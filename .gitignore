@@ -18,7 +18,6 @@ tmpclaude-*-cwd
 mathPaper
 run.sh
 .editorconfig
-AGENTS.md
 .pytest_cache/
 .logs/
 /logs/
