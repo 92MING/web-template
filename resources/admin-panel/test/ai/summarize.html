@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>摘要测试</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <link rel="stylesheet" href="/html-assets/css/ai-test-shared.css"/>
+  <style>
+    .summary-copy-toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--ai-border);
+      background: var(--ai-surface);
+      color: var(--ai-text);
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: var(--ai-shadow);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+      z-index: 50;
+    }
+
+    .summary-copy-toast.show {
+      opacity: 1;
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="ai-page">
+
+<div class="ai-shell">
+  <div class="ai-header">
+    <div class="ai-header-main">
+      <a href="/admin/test/ai" class="ai-back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        <span>返回 AI 测试中心</span>
+      </a>
+      <h1>摘要生成</h1>
+      <p>用于验证长文本压缩质量、流式开关、参数调节和原文摘要对照效果。</p>
+    </div>
+    <div class="ai-pills">
+      <span class="ai-pill">POST /ai/summarize</span>
+      <span class="ai-pill"><strong>长文本压缩</strong></span>
+    </div>
+  </div>
+
+  <section class="ai-card">
+    <div class="ai-card-title"><h2>快速样例</h2></div>
+    <div class="ai-toolbar">
+      <button class="ai-button ai-button-secondary" type="button" onclick="fillSample('tech')">技术综述</button>
+      <button class="ai-button ai-button-secondary" type="button" onclick="fillSample('science')">科学文章</button>
+      <button class="ai-button ai-button-secondary" type="button" onclick="fillSample('story')">叙事文本</button>
+      <button class="ai-button ai-button-secondary" type="button" onclick="fillSample('business')">商业报告</button>
+    </div>
+  </section>
+
+  <section class="ai-card" style="margin-top:16px;">
+    <div class="ai-card-title"><h2>请求参数</h2></div>
+    <div class="ai-grid-4">
+      <div class="ai-field">
+        <label for="chunk-size">分块大小</label>
+        <input id="chunk-size" type="number" class="ai-input" placeholder="自动" min="64" step="64"/>
+      </div>
+      <div class="ai-field">
+        <label for="sliding-window">滑动窗口</label>
+        <input id="sliding-window" type="number" class="ai-input" value="0.15" min="0" max="0.5" step="0.05"/>
+      </div>
+      <div class="ai-field" style="grid-column: span 2;">
+        <label for="summary-prompt">自定义指令</label>
+        <input id="summary-prompt" type="text" class="ai-input" placeholder="默认: Summarize briefly and accurately"/>
+      </div>
+      <div class="ai-field">
+        <label>流式模式</label>
+        <label class="ai-check"><input id="stream-toggle" type="checkbox"/><span>启用 stream</span></label>
+      </div>
+      <div class="ai-field" style="grid-column: span 3;">
+        <label>布局</label>
+        <div class="ai-toolbar">
+          <button id="layout-side" class="ai-button ai-button-secondary is-active" onclick="setLayout('side')" type="button">左右</button>
+          <button id="layout-stack" class="ai-button ai-button-secondary" onclick="setLayout('stack')" type="button">上下</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ai-card" style="margin-top:16px;">
+    <div class="ai-card-title">
+      <h2>原始文本</h2>
+      <span class="ai-badge ai-badge-muted"><span id="char-count">0</span>&nbsp;字符 · <span id="word-count">0</span>&nbsp;词</span>
+    </div>
+    <textarea id="input-text" class="ai-textarea" rows="10" placeholder="在此输入要生成摘要的文本…" oninput="updateCounts()"></textarea>
+    <div class="ai-toolbar" style="margin-top:12px;">
+      <button id="summarize-btn" onclick="doSummarize()" class="ai-button ai-button-primary" type="button">生成摘要</button>
+      <span id="summarize-spinner" class="ai-spinner ai-spinner-dark" style="display:none;color:var(--ai-primary);"></span>
+      <button onclick="clearAll()" class="ai-button ai-button-secondary" type="button">清空</button>
+    </div>
+  </section>
+
+  <div id="result-section" class="ai-stack" style="display:none;margin-top:16px;">
+    <div class="ai-metric-grid">
+      <div class="ai-metric"><div class="ai-metric-value" id="stat-original">0</div><div class="ai-metric-label">原文字符</div></div>
+      <div class="ai-metric"><div class="ai-metric-value" id="stat-summary">0</div><div class="ai-metric-label">摘要字符</div></div>
+      <div class="ai-metric"><div class="ai-metric-value" id="stat-ratio">—</div><div class="ai-metric-label">压缩比</div></div>
+      <div class="ai-metric"><div class="ai-metric-value" id="stat-reduction">—</div><div class="ai-metric-label">缩减率</div></div>
+    </div>
+
+    <div id="compare-container" class="ai-result-compare">
+      <section class="ai-card">
+        <div class="ai-card-title">
+          <h2>原始文本</h2>
+          <span class="ai-badge ai-badge-muted" id="compare-original-len"></span>
+        </div>
+        <div class="ai-result" id="compare-original" style="max-height:420px;overflow-y:auto"></div>
+      </section>
+      <section class="ai-card">
+        <div class="ai-card-title">
+          <h2>生成摘要</h2>
+          <button onclick="copySummary()" class="ai-button ai-button-secondary" type="button">复制</button>
+        </div>
+        <div class="ai-result" id="compare-summary" style="max-height:420px;overflow-y:auto"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="copy-toast" class="summary-copy-toast">已复制到剪贴板</div>
+
+<script>
+'use strict';
+
+// ── Sample texts ──────────────────────────────────────────────────────────────
+const SAMPLES = {
+  tech: `人工智能（AI）技术正在以前所未有的速度改变着我们的世界。从自动驾驶汽车到智能家居，从医疗诊断到金融风控，AI的应用场景正在不断扩展。据最新市场研究报告显示，全球AI市场规模预计将在2030年达到1.5万亿美元，年复合增长率超过35%。
+
+大语言模型（LLM）是近年来AI领域最引人注目的突破之一。这些模型通过在海量文本数据上进行训练，能够理解和生成自然语言文本，实现翻译、摘要、问答等多种任务。GPT系列、Claude、Gemini等模型的出现，标志着AI在语言理解方面取得了质的飞跃。
+
+然而，AI技术的快速发展也带来了一系列挑战。数据隐私、算法偏见、就业影响等问题日益受到社会各界的关注。如何在推动技术创新的同时确保AI的安全、公平和负责任使用，已成为全球性的重要议题。各国政府和国际组织正在积极制定AI治理框架和法规，以应对这些挑战。
+
+在教育领域，AI正在重塑传统的教学模式。智能辅导系统可以根据每个学生的学习状况提供个性化的学习路径和反馈。自动评估系统能够高效地批改作业和考试，释放教师的时间用于更有价值的教学活动。同时，AI工具也在帮助研究人员加速科学发现的进程。`,
+
+  science: `Quantum computing represents a fundamental shift in computational paradigm, leveraging quantum mechanical phenomena such as superposition and entanglement to process information in ways that classical computers cannot. Unlike classical bits, which exist in a definite state of either 0 or 1, quantum bits (qubits) can exist in a superposition of both states simultaneously, enabling parallel computation on an exponential scale.
+
+Recent advances in error correction have brought us closer to fault-tolerant quantum computing. The surface code, a topological quantum error-correcting code, has emerged as the leading candidate for achieving this goal. Researchers have demonstrated logical qubit error rates below the threshold required for large-scale quantum computation, marking a significant milestone in the field.
+
+The implications of practical quantum computing extend across numerous domains. In cryptography, Shor's algorithm threatens current RSA encryption schemes, necessitating the development of post-quantum cryptographic standards. In drug discovery, quantum simulation of molecular interactions could dramatically accelerate the identification of therapeutic compounds. In optimization, quantum annealing and variational quantum eigensolvers offer promising approaches to solving complex logistical and financial problems.
+
+Despite these advances, significant challenges remain. Qubit coherence times must be extended, gate fidelities improved, and scalable architectures developed. The current era of Noisy Intermediate-Scale Quantum (NISQ) devices, while limited, provides valuable insights into the practical applications and limitations of quantum computing technology.`,
+
+  story: `老李在这个小镇上开了三十年的面馆。每天清晨四点，当整条街还沉浸在夜色中时，他就已经开始和面、熬汤了。那碗看似简单的阳春面，用的是他祖传的配方：猪骨文火慢炖八小时的高汤，手工擀制的细面条，加上几片翠绿的葱花。
+
+小镇上的人都知道，老李的面馆是个特殊的地方。清晨赶集的农民、早起上学的孩子、值完夜班的工人，都会来这里坐一坐。一碗热气腾腾的面下肚，新的一天就有了着落。
+
+去年冬天，镇上来了一家连锁快餐店。明亮的灯光、标准化的菜单、快速的出餐速度，很快吸引了不少年轻人。老李的面馆客人明显少了。老伴劝他："要不咱也改改？加几个新品种，搞搞外卖。"老李摇摇头："面这东西，从锅里捞出来三分钟不吃，味道就不对了。我做了一辈子的面，不能为了赶时髦把手艺糟蹋了。"
+
+但让人意外的是，半年后，那家连锁店关门了。而老李的面馆前，又恢复了排队的景象。镇上的人说：还是老李的面好吃，那味道是用时间和心思熬出来的，机器替代不了。`,
+
+  business: `2024年第四季度财务业绩报告摘要：本季度公司实现营业收入48.6亿元，同比增长18.3%，环比增长5.7%。其中，核心业务板块贡献收入32.1亿元，新兴业务板块贡献16.5亿元。毛利率维持在62.4%的健康水平，较去年同期提升2.1个百分点。
+
+在成本控制方面，得益于供应链优化和规模效应，销售成本同比下降3.2%。研发投入保持高位，本季度研发费用达7.8亿元，占营收比例为16.1%，主要投向人工智能、云计算和大数据平台的技术研发。员工总数达到12,800人，较年初增长15%，其中技术人员占比超过60%。
+
+区域市场表现方面，国内市场收入同比增长22.4%，国际市场收入同比增长12.8%。东南亚市场表现尤为亮眼，收入同比大增45%，成为海外增长的主要引擎。公司已在新加坡、曼谷和雅加达设立了区域运营中心，计划在明年覆盖更多东南亚国家。
+
+展望2025年，管理层对全年业绩增长保持乐观预期。公司将继续加大在AI和云服务领域的投入，同时推进全球化战略。预计全年营收增速将维持在15%-20%的区间，净利润率目标为18%-20%。`,
+};
+
+function fillSample(key) {
+  document.getElementById('input-text').value = SAMPLES[key] || '';
+  updateCounts();
+  document.getElementById('input-text').focus();
+}
+
+// ── Counts ────────────────────────────────────────────────────────────────────
+function updateCounts() {
+  const text = document.getElementById('input-text').value;
+  document.getElementById('char-count').textContent = text.length;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('word-count').textContent = words;
+}
+
+// ── Layout toggle ─────────────────────────────────────────────────────────────
+let currentLayout = 'side';
+
+function setLayout(mode) {
+  currentLayout = mode;
+  document.getElementById('layout-side').classList.toggle('is-active', mode === 'side');
+  document.getElementById('layout-stack').classList.toggle('is-active', mode === 'stack');
+  const container = document.getElementById('compare-container');
+  if (mode === 'side') {
+    container.style.gridTemplateColumns = '1fr 1fr';
+  } else {
+    container.style.gridTemplateColumns = '1fr';
+  }
+}
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
+let summaryText = '';
+
+function copySummary() {
+  if (!summaryText) return;
+  navigator.clipboard.writeText(summaryText).then(() => {
+    const toast = document.getElementById('copy-toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  });
+}
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+function clearAll() {
+  document.getElementById('input-text').value = '';
+  document.getElementById('result-section').style.display = 'none';
+  summaryText = '';
+  updateCounts();
+}
+
+// ── Summarize ─────────────────────────────────────────────────────────────────
+function setLoading(loading) {
+  document.getElementById('summarize-btn').disabled = loading;
+  document.getElementById('summarize-spinner').style.display = loading ? 'inline-block' : 'none';
+}
+
+async function doSummarize() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) return;
+
+  setLoading(true);
+
+  const chunkSizeVal = parseInt(document.getElementById('chunk-size').value);
+  const slidingVal = parseFloat(document.getElementById('sliding-window').value);
+  const promptVal = document.getElementById('summary-prompt').value.trim();
+  const useStream = document.getElementById('stream-toggle').checked;
+
+  const body = {
+    text,
+    stream: useStream,
+    sliding_window_size: isNaN(slidingVal) ? 0.15 : slidingVal,
+  };
+  if (!isNaN(chunkSizeVal) && chunkSizeVal > 0) body.chunk_size = chunkSizeVal;
+  if (promptVal) body.prompt = promptVal;
+
+  try {
+    const resp = await fetch('/ai/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+
+    summaryText = data.summary || '';
+    const origLen = text.length;
+    const sumLen = summaryText.length;
+    const ratio = origLen > 0 ? (sumLen / origLen).toFixed(2) : '—';
+    const reduction = origLen > 0 ? Math.round((1 - sumLen / origLen) * 100) + '%' : '—';
+
+    // Update stats
+    document.getElementById('stat-original').textContent = origLen.toLocaleString();
+    document.getElementById('stat-summary').textContent = sumLen.toLocaleString();
+    document.getElementById('stat-ratio').textContent = ratio;
+    document.getElementById('stat-reduction').textContent = reduction;
+
+    // Update compare view
+    document.getElementById('compare-original').textContent = text;
+    document.getElementById('compare-original-len').textContent = origLen + ' 字符';
+    document.getElementById('compare-summary').textContent = summaryText;
+    document.getElementById('compare-summary').style.color = 'var(--ai-text)';
+
+    document.getElementById('result-section').style.display = '';
+  } catch (e) {
+    document.getElementById('result-section').style.display = '';
+    document.getElementById('stat-original').textContent = '—';
+    document.getElementById('stat-summary').textContent = '—';
+    document.getElementById('stat-ratio').textContent = '—';
+    document.getElementById('stat-reduction').textContent = '—';
+    document.getElementById('compare-original').textContent = text;
+    document.getElementById('compare-summary').textContent = '错误: ' + e.message;
+    document.getElementById('compare-summary').style.color = '#dc2626';
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+updateCounts();
+setLayout('side');
+</script>
+</body>
+</html>

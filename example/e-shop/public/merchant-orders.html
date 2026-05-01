@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>订单管理 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
+  .order-list { display: grid; gap: 0.75rem; }
+  .order-item { display: grid; gap: 0.6rem; padding: 1rem; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  .order-item:last-child { border-bottom: none; }
+  .order-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .order-id { font-size: 1rem; font-weight: 700; }
+  .order-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; color: var(--builtin-color-muted, #6b7280); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge-paid { background: #dcfce7; color: #166534; }
+  .badge-shipped { background: #dbeafe; color: #1e40af; }
+  .badge-delivered { background: #f3f4f6; color: #374151; }
+</style>
+<link rel="stylesheet" href="/eshop-merchant.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="card list-wrap">
+    <h2 style="margin:0;font-size:1.5rem;" data-copy="list_title">全部订单</h2>
+    <div id="list-state"></div>
+    <div id="order-list" class="order-list"></div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">订单管理上下文</strong></div>
+    <builtin-metadata-list id="order-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { initEshop, api, t, getRole, logout, switchLang } from './eshop-utils.js?v=20260501-1';
+
+await initEshop();
+
+if (getRole() !== 'merchant' && getRole() !== 'admin') {
+  location.replace('index.html');
+}
+
+const $ = id => document.getElementById(id);
+const copy = {
+  'zh-cn': {
+    back: '返回商家后台',
+    eyebrow: '商家订单',
+    title: '订单管理',
+    documentTitle: '订单管理 - e-Shop',
+    lead: '集中查看订单状态、用户信息和商品摘要，订单详情从这里继续进入。',
+    list_title: '全部订单',
+    contextTitle: '订单管理上下文',
+    loadingTitle: '正在加载订单',
+    loadingDescription: '正在获取当前商家的订单列表。',
+    emptyTitle: '还没有订单',
+    emptyDescription: '顾客下单后，这里会出现订单记录。',
+    errorTitle: '加载订单失败',
+    errorDescription: '请稍后重试，或返回商家后台重新进入。',
+    totalLabel: '订单总数',
+    revenueLabel: '订单金额',
+    latestLabel: '最新状态',
+  },
+  en: {
+    back: 'Back to Merchant',
+    eyebrow: 'Merchant Orders',
+    title: 'Order Management',
+    documentTitle: 'Order Management - e-Shop',
+    lead: 'Review order status, customer identity and item summaries from one place.',
+    list_title: 'All Orders',
+    contextTitle: 'Order Management Context',
+    loadingTitle: 'Loading orders',
+    loadingDescription: 'Fetching orders for the current merchant account.',
+    emptyTitle: 'No orders yet',
+    emptyDescription: 'Customer orders will appear here once purchases are made.',
+    errorTitle: 'Failed to load orders',
+    errorDescription: 'Try again in a moment or return to the merchant console.',
+    totalLabel: 'Orders',
+    revenueLabel: 'Revenue',
+    latestLabel: 'Latest Status',
+  }
+};
+
+let lang = localStorage.getItem('eshop_lang') || 'zh-cn';
+let orders = [];
+
+function d() {
+  return copy[lang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  document.title = labels.documentTitle;
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'merchant.html';
+  appShell.backLabel = labels.back;
+  appShell.currentLang = lang;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'merchant.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+  document.querySelectorAll('[data-copy]').forEach((el) => {
+    el.textContent = labels[el.dataset.copy] || el.textContent;
+  });
+}
+
+function renderListState(mode) {
+  const labels = d();
+  const host = $('list-state');
+  if (mode === 'idle') {
+    host.innerHTML = '';
+    return;
+  }
+  if (mode === 'loading') {
+    host.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    host.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="merchant.html"></builtin-empty-state>`;
+    return;
+  }
+  host.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext() {
+  const revenue = orders.reduce((sum, order) => sum + (order.final_total || order.total || 0), 0);
+  const latestStatus = orders[0]?.status || '—';
+  $('order-context').items = [
+    { icon: 'file-text', label: d().totalLabel, value: String(orders.length) },
+    { icon: 'bar-chart', label: d().revenueLabel, value: `¥${revenue}` },
+    { icon: 'schedule', label: d().latestLabel, value: latestStatus },
+  ];
+}
+
+function statusClass(status) {
+  if (status === 'paid') return 'badge-paid';
+  if (status === 'shipped') return 'badge-shipped';
+  return 'badge-delivered';
+}
+
+function renderOrders(statusLabels) {
+  const host = $('order-list');
+  if (!orders.length) {
+    host.innerHTML = '';
+    renderListState('empty');
+    return;
+  }
+  renderListState('idle');
+  host.innerHTML = orders.map((order, index) => {
+    const items = (order.items || []).map((item) => `${item.name || item.product_id} x${item.quantity}`).join(', ');
+    const date = order.created_at ? new Date(order.created_at * 1000).toLocaleString() : '-';
+    return `
+      <div class="order-item">
+        <div class="order-top">
+          <div class="order-id">${order.order_id}</div>
+          <span class="badge ${statusClass(order.status)}">${statusLabels[index]}</span>
+        </div>
+        <div class="order-meta">
+          <span>${order.user_id}</span>
+          <span>¥${order.final_total || order.total || 0}</span>
+          <span>${date}</span>
+        </div>
+        <div class="order-meta">${items || '—'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function load() {
+  renderListState('loading');
+  try {
+    const res = await api('/shop/merchant/orders');
+    orders = (res && res.orders) || [];
+    const statusLabels = await Promise.all(orders.map((order) => t('eshop.status_' + (order.status || 'pending'))));
+    renderOrders(statusLabels);
+    updateContext();
+  } catch (_error) {
+    orders = [];
+    $('order-list').innerHTML = '';
+    renderListState('error');
+    updateContext();
+  }
+}
+
+document.addEventListener('builtin-user-action', (e) => {
+  if (e.detail?.action === 'logout') logout();
+});
+
+document.addEventListener('builtin-lang-change', async (e) => {
+  lang = e.detail?.lang || lang;
+  await switchLang(lang);
+  applyShellCopy();
+  await load();
+});
+
+document.addEventListener('builtin-theme-change', (e) => {
+  localStorage.setItem('eshop_theme', e.detail.dark ? 'dark' : 'light');
+});
+
+applyShellCopy();
+updateContext();
+await load();
+</script>
+</body>
+</html>

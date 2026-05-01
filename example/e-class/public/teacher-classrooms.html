@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>我的教室 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1080px; --builtin-shell-secondary-width: 300px; }
+  .section { display: grid; gap: 1rem; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-surface, #fff); color: var(--builtin-color-text, #111827); font: inherit; cursor: pointer; text-decoration: none; font-size: 0.875rem; }
+  .btn-primary { background: var(--builtin-primary, #2563eb); border-color: var(--builtin-primary, #2563eb); color: #fff; }
+  .form-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+  .form-row input { flex: 1; max-width: 360px; padding: 0.5rem 0.75rem; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-input-bg, #fff); color: inherit; font: inherit; }
+  @media (max-width: 720px) {
+    builtin-app-shell { --builtin-shell-padding-mobile: 16px 12px 28px; }
+  }
+</style>
+<link rel="stylesheet" href="/eclass-pages.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="section">
+    <builtin-card variant="elevated">
+      <div slot="header"><strong data-i18n="eclass.create_classroom">创建教室</strong></div>
+      <div class="form-row">
+        <input id="create-name" placeholder="教室名称" data-i18n-placeholder="eclass.classroom_name">
+        <button id="btn-create" class="btn btn-primary" data-i18n="eclass.create">创建</button>
+      </div>
+    </builtin-card>
+
+    <builtin-data-view id="classroom-view" view="cards" page-size="20"></builtin-data-view>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">教室上下文</strong></div>
+    <builtin-metadata-list id="classroom-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<builtin-member-manager-drawer id="drawer" placement="right" size="400px"></builtin-member-manager-drawer>
+
+<script type="module">
+import { BuiltinToast } from '/shared/components.js?v=20260429-2';
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    eyebrow: '老师端教室',
+    title: '我的教室',
+    lead: '创建教室、查看成员数量，并从同一页进入成员管理抽屉。',
+    back: '返回老师端',
+    contextTitle: '教室上下文',
+    classLabel: '教室数量',
+    schoolLabel: '学校 ID',
+    selectedLabel: '当前管理',
+  },
+  en: {
+    eyebrow: 'Teacher Classrooms',
+    title: 'My Classrooms',
+    lead: 'Create classrooms, review member counts and manage rosters from one drawer workflow.',
+    back: 'Back to Teacher',
+    contextTitle: 'Classroom Context',
+    classLabel: 'Classrooms',
+    schoolLabel: 'School ID',
+    selectedLabel: 'Managing',
+  }
+};
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.my_classrooms',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'teacher',
+  getInvalidRoleRedirect: () => 'student.html',
+  onApplyI18n: async ({ t, $, lang }) => {
+    currentLang = lang;
+    applyShellCopy();
+    $('drawer').title = await t('eclass.manage_members');
+    $('drawer').searchPlaceholder = await t('eclass.search_student');
+    $('drawer').currentTitle = await t('eclass.current_members');
+    $('drawer').candidateTitle = await t('eclass.candidate_students');
+    $('drawer').emptyMembers = await t('eclass.no_members');
+    $('drawer').emptyCandidates = await t('eclass.no_candidates');
+    updateContext(lastClassroomCount);
+  },
+  onReady: async ({ session }) => {
+    await loadSchoolId(session);
+    await loadClassrooms();
+  },
+});
+
+const { $, api, t } = shell;
+
+let currentClassId = null;
+let schoolId = '';
+let currentLang = localStorage.getItem('eclass_lang') || 'zh-cn';
+let lastClassroomCount = 0;
+
+function d() {
+  return copy[currentLang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'teacher.html';
+  appShell.backLabel = labels.back;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'teacher.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: currentLang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+}
+
+function updateContext(total) {
+  lastClassroomCount = total;
+  $('classroom-context').items = [
+    { icon: 'bank', label: d().classLabel, value: String(total) },
+    { icon: 'bank', label: d().schoolLabel, value: schoolId || '—' },
+    { icon: 'team', label: d().selectedLabel, value: currentClassId || '—' },
+  ];
+}
+
+async function loadSchoolId(session) {
+  if (session?.user?.school_id) {
+    schoolId = session.user.school_id;
+    return;
+  }
+  const list = await api('/classroom/list');
+  if (list && list.classrooms && list.classrooms.length) {
+    schoolId = list.classrooms[0].school_id || '';
+  }
+}
+
+const view = $('classroom-view');
+
+async function applyViewLabels(emptyText) {
+  const [search, refresh, exportCsv, rows, page, previous, next, loading, noData] = await Promise.all([
+    t('eclass.search'),
+    t('eclass.refresh'),
+    t('eclass.export_csv'),
+    t('eclass.rows'),
+    t('eclass.page_word'),
+    t('eclass.prev_page'),
+    t('eclass.next_page'),
+    t('eclass.loading'),
+    t('eclass.no_data')
+  ]);
+  view.labels = {
+    search,
+    refresh,
+    exportCsv,
+    rows,
+    page,
+    previous,
+    next,
+    loading,
+    noData: emptyText || noData,
+  };
+  view.emptyText = emptyText || noData;
+}
+
+async function loadClassrooms() {
+  const [nameLabel, memberCountLabel, noClassrooms, manageLabel] = await Promise.all([
+    t('eclass.classroom_name'),
+    t('eclass.member_count'),
+    t('eclass.no_classrooms'),
+    t('eclass.manage_members')
+  ]);
+
+  const r = await api('/classroom/list');
+  const list = (r && r.classrooms) || [];
+  updateContext(list.length);
+
+  if (!list.length) {
+    await applyViewLabels(noClassrooms);
+    view.setData([], { columns: [] });
+    view.requestUpdate();
+    return;
+  }
+
+  const counts = await Promise.all(list.map(async c => {
+    const mr = await api('/classroom/' + c.id + '/members');
+    return (mr && mr.members && mr.members.length) || 0;
+  }));
+
+  const data = list.map((c, i) => ({ ...c, memberCount: counts[i] }));
+  await applyViewLabels(noClassrooms);
+  view.setData(data, {
+    columns: [
+      { key: 'name', label: nameLabel },
+      { key: 'memberCount', label: memberCountLabel },
+      { key: 'action', label: manageLabel, allowHtml: true, formatter: () => `<span style="color:var(--builtin-primary);">${manageLabel} →</span>` }
+    ]
+  });
+}
+
+view.addEventListener('builtin-row-click', (e) => {
+  const row = e.detail.row;
+  if (row && row.id) {
+    openDrawer(row.id);
+  }
+});
+
+async function createClassroom() {
+  const name = $('create-name').value.trim();
+  if (!name) return;
+  if (!schoolId) await loadSchoolId();
+  const r = await api('/classroom/create', { method: 'POST', body: JSON.stringify({ name, school_id: schoolId }) });
+  if (r && r.ok) {
+    BuiltinToast.show(await t('eclass.create_success'), { type: 'success' });
+    $('create-name').value = '';
+    loadClassrooms();
+  } else {
+    BuiltinToast.show((r && r.error) || await t('eclass.create_failed'), { type: 'error' });
+  }
+}
+
+$('btn-create').addEventListener('click', createClassroom);
+
+const drawer = $('drawer');
+
+function openDrawer(classId) {
+  currentClassId = classId;
+  updateContext(lastClassroomCount);
+  drawer.openDrawer();
+  loadMembers();
+  loadCandidates('');
+}
+
+function closeDrawer() {
+  drawer.close();
+  currentClassId = null;
+  updateContext(lastClassroomCount);
+}
+
+async function loadMembers() {
+  if (!currentClassId) return;
+  const r = await api('/classroom/' + currentClassId + '/members');
+  drawer.members = (r && r.members) || [];
+}
+
+let candidateDebounce = null;
+async function loadCandidates(q) {
+  if (!currentClassId) return;
+  const r = await api('/classroom/' + currentClassId + '/members?action=candidates' + (q ? '&q=' + encodeURIComponent(q) : ''));
+  drawer.searchValue = q;
+  drawer.candidates = (r && r.candidates) || [];
+}
+
+drawer.addEventListener('builtin-member-search', (e) => {
+  clearTimeout(candidateDebounce);
+  candidateDebounce = setTimeout(() => loadCandidates(e.detail.query), 300);
+});
+
+drawer.addEventListener('builtin-member-add', async (e) => {
+  const userId = e.detail.userId;
+  const res = await api('/classroom/' + currentClassId + '/members', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+  if (res && res.ok) {
+    BuiltinToast.show(await t('eclass.add_success'), { type: 'success' });
+    loadMembers();
+    loadCandidates(drawer.searchValue.trim());
+    loadClassrooms();
+  } else {
+    BuiltinToast.show((res && res.error) || await t('eclass.add_failed'), { type: 'error' });
+  }
+});
+
+drawer.addEventListener('builtin-close', closeDrawer);
+
+await shell.init();
+</script>
+</body>
+</html>

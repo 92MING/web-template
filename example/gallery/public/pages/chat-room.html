@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Room</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js?v=20260501-2"></script>
+  <script type="module" src="/shared/templates.js?v=20260501-2"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>
+    :root {
+      --page-bg: #eaf1ff;
+      --page-text: #0f172a;
+    }
+    [data-builtin-theme="dark"] {
+      --page-bg: #060b16;
+      --page-text: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.16), transparent 30%),
+        var(--page-bg);
+      color: var(--page-text);
+    }
+    .demo-status {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 5;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(255, 255, 255, 0.78);
+      color: #0f172a;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+      max-width: min(360px, calc(100vw - 28px));
+      font: 600 12px/1.45 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    [data-builtin-theme="dark"] .demo-status {
+      background: rgba(15, 23, 42, 0.84);
+      color: #e2e8f0;
+    }
+    .demo-status strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-status" id="demo-status">
+    <strong>Event log</strong>
+    <span id="demo-status-text">Room loaded.</span>
+  </div>
+
+  <builtin-tpl-chat-room id="chat-room"></builtin-tpl-chat-room>
+
+  <script type="module">
+    const room = document.getElementById("chat-room");
+    const statusText = document.getElementById("demo-status-text");
+
+    function currentLang() {
+      return (document.documentElement.lang || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+    }
+
+    function pick(zh, en) {
+      return currentLang() === "zh" ? zh : en;
+    }
+
+    function buildRoomState() {
+      return {
+        quickEmojis: currentLang() === "zh" ? ["收到", "安排", "赞", "冲"] : ["ACK", "ON IT", "NICE", "SHIP"],
+        conversations: [
+          {
+            id: "launch-room",
+            name: pick("发布战情室", "Launch War Room"),
+            subtitle: pick("12 人在线 · 历史搜索与附件预览已开启", "12 online · history search and attachment previews enabled"),
+            preview: pick("Pinned: 今天把语音、视频、成员面板和历史分组全部收口。", "Pinned: close voice, video, members, and history grouping today."),
+            time: "2m",
+            unread: 4,
+            tags: [pick("置顶", "Pinned"), pick("群组", "Group")],
+            callCards: [
+              {
+                id: "call-launch-voice",
+                mode: "voice",
+                title: pick("语音战情室", "Launch voice room"),
+                meta: pick("6 人通话中 · 自动记录要点", "6 attendees · auto notes enabled"),
+                tags: [pick("语音", "Voice"), pick("录制", "Recorded")],
+              },
+              {
+                id: "call-launch-video",
+                mode: "video",
+                title: pick("视频总控台", "Launch video room"),
+                meta: pick("12 分钟后开始 · 附议程", "Starts in 12 min · agenda attached"),
+                tags: [pick("视频", "Video"), pick("预约", "Scheduled")],
+              },
+            ],
+            members: [
+              {
+                id: "mina",
+                name: "Mina",
+                role: pick("群主", "Owner"),
+                status: pick("在线", "Online"),
+                bio: pick("负责发布节奏、权限和群公告。", "Owns launch cadence, permissions, and moderation."),
+                tags: [pick("可踢人", "Can kick"), pick("可置顶", "Can pin")],
+              },
+              {
+                id: "jules",
+                name: "Jules",
+                role: pick("管理员", "Admin"),
+                status: pick("正在语音通话", "In voice call"),
+                bio: pick("负责移动端回归和附件流程。", "Handles mobile QA and attachment workflows."),
+                tags: [pick("审核负责人", "Review lead")],
+              },
+              {
+                id: "nora",
+                name: "Nora",
+                role: pick("访客", "Guest"),
+                status: pick("3 分钟前离开", "Left 3m ago"),
+                bio: pick("成员离开后，历史与共享文件仍保留可检索记录。", "After leaving, member history and shared files stay searchable."),
+                tags: [pick("已离开", "Former member")],
+              },
+            ],
+            historyGroups: [
+              {
+                id: "all",
+                label: pick("全部历史", "All history"),
+                count: 1240,
+                items: [
+                  {
+                    id: "launch-history-1",
+                    title: pick("附件预览改版", "Attachment preview redesign"),
+                    meta: pick("24 条结果 · 图片 / PDF / 语音", "24 hits · image / PDF / voice"),
+                    excerpt: pick("展示拖拽上传、附件气泡与点击预览完整链路。", "Shows drag upload, attachment bubbles, and click-through previews."),
+                  },
+                  {
+                    id: "launch-history-2",
+                    title: pick("语音和视频入口", "Voice and video entry states"),
+                    meta: pick("9 次会议 · 群组语音 / 视频", "9 sessions · group voice / video"),
+                    excerpt: pick("保留会议入口、预约信息和进入内页的按钮。", "Keeps call entry points, schedules, and join flows visible."),
+                  },
+                ],
+              },
+              {
+                id: "people",
+                label: pick("成员事件", "Member events"),
+                count: 17,
+                items: [
+                  {
+                    id: "launch-history-3",
+                    title: pick("成员变更", "Roster changes"),
+                    meta: pick("加入 / 离开 / 踢出 / 提权", "Join / leave / kick / promote"),
+                    excerpt: pick("成员详情、离开信息与管理动作都能从这里回查。", "Member details, leave notices, and moderation actions stay searchable here."),
+                  },
+                ],
+              },
+              {
+                id: "attachments",
+                label: pick("附件分类", "Attachments"),
+                count: 86,
+                items: [
+                  {
+                    id: "launch-history-4",
+                    title: pick("设计资产", "Design assets"),
+                    meta: pick("41 张图 · 6 条语音 · 12 份文档", "41 images · 6 voice notes · 12 docs"),
+                    excerpt: pick("历史面板按附件类型和时间分类。", "History panel categories group media by type and recency."),
+                  },
+                ],
+              },
+            ],
+            messages: [
+              {
+                id: "msg-1",
+                sender: "Mina",
+                senderRole: pick("群主", "Owner"),
+                text: pick("Kickoff 文档已经定稿。我把批注版 PDF 和一段语音总结都贴上来了，手机端先看这个。", "Kickoff doc is final. I posted the annotated PDF and a short voice summary for mobile reviewers."),
+                time: "09:12",
+                category: pick("今天", "Today"),
+                reactions: [{ emoji: pick("收到", "ACK"), count: 5, active: true }],
+                attachments: [
+                  { id: "att-1", type: "file", name: "launch-kickoff-v4.pdf", sizeLabel: "3.1 MB" },
+                  {
+                    id: "att-2",
+                    type: "audio",
+                    name: pick("语音总结", "Voice summary"),
+                    sizeLabel: "1m 12s",
+                    durationLabel: "1m 12s",
+                    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+                  },
+                ],
+              },
+              {
+                id: "msg-2",
+                sender: "You",
+                text: pick("我今天把附件预览、历史搜索和成员面板串起来。", "I will wire attachment previews, history search, and the member panel today."),
+                time: "09:16",
+                self: true,
+                read: true,
+                edited: true,
+                delivery: pick("已同步到桌面和手机", "Synced to desktop and mobile"),
+                reactions: [{ emoji: pick("安排", "ON IT"), count: 2 }],
+              },
+              {
+                id: "msg-3",
+                sender: "Ops Bot",
+                kind: "event",
+                eventText: pick("Nora 已离开群组。相关附件和历史在 30 天内仍可搜索。", "Nora left the room. Related files and history remain searchable for 30 days."),
+                time: "09:20",
+                category: pick("今天", "Today"),
+              },
+              {
+                id: "msg-4",
+                sender: "Jules",
+                senderRole: pick("管理员", "Admin"),
+                text: pick("我补了一张手机端截图，编辑后引用状态还要保留。", "I added a mobile capture. Quoted state should remain visible after editing."),
+                replyTo: pick("我今天把附件预览、历史搜索和成员面板串起来。", "I will wire attachment previews, history search, and the member panel today."),
+                time: "09:21",
+                badge: pick("跟进", "Follow-up"),
+                attachments: [
+                  {
+                    id: "att-3",
+                    type: "image",
+                    name: "mobile-chat-board.png",
+                    sizeLabel: "960 KB",
+                    thumbnail: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80",
+                  },
+                ],
+                reactions: [{ emoji: pick("赞", "NICE"), count: 3 }, { emoji: pick("收到", "ACK"), count: 4 }],
+              },
+            ],
+          },
+          {
+            id: "support-hub",
+            name: pick("支持中枢", "Support Hub"),
+            subtitle: pick("8 人在线 · 已启用历史分类", "8 online · history categories enabled"),
+            preview: pick("历史里可以按附件、成员事件和会议归类。", "History can be grouped by attachments, people, and calls."),
+            time: "11m",
+            unread: 1,
+            tags: [pick("历史", "History")],
+            callCards: [
+              {
+                id: "call-support-1",
+                mode: "voice",
+                title: pick("值班语音间", "Support voice room"),
+                meta: pick("3 人在线 · 问题分流", "3 attendees · triage session"),
+                tags: [pick("语音", "Voice")],
+              },
+            ],
+            members: [
+              {
+                id: "casey",
+                name: "Casey",
+                role: pick("管理员", "Admin"),
+                status: pick("在线", "Online"),
+                bio: pick("负责工单路由和历史检索。", "Handles ticket routing and history retrieval."),
+                tags: [pick("搜索负责人", "Search owner")],
+              },
+            ],
+            historyGroups: [
+              {
+                id: "all",
+                label: pick("全部历史", "All history"),
+                count: 540,
+                items: [
+                  {
+                    id: "support-history-1",
+                    title: pick("相似问题聚合", "Similar issue clusters"),
+                    meta: pick("按历史标签归档", "Archived by history tags"),
+                    excerpt: pick("支持对相似消息和附件进行二次聚合。", "Supports secondary grouping of similar messages and attachments."),
+                  },
+                ],
+              },
+            ],
+            messages: [
+              {
+                id: "support-msg-1",
+                sender: "Casey",
+                senderRole: pick("管理员", "Admin"),
+                text: pick("把历史分类面板当成常驻导航，工单回溯会更快。", "Keep the history categories visible; ticket backtracking gets much faster."),
+                time: "10:03",
+                category: pick("今天", "Today"),
+              },
+            ],
+          },
+        ],
+      };
+    }
+
+    let state = buildRoomState();
+
+    function setStatus(message) {
+      statusText.textContent = message;
+    }
+
+    function syncRoom() {
+      room.conversations = state.conversations;
+      room.quickEmojis = state.quickEmojis;
+      room.inputPlaceholder = pick("输入消息、引用历史或发附件", "Type a message, quote history, or attach files");
+      room.composerValue = room.composerValue || pick("今天先把附件预览和成员面板走通。", "Let's wire attachment previews and the member panel first.");
+      if (!room.activeConversationId) {
+        room.activeConversationId = state.conversations[0].id;
+      }
+      const active = state.conversations.find((item) => item.id === room.activeConversationId) || state.conversations[0];
+      room.activeCall = active.callCards?.[0] || null;
+      room.chatName = active.name;
+      room.status = active.subtitle;
+    }
+
+    function activeConversation() {
+      return state.conversations.find((item) => item.id === room.activeConversationId) || state.conversations[0];
+    }
+
+    room.addEventListener("builtin-conversation-select", (event) => {
+      room.activeConversationId = event.detail.conversation.id;
+      syncRoom();
+      setStatus(pick(`切换到 ${event.detail.conversation.name}`, `Switched to ${event.detail.conversation.name}`));
+    });
+
+    room.addEventListener("builtin-send", (event) => {
+      const conversation = activeConversation();
+      conversation.messages = [
+        ...(conversation.messages || []),
+        {
+          id: `draft-${Date.now()}`,
+          sender: "You",
+          text: event.detail.text || pick("已发送空白测试消息", "Sent an empty draft test message"),
+          time: new Date().toLocaleTimeString(currentLang() === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }),
+          self: true,
+          read: false,
+          delivery: pick("等待同步", "Waiting to sync"),
+          attachments: (event.detail.attachments || []).map((attachment) => ({
+            id: attachment.id,
+            type: attachment.type,
+            name: attachment.name,
+            sizeLabel: attachment.sizeLabel,
+            url: attachment.url,
+            thumbnail: attachment.thumbnail,
+          })),
+        },
+      ];
+      room.composerValue = "";
+      syncRoom();
+      setStatus(pick("已发送一条演示消息。", "Sent a message."));
+    });
+
+    room.addEventListener("builtin-emoji-pick", (event) => {
+      room.composerValue = `${room.composerValue || ""} ${event.detail.emoji}`.trim();
+      setStatus(pick(`插入快捷表情：${event.detail.emoji}`, `Inserted quick emoji: ${event.detail.emoji}`));
+    });
+
+    [
+      ["builtin-attachment-upload", pick("已加入附件到草稿。", "Added attachment to draft.")],
+      ["builtin-history-open", pick("打开了一条历史分类结果。", "Opened a history result.")],
+      ["builtin-member-kick", pick("触发了踢出成员回调。", "Triggered member kick callback.")],
+      ["builtin-member-promote", pick("触发了成员提权回调。", "Triggered member promotion callback.")],
+      ["builtin-voice-call", pick("触发了群组语音入口。", "Triggered group voice entry." )],
+      ["builtin-video-call", pick("触发了群组视频入口。", "Triggered group video entry.")],
+      ["builtin-record-toggle", pick("切换了录音状态。", "Toggled recording state.")],
+    ].forEach(([eventName, message]) => {
+      room.addEventListener(eventName, () => setStatus(message));
+    });
+
+    document.addEventListener("builtin-lang-change", () => {
+      state = buildRoomState();
+      room.activeConversationId = "";
+      room.composerValue = "";
+      syncRoom();
+      setStatus(pick("已按当前语言重建演示数据。", "Rebuilt data for the current language."));
+    });
+
+    syncRoom();
+  </script>
+</body>
+</html>

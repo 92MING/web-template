@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统进程</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-monitoring-shared.css" />
+  <style>
+    html { font-size: 11px; height: 100%; }
+
+    :root {
+      --monitor-accent-1: rgba(99, 102, 241, 0.12);
+      --monitor-accent-2: rgba(6, 182, 212, 0.10);
+      --monitor-accent-3: rgba(14, 165, 233, 0.08);
+    }
+
+    .monitor-shell {
+      gap: 6px;
+    }
+
+    .process-workbench-grid {
+      --monitor-sidebar-width: 408px;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .process-toolbar-panel {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      min-height: 0;
+    }
+
+    .process-list-pane {
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #process-splitter {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .process-detail-pane {
+      grid-column: 3;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .process-toolbar-card,
+    .process-detail-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .process-detail-card {
+      min-height: 240px;
+    }
+
+    .process-toolbar-body {
+      padding: 5px 8px 6px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .process-toolbar-inline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .process-toolbar-inline .monitor-filter-field {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .process-toolbar-inline .monitor-filter-label {
+      display: none;
+    }
+
+    .process-toolbar-inline .monitor-input {
+      min-height: 28px;
+      padding: 0 8px;
+      border-radius: 10px;
+    }
+
+    .process-filter-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      align-items: end;
+    }
+
+    .process-filter-grid .monitor-filter-field {
+      grid-column: span 1;
+      gap: 4px;
+    }
+
+    .process-filter-grid .monitor-filter-field.is-wide,
+    .process-filter-grid .monitor-filter-field.is-action {
+      grid-column: span 2;
+    }
+
+    .process-filter-grid .monitor-input,
+    .process-filter-grid .monitor-select {
+      min-height: 30px;
+      padding: 0 9px;
+      border-radius: 12px;
+    }
+
+    .process-toolbar-meta {
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--proj-text-muted);
+      max-width: min(42vw, 360px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .process-list-heading,
+    .process-detail-heading,
+    .process-page-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .process-toolbar-card .monitor-panel-header {
+      padding: 6px 8px 4px;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .process-toolbar-card .monitor-panel-actions {
+      gap: 4px;
+    }
+
+    .process-list-card .panel-card-title,
+    .process-detail-card .panel-card-title,
+    .process-toolbar-card .panel-card-title {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .process-list-card .panel-note,
+    .process-detail-card .panel-note,
+    .process-toolbar-card .panel-note,
+    .process-list-card .monitor-cell-primary,
+    .process-list-card .monitor-cell-secondary,
+    .process-list-card .monitor-data-table,
+    .process-toolbar-card .monitor-filter-label,
+    .process-toolbar-card .panel-check-row,
+    .process-toolbar-card .panel-btn {
+      font-size: 11px;
+    }
+
+    .process-toolbar-card .panel-btn,
+    .process-detail-card .panel-btn,
+    .process-list-card .panel-btn {
+      min-height: 28px;
+      padding-inline: 8px;
+    }
+
+    .monitor-advanced-overlay[hidden] {
+      display: none !important;
+    }
+
+    .monitor-advanced-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: grid;
+      place-items: start center;
+      padding: 52px 12px 12px;
+    }
+
+    .monitor-advanced-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.34);
+      backdrop-filter: blur(1px);
+    }
+
+    .monitor-advanced-popover {
+      position: relative;
+      width: min(680px, calc(100vw - 24px));
+      max-height: calc(100vh - 70px);
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid var(--proj-border-soft);
+      background: var(--proj-surface-elevated);
+      box-shadow: 0 20px 46px rgba(15, 23, 42, 0.22);
+      padding: 10px 12px 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .monitor-advanced-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--proj-border-soft);
+    }
+
+    .monitor-advanced-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--proj-text-strong);
+    }
+
+    .monitor-advanced-note {
+      font-size: 10px;
+      line-height: 1.45;
+      color: var(--proj-text-muted);
+    }
+
+    html.dark .monitor-advanced-backdrop {
+      background: rgba(2, 6, 23, 0.56);
+    }
+
+    .process-list-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .process-list-card .monitor-table-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+    }
+
+    .process-detail-card .monitor-detail-shell {
+      flex: 1 1 auto;
+      padding: 7px 8px 8px;
+      min-height: 0;
+      max-height: none;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    .process-detail-card .monitor-detail-stage {
+      gap: 6px;
+    }
+
+    .process-detail-card .monitor-primary-grid,
+    .process-detail-card .monitor-detail-grid {
+      gap: 6px;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    }
+
+    .process-detail-card .monitor-metric-box {
+      padding: 6px 7px;
+      border-radius: 10px;
+    }
+
+    .process-detail-card .monitor-metric-kicker {
+      font-size: 8px;
+      letter-spacing: 0.1em;
+    }
+
+    .process-detail-card .monitor-metric-value {
+      margin-top: 2px;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .process-detail-card .monitor-metric-note {
+      margin-top: 1px;
+      font-size: 9px;
+      line-height: 1.28;
+    }
+
+    .process-detail-card .monitor-list-card {
+      padding: 6px 8px;
+      border-radius: 10px;
+    }
+
+    .process-detail-card .monitor-list-body {
+      margin-top: 4px;
+      gap: 3px;
+      max-height: 260px;
+    }
+
+    .process-detail-card .monitor-list-row {
+      gap: 6px;
+      font-size: 9px;
+    }
+
+    .process-detail-card .monitor-empty-card {
+      min-height: 72px;
+      padding: 8px;
+    }
+
+    .process-list-card .monitor-table-scroll {
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    .process-unavailable-card {
+      padding: 10px 12px;
+      border: 1px dashed rgba(239, 68, 68, 0.35);
+      border-radius: 12px;
+      background: rgba(239, 68, 68, 0.06);
+      display: grid;
+      gap: 4px;
+    }
+
+    .process-unavailable-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #b91c1c;
+    }
+
+    .process-unavailable-copy {
+      font-size: 10px;
+      line-height: 1.5;
+      color: var(--proj-text-muted);
+      word-break: break-word;
+    }
+
+    html.dark .process-unavailable-card {
+      background: rgba(239, 68, 68, 0.10);
+    }
+
+    html.dark .process-unavailable-title {
+      color: #fecaca;
+    }
+
+    @media (max-width: 1180px) {
+      .process-workbench-grid {
+        --monitor-sidebar-width: 388px;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .process-toolbar-panel,
+      .process-list-pane,
+      #process-splitter,
+      .process-detail-pane {
+        grid-column: auto;
+        grid-row: auto;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .monitor-advanced-overlay {
+        padding-top: 44px;
+      }
+
+      .process-filter-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .process-filter-grid .monitor-filter-field,
+      .process-filter-grid .monitor-filter-field.is-wide,
+      .process-filter-grid .monitor-filter-field.is-action {
+        grid-column: span 1;
+      }
+
+      .process-list-card {
+        min-height: 0;
+      }
+
+      .process-detail-card .monitor-detail-shell {
+        max-height: none;
+      }
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="panel-page-body monitor-page-body">
+  <main class="panel-page monitor-page">
+    <div class="panel-page-shell monitor-shell">
+      <div id="page-status" class="panel-note process-toolbar-meta" hidden aria-live="polite"></div>
+
+      <section id="process-workbench" class="monitor-workbench-grid monitor-workbench-split process-workbench-grid">
+        <section class="panel-card monitor-panel-card process-toolbar-card process-toolbar-panel">
+          <div class="monitor-panel-header">
+            <div class="monitor-panel-title process-page-heading">
+              <div class="panel-card-title">搜索 / 排序</div>
+              <div id="process-toolbar-meta" class="panel-note process-toolbar-meta">—</div>
+            </div>
+            <div class="monitor-panel-actions">
+                <button id="process-advanced-toggle" type="button" class="panel-btn" aria-haspopup="dialog" aria-expanded="false">进阶筛选</button>
+              <button id="refresh-btn" type="button" class="panel-btn panel-btn-primary">刷新</button>
+              <label class="panel-check-row monitor-toggle-chip">
+                <input id="auto-refresh" type="checkbox" class="rounded" checked />
+                自动 5s
+              </label>
+            </div>
+          </div>
+          <div class="process-toolbar-body">
+              <div class="process-toolbar-inline">
+                <label class="monitor-filter-field">
+                <span class="monitor-filter-label">搜索</span>
+                <input id="search-input" class="monitor-input" placeholder="pid / 名称 / 用户 / cmdline" />
+              </label>
+              </div>
+            </div>
+          </section>
+
+          <div id="process-advanced-overlay" class="monitor-advanced-overlay" hidden>
+            <div class="monitor-advanced-backdrop" data-advanced-close="1"></div>
+            <section class="monitor-advanced-popover" role="dialog" aria-modal="true" aria-labelledby="process-advanced-title">
+              <div class="monitor-advanced-head">
+                <div>
+                  <div id="process-advanced-title" class="monitor-advanced-title">进阶筛选 / 排序</div>
+                  <div class="monitor-advanced-note">仅在需要精细过滤时展开，避免占用主列表空间。</div>
+                </div>
+                <button id="process-advanced-close" type="button" class="panel-btn">关闭</button>
+              </div>
+              <div class="monitor-filter-grid process-filter-grid">
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">最大数量</span>
+                <input id="limit-input" type="number" min="1" max="5000" value="800" class="monitor-input" />
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">快捷筛选</span>
+                <select id="quick-filter" class="monitor-select">
+                  <option value="all">全部进程</option>
+                  <option value="high-cpu">高 CPU</option>
+                  <option value="high-memory">高内存</option>
+                  <option value="running">运行中</option>
+                  <option value="long-running">长时间运行</option>
+                </select>
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">排序字段</span>
+                <select id="sort-key" class="monitor-select">
+                  <option value="cpu_percent">CPU</option>
+                  <option value="memory_rss">内存</option>
+                  <option value="pid">PID</option>
+                  <option value="name">名称</option>
+                  <option value="status">状态</option>
+                  <option value="create_time">创建时间</option>
+                </select>
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">顺序</span>
+                <select id="sort-order" class="monitor-select">
+                  <option value="desc">降序</option>
+                  <option value="asc">升序</option>
+                </select>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <section class="monitor-pane monitor-pane-main process-list-pane">
+          <section class="panel-card monitor-panel-card process-list-card">
+          <div class="monitor-panel-header">
+            <div class="monitor-panel-title monitor-panel-title-inline process-list-heading">
+              <div class="panel-card-title">进程列表</div>
+              <div id="list-meta" class="panel-note">—</div>
+            </div>
+            <div class="monitor-panel-actions">
+              <span id="selection-meta" class="panel-pill monitor-summary-pill">未选择</span>
+              <button id="clear-selection-btn" type="button" class="panel-btn">清空选择</button>
+              <button id="batch-terminate-btn" type="button" class="panel-btn">批量终止</button>
+              <button id="batch-kill-btn" type="button" class="panel-btn panel-btn-danger">批量强杀</button>
+            </div>
+          </div>
+          <div class="monitor-table-scroll">
+            <table class="monitor-data-table">
+              <colgroup>
+                <col class="monitor-col-check" />
+                <col class="monitor-col-xs" />
+                <col class="monitor-col-process" />
+                <col class="monitor-col-sm" />
+                <col class="monitor-col-md" />
+                <col class="monitor-col-xs" />
+                <col class="monitor-col-xs" />
+                <col class="monitor-col-md" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th><input id="select-all" type="checkbox" class="rounded" /></th>
+                  <th>PID</th>
+                  <th>进程</th>
+                  <th>状态</th>
+                  <th>用户</th>
+                  <th>CPU</th>
+                  <th>内存</th>
+                  <th>启动</th>
+                </tr>
+              </thead>
+              <tbody id="process-table"></tbody>
+            </table>
+          </div>
+          </section>
+        </section>
+
+        <div id="process-splitter" class="monitor-splitter" data-splitter tabindex="0" role="separator" aria-label="调整详情侧栏宽度" aria-orientation="vertical">
+          <span class="monitor-splitter-grip" aria-hidden="true"></span>
+          <button id="process-split-toggle" type="button" class="monitor-splitter-toggle" aria-label="折叠详情侧栏" aria-expanded="true">›</button>
+        </div>
+
+        <aside id="process-sidebar" class="process-detail-pane monitor-pane monitor-pane-side">
+          <section class="panel-card monitor-panel-card process-detail-card">
+            <div class="monitor-panel-header">
+              <div class="monitor-panel-title monitor-panel-title-inline process-detail-heading">
+                <div class="panel-card-title">详情</div>
+                <div id="detail-title" class="panel-note panel-mono">未选择进程</div>
+              </div>
+              <div class="monitor-panel-actions">
+                <button id="detail-terminate-btn" type="button" class="panel-btn">终止</button>
+                <button id="detail-kill-btn" type="button" class="panel-btn panel-btn-danger">强杀</button>
+              </div>
+            </div>
+            <div class="monitor-detail-shell">
+              <div id="detail-body" class="monitor-detail-stage"></div>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const state = {
+      rawItems: [],
+      items: [],
+      meta: { total: 0, truncated: false, generated_at: null },
+      selectedPids: new Set(),
+      focusedPid: null,
+      timer: null,
+      detailCache: new Map(),
+      detailErrorCache: new Map(),
+      detailInflight: new Map(),
+      detailLastFetchAt: new Map(),
+    };
+
+    const DETAIL_CACHE_TTL_MS = 15000;
+    const DETAIL_FETCH_THROTTLE_MS = 1200;
+    const QUICK_FILTER_PRESETS = {
+      all: {
+        label: '全部进程',
+        hint: '',
+        matches: () => true,
+      },
+      'high-cpu': {
+        label: '高 CPU',
+        hint: 'CPU >= 10%',
+        matches: (item) => Number(item.cpu_percent || 0) >= 10,
+      },
+      'high-memory': {
+        label: '高内存',
+        hint: 'RSS >= 200 MiB 或占比 >= 3%',
+        matches: (item) => Number(item.memory_rss || 0) >= 200 * 1024 * 1024 || Number(item.memory_percent || 0) >= 3,
+      },
+      running: {
+        label: '运行中',
+        hint: 'status = running',
+        matches: (item) => String(item.status || '').toLowerCase() === 'running',
+      },
+      'long-running': {
+        label: '长时间运行',
+        hint: '运行时长 >= 1 小时',
+        matches: (item, now) => {
+          const created = item.create_time ? Date.parse(item.create_time) : NaN;
+          return Number.isFinite(created) && ((now || Date.now()) - created) >= 3600 * 1000;
+        },
+      },
+    };
+    const PROCESS_ACTION_LABELS = {
+      terminate: '终止',
+      kill: '强杀',
+    };
+    let detailTransitionFrame = null;
+
+    function initWorkbenchSplit({ rootId, splitterId, toggleId, storageKey, defaultWidth, minWidth, maxWidth, collapseAt }) {
+      const root = document.getElementById(rootId);
+      const splitter = document.getElementById(splitterId);
+      const toggle = document.getElementById(toggleId);
+      if (!root || !splitter || !toggle) return;
+
+      const mediaQuery = window.matchMedia('(max-width: 1024px)');
+      let width = defaultWidth;
+      let collapsed = false;
+
+      function clampWidth(value) {
+        return Math.max(minWidth, Math.min(maxWidth, value));
+      }
+
+      try {
+        const storedWidth = Number(window.localStorage.getItem(`${storageKey}:width`) || '');
+        if (Number.isFinite(storedWidth)) width = clampWidth(storedWidth);
+        window.localStorage.removeItem(`${storageKey}:collapsed`);
+      } catch (_) {
+        width = defaultWidth;
+        collapsed = false;
+      }
+
+      function persist() {
+        try {
+          window.localStorage.setItem(`${storageKey}:width`, String(Math.round(width)));
+        } catch (_) {
+          // Ignore storage failures.
+        }
+      }
+
+      function apply() {
+        const compact = mediaQuery.matches;
+        root.style.setProperty('--monitor-sidebar-width', `${Math.round(width)}px`);
+        root.classList.toggle('is-collapsed', !compact && collapsed);
+        toggle.textContent = compact ? '›' : (collapsed ? '‹' : '›');
+        toggle.disabled = compact;
+        toggle.setAttribute('aria-expanded', compact ? 'true' : String(!collapsed));
+        toggle.setAttribute('aria-label', compact ? '窄屏模式下不支持折叠详情侧栏' : (collapsed ? '展开详情侧栏' : '折叠详情侧栏'));
+        splitter.setAttribute('aria-valuemin', String(minWidth));
+        splitter.setAttribute('aria-valuemax', String(maxWidth));
+        splitter.setAttribute('aria-valuenow', String(Math.round(width)));
+      }
+
+      function setCollapsed(next) {
+        collapsed = !!next;
+        persist();
+        apply();
+      }
+
+      toggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (mediaQuery.matches) return;
+        setCollapsed(!collapsed);
+      });
+
+      splitter.addEventListener('dblclick', () => {
+        if (mediaQuery.matches) return;
+        setCollapsed(!collapsed);
+      });
+
+      splitter.addEventListener('keydown', (event) => {
+        if (mediaQuery.matches) return;
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          collapsed = false;
+          width = clampWidth(width + 24);
+          persist();
+          apply();
+          return;
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          collapsed = false;
+          width = clampWidth(width - 24);
+          if (width <= collapseAt) {
+            width = minWidth;
+            collapsed = true;
+          }
+          persist();
+          apply();
+          return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setCollapsed(!collapsed);
+        }
+      });
+
+      splitter.addEventListener('pointerdown', (event) => {
+        if (mediaQuery.matches) return;
+        if (event.target instanceof Element && event.target.closest('.monitor-splitter-toggle')) return;
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = width;
+        collapsed = false;
+        apply();
+        splitter.setPointerCapture(event.pointerId);
+        document.body.classList.add('is-panel-resizing');
+
+        const handleMove = (moveEvent) => {
+          width = clampWidth(startWidth - (moveEvent.clientX - startX));
+          apply();
+        };
+
+        const handleUp = (upEvent) => {
+          splitter.releasePointerCapture(upEvent.pointerId);
+          splitter.removeEventListener('pointermove', handleMove);
+          splitter.removeEventListener('pointerup', handleUp);
+          splitter.removeEventListener('pointercancel', handleUp);
+          document.body.classList.remove('is-panel-resizing');
+          if (width <= collapseAt) {
+            width = minWidth;
+            collapsed = true;
+          }
+          persist();
+          apply();
+        };
+
+        splitter.addEventListener('pointermove', handleMove);
+        splitter.addEventListener('pointerup', handleUp);
+        splitter.addEventListener('pointercancel', handleUp);
+      });
+
+      const handleMediaChange = () => apply();
+      if (typeof mediaQuery.addEventListener === 'function') mediaQuery.addEventListener('change', handleMediaChange);
+      else if (typeof mediaQuery.addListener === 'function') mediaQuery.addListener(handleMediaChange);
+
+      apply();
+    }
+
+    function httpUrl(path) {
+      return typeof window.projResolveUrl === 'function' ? window.projResolveUrl(path) : path;
+    }
+
+    function fmtBytes(value) {
+      const bytes = Number(value || 0);
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let size = bytes;
+      let idx = 0;
+      while (size >= 1024 && idx < units.length - 1) {
+        size /= 1024;
+        idx += 1;
+      }
+      return `${size.toFixed(size >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+    }
+
+    function fmtDate(value) {
+      if (!value) return '—';
+      const timestamp = Date.parse(value);
+      if (!Number.isFinite(timestamp)) return '—';
+      return new Date(timestamp).toLocaleString('zh-CN');
+    }
+
+    function fmtAge(value) {
+      if (!value) return '—';
+      const timestamp = Date.parse(value);
+      if (!Number.isFinite(timestamp)) return '—';
+      const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+      if (seconds < 60) return `${seconds}s`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+      return `${Math.floor(seconds / 86400)}d`;
+    }
+
+    function setStatus(message, ok = true) {
+      const el = document.getElementById('page-status');
+      if (!el) return;
+      el.textContent = message;
+      el.hidden = !!ok;
+      el.className = ok
+        ? 'panel-note process-toolbar-meta'
+        : 'panel-note process-toolbar-meta panel-danger-text';
+    }
+
+    function initAdvancedFilterPopover() {
+      const toggle = document.getElementById('process-advanced-toggle');
+      const overlay = document.getElementById('process-advanced-overlay');
+      const closeBtn = document.getElementById('process-advanced-close');
+      if (!toggle || !overlay || !closeBtn) return;
+
+      const close = () => {
+        overlay.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+      };
+
+      const open = () => {
+        overlay.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+      };
+
+      toggle.addEventListener('click', () => {
+        if (overlay.hidden) open();
+        else close();
+      });
+
+      closeBtn.addEventListener('click', close);
+
+      overlay.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target instanceof Element && target.hasAttribute('data-advanced-close')) {
+          close();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !overlay.hidden) {
+          event.preventDefault();
+          close();
+          toggle.focus();
+        }
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function readErrorMessage(response, fallback) {
+      if (!response) return fallback;
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('application/json')) {
+        const data = await response.clone().json().catch(() => null);
+        const message = data?.detail || data?.message || data?.error;
+        if (typeof message === 'string' && message.trim()) return message.trim();
+      }
+      const text = (await response.text().catch(() => '')).trim();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          const message = parsed?.detail || parsed?.message || parsed?.error;
+          if (typeof message === 'string' && message.trim()) return message.trim();
+        } catch (_) {
+          return text;
+        }
+        return text;
+      }
+      return fallback;
+    }
+
+    function animateDetailStage() {
+      const stage = document.getElementById('detail-body');
+      if (!stage) return;
+      if (detailTransitionFrame) {
+        window.cancelAnimationFrame(detailTransitionFrame);
+      }
+      stage.classList.add('is-updating');
+      detailTransitionFrame = window.requestAnimationFrame(() => {
+        detailTransitionFrame = window.requestAnimationFrame(() => {
+          stage.classList.remove('is-updating');
+          detailTransitionFrame = null;
+        });
+      });
+    }
+
+    function getQuickFilterPreset(mode) {
+      return QUICK_FILTER_PRESETS[mode] || QUICK_FILTER_PRESETS.all;
+    }
+
+    function matchesQuickFilter(mode, item, now = Date.now()) {
+      return getQuickFilterPreset(mode).matches(item, now);
+    }
+
+    function countMatching(items, mode, now = Date.now()) {
+      return (items || []).filter((item) => matchesQuickFilter(mode, item, now)).length;
+    }
+
+    function compareProcess(a, b, key, order) {
+      const direction = order === 'asc' ? 1 : -1;
+      if (key === 'name' || key === 'status') {
+        return String(a?.[key] || '').localeCompare(String(b?.[key] || '')) * direction;
+      }
+      if (key === 'create_time') {
+        return ((Date.parse(a?.create_time || '') || 0) - (Date.parse(b?.create_time || '') || 0)) * direction;
+      }
+      return ((Number(a?.[key] || 0) - Number(b?.[key] || 0)) || (Number(a?.pid || 0) - Number(b?.pid || 0))) * direction;
+    }
+
+    function applyProcessQuickFilter(items) {
+      const mode = document.getElementById('quick-filter').value || 'all';
+      const now = Date.now();
+      const preset = getQuickFilterPreset(mode);
+      const filtered = (items || []).filter((item) => preset.matches(item, now));
+      document.getElementById('process-toolbar-meta').textContent = `${preset.label} · ${filtered.length} 项`;
+      return filtered;
+    }
+
+    function applyQuickFilter(items) {
+      return applyProcessQuickFilter(items);
+    }
+
+    function selectedItems() {
+      return state.items.filter((item) => state.selectedPids.has(item.pid));
+    }
+
+    function getCachedDetail(pid, { allowStale = false } = {}) {
+      const entry = state.detailCache.get(pid);
+      if (!entry) return null;
+      if (allowStale || (Date.now() - entry.fetchedAt) <= DETAIL_CACHE_TTL_MS) {
+        return entry.data;
+      }
+      return null;
+    }
+
+    function getCachedDetailError(pid, { allowStale = false } = {}) {
+      const entry = state.detailErrorCache.get(pid);
+      if (!entry) return null;
+      if (allowStale || (Date.now() - entry.fetchedAt) <= DETAIL_CACHE_TTL_MS) {
+        return entry.message;
+      }
+      return null;
+    }
+
+    function focusedItem() {
+      return state.items.find((item) => item.pid === state.focusedPid) || null;
+    }
+
+    function syncSelectionAndFocus() {
+      const visible = new Set(state.items.map((item) => item.pid));
+      state.selectedPids = new Set([...state.selectedPids].filter((pid) => visible.has(pid)));
+      if (state.focusedPid == null || !visible.has(state.focusedPid)) {
+        state.focusedPid = state.items[0]?.pid ?? null;
+      }
+    }
+
+    function getKnownDetailUnavailableReason(item) {
+      const pid = Number(item?.pid);
+      if (!Number.isFinite(pid)) return '该进程标识无效，无法读取详情。';
+      if (pid <= 0) {
+        if (String(item?.name || '').trim() === 'System Idle Process') {
+          return 'System Idle Process 属于系统保留空闲进程，不提供可读取的详情。';
+        }
+        return '系统保留进程不提供详情。';
+      }
+      return null;
+    }
+
+    function updateHeaderStats() {
+      const now = Date.now();
+      document.getElementById('list-meta').textContent = state.meta.generated_at
+        ? `更新时间 ${new Date(state.meta.generated_at).toLocaleString('zh-CN')} · 总数 ${state.meta.total}${state.meta.truncated ? ' · 已截断' : ''}`
+        : '—';
+      document.getElementById('selection-meta').textContent = state.selectedPids.size
+        ? `已选择 ${state.selectedPids.size} 项`
+        : '未选择';
+      document.getElementById('selection-meta').className = state.selectedPids.size
+        ? 'panel-pill monitor-summary-pill is-brand'
+        : 'panel-pill monitor-summary-pill';
+      document.getElementById('clear-selection-btn').disabled = state.selectedPids.size === 0;
+      document.getElementById('batch-terminate-btn').disabled = state.selectedPids.size === 0;
+      document.getElementById('batch-kill-btn').disabled = state.selectedPids.size === 0;
+      document.getElementById('process-toolbar-meta').textContent = `可见 ${state.items.length} · 运行 ${countMatching(state.items, 'running', now)} · CPU高 ${countMatching(state.items, 'high-cpu', now)} · 内存高 ${countMatching(state.items, 'high-memory', now)}`;
+    }
+
+    function updateSelectAllBox() {
+      const box = document.getElementById('select-all');
+      const total = state.items.length;
+      const selected = selectedItems().length;
+      box.checked = total > 0 && selected === total;
+      box.indeterminate = selected > 0 && selected < total;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('process-table');
+      tbody.innerHTML = '';
+      if (!state.items.length) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="8"><div class="monitor-empty-card">暂无匹配进程。</div></td>';
+        tbody.appendChild(row);
+        updateSelectAllBox();
+        return;
+      }
+      state.items.forEach((item) => {
+        const selected = state.selectedPids.has(item.pid);
+        const focused = state.focusedPid === item.pid;
+        const row = document.createElement('tr');
+        row.className = `${focused ? 'is-focused ' : ''}${selected ? 'is-selected' : ''}`.trim();
+        row.innerHTML = `
+          <td><input class="rounded" type="checkbox" data-pid="${item.pid}" ${selected ? 'checked' : ''} /></td>
+          <td><span class="monitor-cell-primary panel-mono">${item.pid}</span></td>
+          <td>
+            <span class="monitor-cell-primary monitor-ellipsis">${escapeHtml(item.name || '(unknown)')}</span>
+            <span class="monitor-cell-secondary panel-mono monitor-ellipsis">${escapeHtml(item.exe || '详情按需载入')}</span>
+          </td>
+          <td><span class="monitor-cell-primary monitor-ellipsis">${escapeHtml(item.status || '—')}</span></td>
+          <td><span class="monitor-cell-primary monitor-ellipsis">${escapeHtml(item.username || '—')}</span></td>
+          <td><span class="monitor-cell-primary">${Number(item.cpu_percent || 0).toFixed(1)}%</span></td>
+          <td>
+            <span class="monitor-cell-primary">${fmtBytes(item.memory_rss)}</span>
+            <span class="monitor-cell-secondary">${Number(item.memory_percent || 0).toFixed(2)}%</span>
+          </td>
+          <td>
+            <span class="monitor-cell-primary">${fmtAge(item.create_time)}</span>
+            <span class="monitor-cell-secondary">${fmtDate(item.create_time)}</span>
+          </td>
+        `;
+        row.addEventListener('click', () => {
+          state.focusedPid = item.pid;
+          renderTable();
+          renderDetailPane();
+        });
+        row.querySelector('input[data-pid]').addEventListener('click', (event) => {
+          event.stopPropagation();
+        });
+        row.querySelector('input[data-pid]').addEventListener('change', (event) => {
+          toggleSelection(item.pid, event.target.checked);
+        });
+        tbody.appendChild(row);
+      });
+      updateSelectAllBox();
+    }
+
+    function renderBatchDetail(items) {
+      const statuses = new Map();
+      let totalCpu = 0;
+      let totalMemory = 0;
+      items.forEach((item) => {
+        const key = item.status || 'unknown';
+        statuses.set(key, (statuses.get(key) || 0) + 1);
+        totalCpu += Number(item.cpu_percent || 0);
+        totalMemory += Number(item.memory_rss || 0);
+      });
+      const statusText = [...statuses.entries()].map(([key, value]) => `${key}:${value}`).join(' / ') || '—';
+      document.getElementById('detail-title').textContent = `批量选择 ${items.length} 项`;
+      document.getElementById('detail-terminate-btn').disabled = true;
+      document.getElementById('detail-kill-btn').disabled = true;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="monitor-primary-grid">
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">已选择</div><div class="monitor-metric-value">${items.length}</div><div class="monitor-metric-note">批量动作输入集</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">累计 CPU</div><div class="monitor-metric-value">${totalCpu.toFixed(1)}%</div><div class="monitor-metric-note">当前工作集总和</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">累计内存</div><div class="monitor-metric-value">${fmtBytes(totalMemory)}</div><div class="monitor-metric-note">RSS 累计</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">状态分布</div><div class="monitor-metric-value">${escapeHtml(statusText)}</div><div class="monitor-metric-note">运行态组合</div></div>
+        </div>
+        <div class="monitor-list-card">
+          <div class="monitor-list-title">已选择进程</div>
+          <div class="monitor-list-body">
+            ${items.slice(0, 48).map((item) => `<div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary panel-mono">${item.pid}</span><span class="monitor-cell-secondary monitor-ellipsis">${escapeHtml(item.name || '(unknown)')}</span></div><span class="monitor-list-row-meta">${Number(item.cpu_percent || 0).toFixed(1)}% · ${fmtBytes(item.memory_rss)}</span></div>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDetailLoading(item) {
+      document.getElementById('detail-title').textContent = `${item.name || '(unknown)'} · ${item.pid}`;
+      document.getElementById('detail-terminate-btn').disabled = true;
+      document.getElementById('detail-kill-btn').disabled = true;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="monitor-detail-skeleton">
+          <div class="monitor-skeleton-grid">
+            <div class="monitor-skeleton-card"><div class="monitor-skeleton-line is-short"></div><div class="monitor-skeleton-line is-tall" style="margin-top:10px"></div></div>
+            <div class="monitor-skeleton-card"><div class="monitor-skeleton-line is-short"></div><div class="monitor-skeleton-line is-medium" style="margin-top:10px"></div></div>
+            <div class="monitor-skeleton-card"><div class="monitor-skeleton-line is-short"></div><div class="monitor-skeleton-line is-medium" style="margin-top:10px"></div></div>
+            <div class="monitor-skeleton-card"><div class="monitor-skeleton-line is-short"></div><div class="monitor-skeleton-line is-medium" style="margin-top:10px"></div></div>
+          </div>
+          <div class="monitor-skeleton-card"><div class="monitor-skeleton-line is-short"></div><div class="monitor-skeleton-line" style="margin-top:12px"></div><div class="monitor-skeleton-line is-medium" style="margin-top:8px"></div></div>
+          <div class="monitor-skeleton-card"><div class="monitor-skeleton-line is-short"></div><div class="monitor-skeleton-line" style="margin-top:12px"></div><div class="monitor-skeleton-line" style="margin-top:8px"></div><div class="monitor-skeleton-line is-medium" style="margin-top:8px"></div></div>
+        </div>`;
+    }
+
+    function renderSingleDetail(item, detail) {
+      const current = detail || getCachedDetail(item.pid, { allowStale: true }) || item;
+      const actionDisabled = Number(item.pid || 0) <= 0;
+      document.getElementById('detail-title').textContent = `${item.name || '(unknown)'} · ${item.pid}`;
+      document.getElementById('detail-terminate-btn').disabled = actionDisabled;
+      document.getElementById('detail-kill-btn').disabled = actionDisabled;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="monitor-detail-grid">
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">PID</div><div class="monitor-metric-value panel-mono">${item.pid}</div><div class="monitor-metric-note">当前进程</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">状态</div><div class="monitor-metric-value">${escapeHtml(current.status || item.status || '—')}</div><div class="monitor-metric-note">运行态</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">用户</div><div class="monitor-metric-value">${escapeHtml(current.username || item.username || '—')}</div><div class="monitor-metric-note">属主</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">CPU</div><div class="monitor-metric-value">${Number(current.cpu_percent || item.cpu_percent || 0).toFixed(1)}%</div><div class="monitor-metric-note">当前占用</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">内存</div><div class="monitor-metric-value">${fmtBytes(current.memory_rss || item.memory_rss)}</div><div class="monitor-metric-note">${Number(current.memory_percent || item.memory_percent || 0).toFixed(2)}%</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">创建时间</div><div class="monitor-metric-value">${fmtDate(current.create_time || item.create_time)}</div><div class="monitor-metric-note">${fmtAge(current.create_time || item.create_time)}</div></div>
+        </div>
+        <div class="monitor-list-card">
+          <div class="monitor-list-title">可执行文件</div>
+          <div class="monitor-list-body">
+            <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary panel-mono monitor-break">${escapeHtml(current.exe || item.exe || '—')}</span></div></div>
+          </div>
+        </div>
+        <div class="monitor-list-card">
+          <div class="monitor-list-title">命令行</div>
+          <div class="monitor-list-body">
+            <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary panel-mono monitor-break">${escapeHtml(((current.cmdline || item.cmdline || []).join(' ')) || '—')}</span></div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDetailUnavailable(item, message) {
+      const detailMessage = message || '该进程当前无法提供详情。';
+      document.getElementById('detail-title').textContent = `${item.name || '(unknown)'} · ${item.pid}`;
+      document.getElementById('detail-terminate-btn').disabled = true;
+      document.getElementById('detail-kill-btn').disabled = true;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="monitor-detail-grid">
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">PID</div><div class="monitor-metric-value panel-mono">${item.pid}</div><div class="monitor-metric-note">当前进程</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">名称</div><div class="monitor-metric-value">${escapeHtml(item.name || '—')}</div><div class="monitor-metric-note">列表快照</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">状态</div><div class="monitor-metric-value">${escapeHtml(item.status || '—')}</div><div class="monitor-metric-note">列表快照</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">详情状态</div><div class="monitor-metric-value">不可显示</div><div class="monitor-metric-note">${escapeHtml(detailMessage)}</div></div>
+        </div>
+        <div class="process-unavailable-card">
+          <div class="process-unavailable-title">无法读取详情</div>
+          <div class="process-unavailable-copy">${escapeHtml(detailMessage)}</div>
+        </div>
+      `;
+    }
+
+    function renderEmptyDetail() {
+      document.getElementById('detail-title').textContent = '未选择进程';
+      document.getElementById('detail-terminate-btn').disabled = true;
+      document.getElementById('detail-kill-btn').disabled = true;
+      document.getElementById('detail-body').innerHTML = '<div class="monitor-empty-card">从左侧选择进程后在这里查看详情或聚合。</div>';
+    }
+
+    function renderDetailPane() {
+      animateDetailStage();
+      const batchItems = selectedItems();
+      if (batchItems.length > 1) {
+        renderBatchDetail(batchItems);
+        return;
+      }
+      const item = focusedItem();
+      if (!item) {
+        renderEmptyDetail();
+        return;
+      }
+      const knownUnavailableReason = getKnownDetailUnavailableReason(item);
+      if (knownUnavailableReason) {
+        state.detailErrorCache.set(Number(item.pid), { message: knownUnavailableReason, fetchedAt: Date.now() });
+        renderDetailUnavailable(item, knownUnavailableReason);
+        return;
+      }
+      const cached = getCachedDetail(item.pid, { allowStale: true });
+      if (cached) {
+        renderSingleDetail(item, cached);
+      } else {
+        const cachedError = getCachedDetailError(item.pid, { allowStale: true });
+        if (cachedError) renderDetailUnavailable(item, cachedError);
+        else renderDetailLoading(item);
+      }
+      loadProcessDetail(item.pid).then((detail) => {
+        if (state.focusedPid === item.pid && selectedItems().length <= 1 && detail) {
+          renderSingleDetail(item, detail);
+        }
+      }).catch((error) => {
+        if (state.focusedPid !== item.pid || selectedItems().length > 1) return;
+        if (!getCachedDetail(item.pid, { allowStale: true })) {
+          renderDetailUnavailable(item, error?.message || '该进程详情当前不可显示。');
+        }
+      });
+    }
+
+    async function loadProcessDetail(pid, { force = false } = {}) {
+      if (pid == null) return null;
+      const numericPid = Number(pid);
+      if (!Number.isFinite(numericPid)) return null;
+      if (numericPid <= 0) {
+        const message = '系统保留进程不提供详情。';
+        state.detailErrorCache.set(numericPid, { message, fetchedAt: Date.now() });
+        throw new Error(message);
+      }
+      const cached = !force ? getCachedDetail(numericPid) : null;
+      if (cached) return cached;
+      const cachedError = !force ? getCachedDetailError(numericPid) : null;
+      if (cachedError) throw new Error(cachedError);
+      if (state.detailInflight.has(numericPid)) return state.detailInflight.get(numericPid);
+      const now = Date.now();
+      const lastFetchAt = state.detailLastFetchAt.get(numericPid) || 0;
+      if (!force && (now - lastFetchAt) < DETAIL_FETCH_THROTTLE_MS) {
+        const staleDetail = getCachedDetail(numericPid, { allowStale: true });
+        if (staleDetail) return staleDetail;
+        const staleError = getCachedDetailError(numericPid, { allowStale: true });
+        if (staleError) throw new Error(staleError);
+        return null;
+      }
+      state.detailLastFetchAt.set(numericPid, now);
+      const request = fetch(httpUrl(`/admin/api/system/processes/${numericPid}`), { cache: 'no-store' })
+        .then(async (response) => {
+          if (!response.ok) {
+            const message = await readErrorMessage(response, '读取进程详情失败');
+            state.detailErrorCache.set(numericPid, { message, fetchedAt: Date.now() });
+            throw new Error(message);
+          }
+          const detail = await response.json();
+          state.detailCache.set(numericPid, { data: detail, fetchedAt: Date.now() });
+          state.detailErrorCache.delete(numericPid);
+          return detail;
+        })
+        .finally(() => {
+          state.detailInflight.delete(numericPid);
+        });
+      state.detailInflight.set(numericPid, request);
+      return request;
+    }
+
+    function recomputeView(meta) {
+      if (meta) state.meta = meta;
+      const filtered = applyQuickFilter(state.rawItems);
+      const sortKey = document.getElementById('sort-key').value;
+      const sortOrder = document.getElementById('sort-order').value;
+      state.items = [...filtered].sort((a, b) => compareProcess(a, b, sortKey, sortOrder));
+      syncSelectionAndFocus();
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    }
+
+    function toggleSelection(pid, checked) {
+      if (checked) state.selectedPids.add(pid);
+      else state.selectedPids.delete(pid);
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    }
+
+    async function loadProcesses() {
+      const params = new URLSearchParams();
+      const search = document.getElementById('search-input').value.trim();
+      const limit = document.getElementById('limit-input').value.trim() || '800';
+      if (search) params.set('search', search);
+      params.set('limit', limit);
+      params.set('include_cmdline', 'false');
+      setStatus('正在读取进程列表…', true);
+      const response = await fetch(`${httpUrl('/admin/api/system/processes')}?${params.toString()}`);
+      if (!response.ok) throw new Error(await response.text() || '读取进程失败');
+      const data = await response.json();
+      state.rawItems = Array.isArray(data.items) ? data.items : [];
+      const visiblePids = new Set(state.rawItems.map((item) => item.pid));
+      [...state.detailCache.keys()].forEach((pid) => {
+        if (!visiblePids.has(pid)) state.detailCache.delete(pid);
+      });
+      [...state.detailErrorCache.keys()].forEach((pid) => {
+        if (!visiblePids.has(pid)) state.detailErrorCache.delete(pid);
+      });
+      [...state.detailLastFetchAt.keys()].forEach((pid) => {
+        if (!visiblePids.has(pid)) state.detailLastFetchAt.delete(pid);
+      });
+      recomputeView({ total: data.total || state.rawItems.length, truncated: Boolean(data.truncated), generated_at: data.generated_at || new Date().toISOString() });
+      setStatus(`已载入 ${state.rawItems.length} 个进程`, true);
+    }
+
+    async function operateProcess(pid, action) {
+      if (pid == null) return;
+      const actionLabel = PROCESS_ACTION_LABELS[action] || action;
+      const confirmed = window.confirm(`确认对进程 ${pid} 执行${actionLabel}吗？`);
+      if (!confirmed) return;
+      setStatus(`正在执行${actionLabel}(${pid})…`, true);
+      const response = await fetch(`${httpUrl(`/admin/api/system/processes/${pid}/${action}`)}?wait_timeout=3`, { method: 'POST' });
+      if (!response.ok) throw new Error(await readErrorMessage(response, `${actionLabel}失败`));
+      const data = await response.json();
+      state.detailCache.delete(pid);
+      state.detailErrorCache.delete(pid);
+      state.detailLastFetchAt.delete(pid);
+      setStatus(data.message || `${actionLabel}成功`, true);
+      await loadProcesses();
+    }
+
+    async function operateBatch(action) {
+      const pids = [...state.selectedPids];
+      if (!pids.length) return;
+      const actionLabel = PROCESS_ACTION_LABELS[action] || action;
+      const confirmed = window.confirm(`确认对 ${pids.length} 个进程执行${actionLabel}吗？`);
+      if (!confirmed) return;
+      setStatus(`正在批量执行${actionLabel}…`, true);
+      const failures = [];
+      for (const pid of pids) {
+        try {
+          const response = await fetch(`${httpUrl(`/admin/api/system/processes/${pid}/${action}`)}?wait_timeout=3`, { method: 'POST' });
+          if (!response.ok) failures.push(pid);
+        } catch (error) {
+          failures.push(pid);
+        }
+      }
+      pids.forEach((pid) => {
+        state.detailCache.delete(pid);
+        state.detailLastFetchAt.delete(pid);
+      });
+      state.selectedPids.clear();
+      await loadProcesses();
+      if (failures.length) setStatus(`${actionLabel}完成，失败 ${failures.length} 项`, false);
+      else setStatus(`${actionLabel}完成，共处理 ${pids.length} 项`, true);
+    }
+
+    function restartAutoRefresh() {
+      if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+      }
+      if (!document.getElementById('auto-refresh').checked) return;
+      state.timer = window.setInterval(() => {
+        loadProcesses().catch((error) => setStatus(error.message || '刷新失败', false));
+      }, 5000);
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+      loadProcesses().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('search-input').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      loadProcesses().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('limit-input').addEventListener('change', () => {
+      loadProcesses().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('sort-key').addEventListener('change', () => recomputeView());
+    document.getElementById('sort-order').addEventListener('change', () => recomputeView());
+    document.getElementById('quick-filter').addEventListener('change', () => recomputeView());
+    document.getElementById('auto-refresh').addEventListener('change', restartAutoRefresh);
+    document.getElementById('select-all').addEventListener('change', (event) => {
+      if (event.target.checked) state.items.forEach((item) => state.selectedPids.add(item.pid));
+      else state.selectedPids.clear();
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    });
+    document.getElementById('clear-selection-btn').addEventListener('click', () => {
+      state.selectedPids.clear();
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    });
+    document.getElementById('batch-terminate-btn').addEventListener('click', () => {
+      operateBatch('terminate').catch((error) => setStatus(error.message || '批量 terminate 失败', false));
+    });
+    document.getElementById('batch-kill-btn').addEventListener('click', () => {
+      operateBatch('kill').catch((error) => setStatus(error.message || '批量 kill 失败', false));
+    });
+    document.getElementById('detail-terminate-btn').addEventListener('click', () => {
+      const item = focusedItem();
+      if (!item) return;
+      operateProcess(item.pid, 'terminate').catch((error) => setStatus(error.message || 'terminate 失败', false));
+    });
+    document.getElementById('detail-kill-btn').addEventListener('click', () => {
+      const item = focusedItem();
+      if (!item) return;
+      operateProcess(item.pid, 'kill').catch((error) => setStatus(error.message || 'kill 失败', false));
+    });
+
+    initAdvancedFilterPopover();
+
+    initWorkbenchSplit({
+      rootId: 'process-workbench',
+      splitterId: 'process-splitter',
+      toggleId: 'process-split-toggle',
+      storageKey: 'proj:panel:system-processes:split',
+      defaultWidth: 408,
+      minWidth: 300,
+      maxWidth: 620,
+      collapseAt: 320,
+    });
+
+    loadProcesses().catch((error) => setStatus(error.message || '初始化失败', false));
+    restartAutoRefresh();
+    window.addEventListener('beforeunload', () => state.timer && clearInterval(state.timer));
+  </script>
+</body>
+</html>

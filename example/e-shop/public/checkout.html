@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f5f5f5">
+<title>结算 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
+  .page-wrap { max-width: 1040px; margin: 0 auto; padding: 1rem; }
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 13px; font-weight: 650; color: var(--builtin-color-muted, #6b7280); margin-bottom: 6px; }
+  .field input, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-input-bg, #ffffff); color: inherit; font-size: 14px; box-sizing: border-box; }
+  .field textarea { min-height: 88px; resize: vertical; }
+  .coupon-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+  .coupon-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-input-bg, #ffffff); color: inherit; font: inherit; }
+  .nav-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: var(--builtin-radius, 6px); border: 1px solid var(--builtin-border, #d1d5db); background: var(--builtin-button-bg, #ffffff); color: var(--builtin-color-text, #111827); font-weight: 500; cursor: pointer; font: inherit; text-decoration: none; }
+  .nav-btn:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  .nav-btn-primary { background: var(--builtin-primary, #2563eb); border-color: var(--builtin-primary, #2563eb); color: #fff; }
+  .nav-btn-primary:hover { background: var(--builtin-primary-hover, #1d4ed8); }
+  @media (max-width: 720px) {
+    .page-wrap { padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem max(0.5rem, env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <builtin-navbar id="navbar" brand="e-Shop">
+    <div slot="brand" style="display:flex;align-items:center;gap:8px;">
+      <builtin-icon name="credit-card" size="20"></builtin-icon>
+      <span>e-Shop</span>
+    </div>
+    <div slot="actions" style="display:flex;gap:0.5rem;align-items:center;">
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
+      <builtin-theme-toggle></builtin-theme-toggle>
+      <a href="cart.html" class="nav-btn" data-i18n="eshop.back_to_cart">返回购物车</a>
+    </div>
+  </builtin-navbar>
+
+  <builtin-stepper id="checkout-stepper" steps='[{"label":"购物车"},{"label":"结算"},{"label":"完成"}]' current="1" style="margin:1rem 0;"></builtin-stepper>
+
+  <builtin-card style="margin-bottom:1rem;">
+    <div slot="header" data-i18n="eshop.shipping_info">收货信息</div>
+    <div style="padding:16px;">
+      <div class="field">
+        <label data-i18n="eshop.name_placeholder">收货人姓名</label>
+        <input type="text" id="ship-name" value="Demo User" data-i18n-placeholder="eshop.name_placeholder">
+      </div>
+      <div class="field">
+        <label data-i18n="eshop.phone_placeholder">联系电话</label>
+        <input type="text" id="ship-phone" value="13800138000" data-i18n-placeholder="eshop.phone_placeholder">
+      </div>
+      <div class="field">
+        <label data-i18n="eshop.address_placeholder">详细地址</label>
+        <textarea id="ship-address" data-i18n-placeholder="eshop.address_placeholder">北京市海淀区</textarea>
+      </div>
+    </div>
+  </builtin-card>
+
+  <builtin-card style="margin-bottom:1rem;">
+    <div slot="header" data-i18n="eshop.coupons">优惠券</div>
+    <div style="padding:16px;">
+      <div class="coupon-row">
+        <input id="coupon-code" placeholder="输入优惠码" data-i18n-placeholder="eshop.discount_code">
+        <button id="btn-apply-coupon" class="nav-btn nav-btn-primary" data-i18n="eshop.apply">应用</button>
+      </div>
+      <div id="coupon-msg" style="font-size:13px;color:var(--builtin-color-muted);"></div>
+    </div>
+  </builtin-card>
+
+  <builtin-tpl-ecommerce-checkout id="checkout-tpl"></builtin-tpl-ecommerce-checkout>
+</div>
+
+<script type="module">
+import { initEshop, api, t, applyI18n, USER_ID, BuiltinToast } from './eshop-utils.js';
+
+await initEshop();
+
+const $ = id => document.getElementById(id);
+let currentCoupon = '';
+let currentDiscount = 0;
+let cartItems = [];
+let cartTotal = 0;
+
+(async () => {
+  const r = await api('/shop/cart?user_id=' + USER_ID);
+  const items = (r && r.items) || [];
+  cartItems = items;
+  if (!items.length) {
+    const tpl = $('checkout-tpl');
+    tpl.style.display = 'none';
+    const alertEl = document.createElement('builtin-alert');
+    alertEl.variant = 'info';
+    alertEl.setAttribute('data-i18n', 'eshop.cart_empty');
+    alertEl.textContent = '购物车是空的';
+    document.querySelector('.page-wrap').insertBefore(alertEl, tpl);
+    await applyI18n();
+    return;
+  }
+  let total = 0;
+  const orderItems = items.map(item => {
+    const itemTotal = (item.price || 0) * item.quantity;
+    total += itemTotal;
+    return { title: item.name, qty: item.quantity, price: '¥' + item.price };
+  });
+  cartTotal = total;
+
+  const tpl = $('checkout-tpl');
+  tpl.items = orderItems;
+  tpl.subtotal = '¥' + total;
+  tpl.shipping = '¥0';
+  tpl.total = '¥' + total;
+  tpl.labels = {
+    'checkout.shippingAddress': await t('eshop.shipping_info'),
+    'checkout.firstName': await t('eshop.first_name') || 'First Name',
+    'checkout.lastName': await t('eshop.last_name') || 'Last Name',
+    'checkout.address': await t('eshop.address') || 'Address',
+    'checkout.city': await t('eshop.city') || 'City',
+    'checkout.postalCode': await t('eshop.postal_code') || 'Postal Code',
+    'checkout.country': await t('eshop.country') || 'Country',
+    'checkout.paymentMethod': await t('eshop.payment_method') || 'Payment Method',
+    'checkout.card': await t('eshop.card') || 'Card',
+    'checkout.paypal': await t('eshop.paypal') || 'PayPal',
+    'checkout.cod': await t('eshop.cod') || 'Cash on Delivery',
+    'checkout.orderSummary': await t('eshop.order_summary'),
+    'checkout.discountCode': await t('eshop.discount_code') || 'Discount code',
+    'checkout.apply': await t('eshop.apply') || 'Apply',
+    'checkout.subtotal': await t('eshop.subtotal') || 'Subtotal',
+    'checkout.shipping': await t('eshop.shipping') || 'Shipping',
+    'checkout.total': await t('eshop.total') || 'Total',
+    'checkout.placeOrder': await t('eshop.submit_order'),
+  };
+})();
+
+$('btn-apply-coupon').addEventListener('click', async () => {
+  const code = $('coupon-code').value.trim();
+  if (!code) return;
+  try {
+    const res = await api('/shop/coupons', { method: 'POST', body: JSON.stringify({ code, order_total: cartTotal }) });
+    if (res?.ok) {
+      currentCoupon = code;
+      currentDiscount = res.coupon.discount;
+      $('coupon-msg').textContent = `${res.coupon.description}，立减 ¥${currentDiscount}`;
+      $('coupon-msg').style.color = 'var(--builtin-primary)';
+      const tpl = $('checkout-tpl');
+      tpl.total = '¥' + Math.max(0, cartTotal - currentDiscount);
+      BuiltinToast.show(await t('eshop.coupon_applied'), { type: 'success' });
+    } else {
+      $('coupon-msg').textContent = res?.error || '优惠券无效';
+      $('coupon-msg').style.color = 'var(--builtin-color-danger)';
+    }
+  } catch (e) {
+    $('coupon-msg').textContent = '验证失败';
+    $('coupon-msg').style.color = 'var(--builtin-color-danger)';
+  }
+});
+
+$('checkout-tpl').addEventListener('builtin-place-order', async () => {
+  if (!cartItems.length) return;
+  const shipping = {
+    name: $('ship-name').value,
+    phone: $('ship-phone').value,
+    address: $('ship-address').value,
+  };
+  const res = await api('/shop/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: USER_ID, items: cartItems, shipping, coupon_code: currentCoupon })
+  });
+  if (res && res.ok) {
+    BuiltinToast.show(await t('eshop.order_success') + res.order.order_id, { type: 'success' });
+    location.href = 'orders.html';
+  } else {
+    BuiltinToast.show(await t('eshop.submit_failed'), { type: 'error' });
+  }
+});
+</script>
+</body>
+</html>

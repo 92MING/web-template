@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Platform</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-video-platform videos='[
+    {"id":"v1","thumbnail":"https://picsum.photos/seed/v1/320/180","title":"Building a Design System","channel":"DesignLab","avatar":"https://i.pravatar.cc/150?u=dl","views":"45K views","timeAgo":"2 days ago","duration":"12:34"},
+    {"id":"v2","thumbnail":"https://picsum.photos/seed/v2/320/180","title":"React Patterns 2024","channel":"CodeDaily","avatar":"https://i.pravatar.cc/150?u=cd","views":"120K views","timeAgo":"1 week ago","duration":"24:15"},
+    {"id":"v3","thumbnail":"https://picsum.photos/seed/v3/320/180","title":"Healthy Morning Routine","channel":"LifeWell","avatar":"https://i.pravatar.cc/150?u=lw","views":"8K views","timeAgo":"3 days ago","duration":"8:45"}
+  ]' categories='["All","Music","Gaming","News","Live","Sports"]'></builtin-tpl-video-platform>
+</body>
+</html>

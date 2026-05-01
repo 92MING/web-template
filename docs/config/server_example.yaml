@@ -1,0 +1,77 @@
+# Framework server config example
+#
+# 启动方式：
+#   python -m app --config docs/config/server_example.yaml
+#
+# 自动发现顺序：
+#   1. config/dev_server.{yaml,yml,json,toml} 或 config/prod_server.{yaml,yml,json,toml}
+#   2. config/server.{yaml,yml,json,toml}
+#   3. 如果都没有，则使用内置默认值
+
+server_config:
+  host: 127.0.0.1
+  port: 8000
+  worker: 1
+  reload: false
+
+  # localhost / all / 单个 IP / 通配模式 / 列表 都可以
+  internal_path_prefix: /_internal
+  expose_internal_prefix: true
+  internal_path_allowed_ip: localhost
+
+  # 是否公开 /ai/* 别名；/_internal/ai/* 始终是 internal 入口
+  expose_ai_service: false
+
+  # 是否启用 RTC chatroom 相关公开路由
+  enable_rtc_chatroom: false
+
+  # 可选：注入前端页面的 base URL
+  frontend_baseurl: null
+
+  # 可选：把业务目录挂进框架
+  # extra_app_paths:
+  #   - example/e-shop
+  # extra_public_paths:
+  #   - example/e-shop/public
+  # extra_resources_paths:
+  #   - example/e-shop/resources
+
+  # system 工具页允许访问的根目录
+  # system_allowed_roots:
+  #   - C:/Users/yashi/Desktop/proj-template
+  # system_default_root: C:/Users/yashi/Desktop/proj-template
+  # system_terminal_default_cwd: C:/Users/yashi/Desktop/proj-template
+  # system_terminal_max_sessions: 6
+
+log_config:
+  # db / file 可单独或同时启用
+  log_method:
+    - db
+
+  # 留空时按运行模式自动决定，dev 更偏 DEBUG，prod 更偏 INFO
+  log_level: null
+
+  # file 模式相关
+  log_path: logs/runtime
+  log_backup_count: 14
+  log_rotation_interval: 24
+  rotation_time: "00:00"
+  zip_old_logs: false
+
+  # db 模式相关
+  system_metrics_interval: 2
+  system_metrics_retention_hours: 72
+
+rtc_room_config:
+  audio_sample_rate: 16000
+  min_silence_ms: 1000
+  min_voice_ms: 200
+  mid_silence_ms: 500
+  max_segment_ms: 10000
+  min_energy_rms: 200
+  bundle_policy: balanced
+
+  # 可选：显式指定 ICE servers
+  # ice_servers:
+  #   - urls:
+  #       - stun:stun.l.google.com:19302

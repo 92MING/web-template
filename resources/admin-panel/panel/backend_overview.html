@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后端概览</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <script src="/html-assets/js/page-controls.js"></script>
+  <style>
+    .backend-overview-body .panel-card-title {
+      margin-top: 2px;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .backend-overview-body .panel-card-body {
+      margin-top: 6px;
+    }
+
+    .backend-overview-body .panel-data-grid {
+      gap: 6px;
+    }
+
+    .backend-overview-body .panel-stat-value {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .backend-overview-body .panel-note {
+      margin-top: 2px;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    .backend-overview-body .panel-stat-card {
+      padding: 7px 8px;
+    }
+
+    .backend-overview-tight-line {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: normal;
+    }
+
+    .backend-control-summary {
+      display: grid;
+      gap: 5px;
+      font-size: 10px;
+      line-height: 1.2;
+      color: var(--proj-page-muted);
+    }
+
+    .backend-control-row {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 8px;
+      align-items: baseline;
+    }
+
+    .backend-control-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .backend-control-value {
+      min-width: 0;
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 700;
+      color: var(--proj-page-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: normal;
+    }
+
+    .backend-worker-stack {
+      display: grid;
+      gap: 6px;
+    }
+
+    .backend-worker-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 6px;
+    }
+
+    .backend-worker-summary-card {
+      padding: 8px 9px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      background: var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96));
+      box-shadow: var(--proj-page-shadow-soft, 0 10px 28px rgba(15, 23, 42, 0.05));
+    }
+
+    .backend-worker-summary-card span {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+      white-space: nowrap;
+    }
+
+    .backend-worker-summary-card strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 13px;
+      line-height: 1.05;
+      font-weight: 800;
+      color: var(--proj-page-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: normal;
+    }
+
+    .backend-worker-summary-card em {
+      display: none;
+      margin-top: 3px;
+      font-style: normal;
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--proj-page-muted);
+    }
+
+    .backend-worker-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 6px;
+    }
+
+    .backend-worker-card {
+      overflow: hidden;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      background: var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96));
+      box-shadow: var(--proj-page-shadow-soft, 0 10px 28px rgba(15, 23, 42, 0.05));
+    }
+
+    .backend-worker-card > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 9px 10px;
+    }
+
+    .backend-worker-card > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .backend-worker-card[open] > summary {
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .backend-worker-card-head {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+
+    .backend-worker-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .backend-worker-title {
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 800;
+      color: var(--proj-page-text);
+    }
+
+    .backend-worker-subtitle {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--proj-page-muted);
+      word-break: break-word;
+    }
+
+    .backend-worker-status,
+    .backend-worker-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .backend-worker-status.ok {
+      border-color: rgba(16, 185, 129, 0.24);
+      background: rgba(16, 185, 129, 0.12);
+      color: #047857;
+    }
+
+    .backend-worker-status.warn {
+      border-color: rgba(245, 158, 11, 0.24);
+      background: rgba(245, 158, 11, 0.12);
+      color: #b45309;
+    }
+
+    .backend-worker-status.err {
+      border-color: rgba(239, 68, 68, 0.26);
+      background: rgba(239, 68, 68, 0.12);
+      color: #b91c1c;
+    }
+
+    .backend-worker-chip {
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+      color: var(--proj-page-muted);
+    }
+
+    .backend-worker-chip strong {
+      color: var(--proj-page-text);
+      font-weight: 800;
+    }
+
+    .backend-worker-kpis {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .backend-worker-body {
+      padding: 8px 10px 10px;
+    }
+
+    .backend-worker-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .backend-worker-meta {
+      min-width: 0;
+      padding: 7px 8px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--proj-page-surface) 88%, transparent);
+    }
+
+    .backend-worker-meta-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .backend-worker-meta-value {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 800;
+      color: var(--proj-page-text);
+      word-break: break-word;
+    }
+
+    .backend-worker-empty {
+      min-height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      border: 1px dashed var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      background: color-mix(in srgb, var(--proj-page-surface) 82%, transparent);
+      color: var(--proj-page-muted);
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 720px) {
+      .backend-control-row {
+        grid-template-columns: 1fr;
+        gap: 2px;
+      }
+
+      .backend-worker-meta-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body class="panel-page-body backend-overview-body">
+  <main class="panel-page">
+    <div class="panel-page-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker">Backend Runtime</div>
+          <h1 class="panel-title">后端概览</h1>
+        </div>
+        <div class="panel-hero-actions">
+          <div id="control-badge" class="panel-pill"><span class="panel-dot warn"></span><span>控制状态未知</span></div>
+          <div class="panel-action-row">
+            <button id="refresh-btn" type="button" class="panel-btn">刷新</button>
+            <button id="restart-btn" type="button" class="panel-btn panel-btn-primary">重启后端</button>
+            <button id="stop-btn" type="button" class="panel-btn panel-btn-danger">停止后端</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="notice-box" class="status-box hidden" data-kind="warn"></div>
+
+      <section class="panel-stat-grid">
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Instance ID</div>
+          <div id="instance-id" class="panel-stat-value panel-mono">—</div>
+          <div id="instance-subtle" class="panel-note">当前 worker PID：—</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Start Time (HK)</div>
+          <div id="start-time" class="panel-stat-value">—</div>
+          <div id="uptime" class="panel-note">Uptime：—</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Git</div>
+          <div id="git-branch" class="panel-stat-value panel-mono">—</div>
+          <div id="git-head" class="panel-note panel-mono">HEAD：—</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Requests</div>
+          <div id="request-total" class="panel-stat-value">—</div>
+          <div id="request-subtle" class="panel-note">当前 worker：—</div>
+        </article>
+      </section>
+
+      <section class="panel-split-grid">
+        <article class="panel-card">
+          <div class="panel-card-header">
+            <div>
+              <div class="panel-card-kicker">Server</div>
+              <h2 class="panel-card-title">运行时信息</h2>
+            </div>
+          </div>
+          <div class="panel-card-body">
+            <div class="panel-data-grid">
+              <div class="panel-stat-card">
+                <div class="panel-stat-kicker">Listen</div>
+                <div id="server-listen" class="panel-stat-value panel-mono backend-overview-tight-line">—</div>
+                <div id="server-mode" class="panel-note">—</div>
+              </div>
+              <div class="panel-stat-card">
+                <div class="panel-stat-kicker">Config File</div>
+                <div id="config-path" class="panel-stat-value panel-mono backend-overview-tight-line">—</div>
+                <div id="config-note" class="panel-note">—</div>
+              </div>
+              <div class="panel-stat-card">
+                <div class="panel-stat-kicker">Start Args</div>
+                <div id="start-args" class="panel-stat-value panel-mono backend-overview-tight-line">—</div>
+                <div id="start-args-note" class="panel-note">—</div>
+              </div>
+              <div class="panel-stat-card">
+                <div class="panel-stat-kicker">Process</div>
+                <div id="process-pids" class="panel-stat-value panel-mono backend-overview-tight-line">—</div>
+                <div id="process-meta" class="panel-note">—</div>
+              </div>
+              <div class="panel-stat-card">
+                <div class="panel-stat-kicker">Rooms / Cache</div>
+                <div id="rooms-open" class="panel-stat-value">—</div>
+                <div id="cache-scope" class="panel-note">—</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel-card panel-card-soft">
+          <div class="panel-card-header">
+            <div>
+              <div class="panel-card-kicker">Control</div>
+              <h2 class="panel-card-title">控制能力</h2>
+            </div>
+          </div>
+          <div id="control-summary" class="panel-card-body backend-control-summary">
+            <div>等待加载…</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-card-header">
+          <div>
+            <div class="panel-card-kicker">Workers</div>
+            <h2 class="panel-card-title">Worker / PID / 请求计数</h2>
+          </div>
+          <div id="worker-summary" class="text-[10px] leading-[1.2] text-slate-500 dark:text-slate-400">—</div>
+        </div>
+        <div class="panel-card-body">
+          <div class="backend-worker-stack">
+            <div id="worker-highlight" class="backend-worker-summary-grid">
+              <div class="backend-worker-summary-card">
+                <span>Workers</span>
+                <strong>加载中…</strong>
+                <em>正在汇总 worker 运行态。</em>
+              </div>
+            </div>
+            <div id="workers-body" class="backend-worker-list">
+              <div class="backend-worker-empty">正在载入 worker 数据…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    let runtimeData = null;
+    let refreshTimer = null;
+    let refreshInFlight = false;
+    let commandPending = false;
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function fmtDateTime(value) {
+      if (!value) return '—';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return value;
+      return new Intl.DateTimeFormat('zh-HK', {
+        timeZone: 'Asia/Hong_Kong',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+      }).format(dt);
+    }
+
+    function fmtUptime(seconds) {
+      if (seconds == null || !Number.isFinite(seconds)) return '—';
+      const total = Math.max(0, Math.floor(seconds));
+      const d = Math.floor(total / 86400);
+      const h = Math.floor((total % 86400) / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      const parts = [];
+      if (d) parts.push(`${d}天`);
+      if (h || d) parts.push(`${h}小时`);
+      parts.push(`${m}分钟`);
+      parts.push(`${s}秒`);
+      return parts.join(' ');
+    }
+
+    function showNotice(message, kind = 'warn') {
+      const el = document.getElementById('notice-box');
+      if (!message) {
+        el.classList.add('hidden');
+        el.textContent = '';
+        el.dataset.kind = 'warn';
+        return;
+      }
+      el.classList.remove('hidden');
+      el.textContent = message;
+      el.dataset.kind = kind === 'error' ? 'error' : 'warn';
+    }
+
+    function buildAuthedUrl(input) {
+      const url = new URL(input, window.location.origin);
+      const pageUrl = new URL(window.location.href);
+      const apiKey = pageUrl.searchParams.get('api_key') || pageUrl.searchParams.get('x_api_key');
+      if (apiKey && !url.searchParams.has('api_key') && !url.searchParams.has('x_api_key')) {
+        url.searchParams.set('api_key', apiKey);
+      }
+      return url.pathname + url.search + url.hash;
+    }
+
+    function buildAuthedRequestInit(options = {}) {
+      const headers = new Headers(options.headers || {});
+      const apiKey = String(window.localStorage.getItem(ADMIN_APIKEY_LOCALSTORAGE_KEY) || '').trim();
+      if (apiKey && !headers.has('x-api-key')) {
+        headers.set('x-api-key', apiKey);
+      }
+      if (!headers.has('accept')) {
+        headers.set('accept', 'application/json');
+      }
+      return {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        ...options,
+        signal: options.signal || AbortSignal.timeout(7000),
+        headers,
+      };
+    }
+
+    async function fetchJson(input, options = {}) {
+      const resp = await fetch(buildAuthedUrl(input), buildAuthedRequestInit(options));
+      const contentType = String(resp.headers.get('content-type') || '').toLowerCase();
+      if (!resp.ok) {
+        let detail = `HTTP ${resp.status}`;
+        try {
+          if (contentType.includes('application/json')) {
+            const payload = await resp.json();
+            detail = payload?.detail || payload?.message || detail;
+          } else {
+            const text = await resp.text();
+            detail = text || detail;
+          }
+        } catch {}
+        if (resp.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        throw new Error(detail);
+      }
+      if (!contentType.includes('application/json')) {
+        throw new Error('接口未返回 JSON，可能是登录态已失效。');
+      }
+      return resp.json();
+    }
+
+    function setCommandPending(pending) {
+      commandPending = pending;
+      document.getElementById('refresh-btn').disabled = pending;
+      document.getElementById('restart-btn').disabled = pending;
+      document.getElementById('stop-btn').disabled = pending;
+    }
+
+    function renderControl(control) {
+      const badge = document.getElementById('control-badge');
+      const summary = document.getElementById('control-summary');
+      const supported = !!control?.supported;
+      const dotClass = supported ? 'ok' : 'warn';
+      badge.innerHTML = `<span class="panel-dot ${dotClass}"></span><span>${supported ? '支持进程级控制' : '控制能力受限'}</span>`;
+      summary.innerHTML = `
+        <div class="backend-control-row">
+          <div class="backend-control-label">Mode</div>
+          <div class="backend-control-value panel-mono" title="${escapeHtml(control?.mode || '—')}">${escapeHtml(control?.mode || '—')}</div>
+        </div>
+        <div class="backend-control-row">
+          <div class="backend-control-label">Supervisor PID</div>
+          <div class="backend-control-value panel-mono">${escapeHtml(control?.supervisor_pid ?? '—')}</div>
+        </div>
+        <div class="backend-control-row">
+          <div class="backend-control-label">Server PID</div>
+          <div class="backend-control-value panel-mono">${escapeHtml(control?.server_pid ?? '—')}</div>
+        </div>
+        <div class="backend-control-row">
+          <div class="backend-control-label">Actions</div>
+          <div class="backend-control-value">${supported ? 'restart / stop' : '—'}</div>
+        </div>
+      `;
+    }
+
+    function getWorkerStatusTone(status) {
+      const raw = String(status || '').toLowerCase();
+      if (!raw) return 'warn';
+      if (/(run|ready|alive|health|active|serving)/.test(raw)) return 'ok';
+      if (/(stop|dead|exit|error|fail|down|crash)/.test(raw)) return 'err';
+      return 'warn';
+    }
+
+    function renderWorkerHighlights(rows, currentWorkerPid) {
+      const highlight = document.getElementById('worker-highlight');
+      const runningCount = rows.filter(worker => getWorkerStatusTone(worker.status) === 'ok').length;
+      const totalRequests = rows.reduce((sum, worker) => sum + Number(worker.request_count || 0), 0);
+      highlight.innerHTML = `
+        <div class="backend-worker-summary-card">
+          <span>Total Workers</span>
+          <strong>${rows.length}</strong>
+        </div>
+        <div class="backend-worker-summary-card">
+          <span>Running</span>
+          <strong>${runningCount}</strong>
+        </div>
+        <div class="backend-worker-summary-card">
+          <span>Requests</span>
+          <strong>${totalRequests}</strong>
+        </div>
+        <div class="backend-worker-summary-card">
+          <span>Current Worker</span>
+          <strong class="panel-mono">${escapeHtml(currentWorkerPid ?? '—')}</strong>
+        </div>
+      `;
+    }
+
+    function renderWorkers(workers, currentWorkerPid) {
+      const list = document.getElementById('workers-body');
+      const summary = document.getElementById('worker-summary');
+      const rows = Array.isArray(workers) ? workers : [];
+      const runningCount = rows.filter(worker => getWorkerStatusTone(worker.status) === 'ok').length;
+      const totalRequests = rows.reduce((sum, worker) => sum + Number(worker.request_count || 0), 0);
+      summary.textContent = rows.length
+        ? `共 ${rows.length} 个 worker · 运行中 ${runningCount} · 请求 ${totalRequests}`
+        : '暂无 worker 数据';
+      renderWorkerHighlights(rows, currentWorkerPid);
+      if (!rows.length) {
+        list.innerHTML = '<div class="backend-worker-empty">暂无 worker 数据。</div>';
+        return;
+      }
+      list.innerHTML = rows.map(worker => {
+        const tone = getWorkerStatusTone(worker.status);
+        const isCurrent = currentWorkerPid != null && String(worker.pid) === String(currentWorkerPid);
+        const requestCount = Number(worker.request_count || 0);
+        const roomsRunning = Number(worker.rooms_running || 0);
+        const lastRequest = fmtDateTime(worker.last_request_at);
+        const startedAt = fmtDateTime(worker.started_at);
+        return `
+        <details class="backend-worker-card" ${isCurrent || tone !== 'ok' || rows.length <= 2 ? 'open' : ''}>
+          <summary>
+            <div class="backend-worker-card-head">
+              <div class="backend-worker-title-row">
+                <div class="backend-worker-title panel-mono">Worker ${escapeHtml(worker.pid ?? '—')}</div>
+                <span class="backend-worker-status ${tone}">${escapeHtml(worker.status || '未知状态')}</span>
+                ${isCurrent ? '<span class="backend-worker-chip"><strong>Current</strong> 本次请求</span>' : ''}
+              </div>
+              <div class="backend-worker-subtitle">Msg Port ${escapeHtml(worker.msg_port ?? '—')} · Started ${escapeHtml(startedAt)}</div>
+              <div class="backend-worker-kpis">
+                <span class="backend-worker-chip"><strong>${escapeHtml(requestCount)}</strong> Requests</span>
+                <span class="backend-worker-chip"><strong>${escapeHtml(roomsRunning)}</strong> Rooms</span>
+                <span class="backend-worker-chip"><strong>${escapeHtml(lastRequest)}</strong> Last Seen</span>
+              </div>
+            </div>
+          </summary>
+          <div class="backend-worker-body">
+            <div class="backend-worker-meta-grid">
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">PID</div>
+                <div class="backend-worker-meta-value panel-mono">${escapeHtml(worker.pid ?? '—')}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Status</div>
+                <div class="backend-worker-meta-value">${escapeHtml(worker.status || '—')}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Message Port</div>
+                <div class="backend-worker-meta-value panel-mono">${escapeHtml(worker.msg_port ?? '—')}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Started</div>
+                <div class="backend-worker-meta-value">${escapeHtml(startedAt)}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Last Request</div>
+                <div class="backend-worker-meta-value">${escapeHtml(lastRequest)}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Rooms Running</div>
+                <div class="backend-worker-meta-value">${escapeHtml(roomsRunning)}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Request Count</div>
+                <div class="backend-worker-meta-value">${escapeHtml(requestCount)}</div>
+              </div>
+              <div class="backend-worker-meta">
+                <div class="backend-worker-meta-label">Current Worker</div>
+                <div class="backend-worker-meta-value">${isCurrent ? '是' : '否'}</div>
+              </div>
+            </div>
+          </div>
+        </details>
+        `;
+      }).join('');
+    }
+
+    function renderRuntime(data) {
+      runtimeData = data;
+      document.getElementById('instance-id').textContent = data.instance_id || '—';
+      document.getElementById('instance-subtle').textContent = `当前 worker PID：${data.current_worker_pid ?? '—'}`;
+      document.getElementById('start-time').textContent = fmtDateTime(data.server_start_time_hk || data.server_start_time);
+      document.getElementById('uptime').textContent = `Uptime：${fmtUptime(data.uptime_seconds)}`;
+
+      const git = data.git || {};
+      document.getElementById('git-branch').textContent = git.available ? (git.branch || '(detached HEAD)') : '未检测到 .git';
+      document.getElementById('git-head').textContent = git.available ? `HEAD：${git.head || '—'}` : 'HEAD：—';
+
+      document.getElementById('request-total').textContent = String(data.request_count_total ?? 0);
+      document.getElementById('request-subtle').textContent = `当前 worker：${data.app_request_count ?? 0}`;
+
+      const listen = data.server || {};
+      document.getElementById('server-listen').textContent = `${listen.host || '—'}:${listen.port ?? '—'}`;
+      document.getElementById('server-mode').textContent = `workers=${listen.worker ?? '—'} · reload=${listen.reload ? 'true' : 'false'}`;
+
+      const configFile = data.config_file || {};
+      document.getElementById('config-path').textContent = configFile.write_path || configFile.source_path || '—';
+      document.getElementById('config-path').title = configFile.write_path || configFile.source_path || '—';
+      document.getElementById('config-note').textContent = '';
+
+      let startArgsText = '—';
+      try {
+        const argsArr = JSON.parse(data.start_args || '[]');
+        startArgsText = argsArr.length ? argsArr.join(' ') : '(none)';
+      } catch {
+        startArgsText = String(data.start_args || '—');
+      }
+      document.getElementById('start-args').textContent = startArgsText;
+      document.getElementById('start-args').title = startArgsText;
+      document.getElementById('start-args-note').textContent = '';
+
+      const control = data.control || {};
+      document.getElementById('process-pids').textContent = `supervisor=${control.supervisor_pid ?? '—'} / server=${control.server_pid ?? '—'}`;
+      document.getElementById('process-pids').title = `supervisor=${control.supervisor_pid ?? '—'} / server=${control.server_pid ?? '—'}`;
+      document.getElementById('process-meta').textContent = `mode=${control.mode || '—'}`;
+
+      document.getElementById('rooms-open').textContent = String(data.open_rooms ?? 0);
+      document.getElementById('cache-scope').textContent = `cache_scope=${data.cache_scope || '—'}`;
+
+      renderControl(control);
+      renderWorkers(data.workers || [], data.current_worker_pid);
+      showNotice(data.runtime_warning || '', 'warn');
+    }
+
+    function renderRuntimeError(err) {
+      const message = err?.name === 'TimeoutError'
+        ? '运行时信息加载超时：后端状态接口没有在 7 秒内响应。'
+        : `运行时信息加载失败：${err?.message || err}`;
+      document.getElementById('control-badge').innerHTML = '<span class="panel-dot err"></span><span>控制状态不可用</span>';
+      document.getElementById('control-summary').innerHTML = `<div>${escapeHtml(message)}</div>`;
+      document.getElementById('worker-summary').textContent = '加载失败';
+      document.getElementById('worker-highlight').innerHTML = `
+        <div class="backend-worker-summary-card">
+          <span>Workers</span>
+          <strong>—</strong>
+          <em>${escapeHtml(message)}</em>
+        </div>
+      `;
+      document.getElementById('workers-body').innerHTML = `<div class="backend-worker-empty">${escapeHtml(message)}</div>`;
+      showNotice(message, 'error');
+    }
+
+    async function fetchRuntime() {
+      const data = await fetchJson('/admin/api/backend/runtime');
+      renderRuntime(data);
+      return data;
+    }
+
+    async function sendControl(action) {
+      const label = action === 'restart' ? '重启后端' : '停止后端';
+      if (!confirm(`确认${label}？这会作用于 uvicorn 主进程，而不是仅重载当前 FastAPI worker。`)) return;
+      setCommandPending(true);
+      try {
+        const data = await fetchJson('/admin/api/backend/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, reason: 'panel-backend-overview' }),
+        });
+        showNotice(`${label}指令已提交。${action === 'restart' ? '页面将尝试重新连接。' : '服务停止后当前页面会失联。'}`);
+        if (action === 'restart') {
+          window.setTimeout(() => { window.location.reload(); }, 3500);
+        }
+      } catch (err) {
+        showNotice(`控制指令失败：${err.message || err}`, 'error');
+      } finally {
+        setCommandPending(false);
+      }
+    }
+
+    async function refreshNow() {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await fetchRuntime();
+      } catch (err) {
+        renderRuntimeError(err);
+      } finally {
+        refreshInFlight = false;
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', refreshNow);
+    document.getElementById('restart-btn').addEventListener('click', () => sendControl('restart'));
+    document.getElementById('stop-btn').addEventListener('click', () => sendControl('stop'));
+
+    refreshNow();
+    refreshTimer = window.setInterval(refreshNow, 4000);
+    window.addEventListener('beforeunload', () => {
+      if (refreshTimer) window.clearInterval(refreshTimer);
+    });
+  </script>
+</body>
+</html>

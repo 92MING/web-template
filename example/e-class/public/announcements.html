@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>通告 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1080px; --builtin-shell-secondary-width: 300px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-surface, #fff); color: var(--builtin-color-text, #111827); font: inherit; cursor: pointer; text-decoration: none; font-size: 0.875rem; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pagination { display: flex; align-items: center; gap: 1rem; justify-content: center; margin-top: 1rem; }
+</style>
+<link rel="stylesheet" href="/eclass-pages.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <builtin-card>
+    <div slot="header"><strong id="feed-title">课堂通告流</strong></div>
+    <builtin-activity-feed id="announcement-feed"></builtin-activity-feed>
+    <div class="pagination">
+      <button id="btn-prev" class="btn" disabled>上一页</button>
+      <span id="page-info">第 1 页</span>
+      <button id="btn-next" class="btn" disabled>下一页</button>
+    </div>
+  </builtin-card>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">通告上下文</strong></div>
+    <builtin-metadata-list id="announcement-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    eyebrow: '学生端通告',
+    title: '通告',
+    lead: '按时间顺序查看老师发布的课堂通知，并保留分页与上下文信息。',
+    back: '返回学生端',
+    contextTitle: '通告上下文',
+    feedTitle: '课堂通告流',
+    emptyTitle: '当前还没有通告',
+    emptyDescription: '老师发布课堂通知后，这里会按时间顺序显示。',
+    loadingTitle: '正在加载通告',
+    loadingDescription: '正在获取当前班级的课堂通知。',
+    errorTitle: '加载通告失败',
+    errorDescription: '请稍后重试，或返回学生端重新进入。',
+    classLabel: '当前教室',
+    totalLabel: '通告数量',
+    pageLabel: '当前页',
+    authorLabel: '作者',
+    prev: '上一页',
+    next: '下一页',
+  },
+  en: {
+    eyebrow: 'Student Announcements',
+    title: 'Announcements',
+    lead: 'Read classroom notices in chronological order with clearer context and paging state.',
+    back: 'Back to Student',
+    contextTitle: 'Announcement Context',
+    feedTitle: 'Announcement Feed',
+    emptyTitle: 'No announcements yet',
+    emptyDescription: 'New classroom notices will appear here in chronological order.',
+    loadingTitle: 'Loading announcements',
+    loadingDescription: 'Fetching notices for the current classroom.',
+    errorTitle: 'Failed to load announcements',
+    errorDescription: 'Try again in a moment or return to the student workspace.',
+    classLabel: 'Classroom',
+    totalLabel: 'Announcements',
+    pageLabel: 'Current Page',
+    authorLabel: 'Author',
+    prev: 'Previous',
+    next: 'Next',
+  }
+};
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.announcements',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'student',
+  getInvalidRoleRedirect: () => 'teacher.html',
+  onApplyI18n: async ({ lang }) => {
+    currentLang = lang;
+    applyShellCopy();
+    renderFeedCopy();
+  },
+});
+
+const { $, api, t } = shell;
+
+let page = 1;
+const perPage = 6;
+const classId = new URLSearchParams(location.search).get('class_id') || 'c1';
+let currentLang = localStorage.getItem('eclass_lang') || 'zh-cn';
+
+function d() {
+  return copy[currentLang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'student.html';
+  appShell.backLabel = labels.back;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'student.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: currentLang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+}
+
+function renderFeedCopy() {
+  const labels = d();
+  $('feed-title').textContent = labels.feedTitle;
+  $('context-title').textContent = labels.contextTitle;
+  $('btn-prev').textContent = labels.prev;
+  $('btn-next').textContent = labels.next;
+  $('announcement-feed').emptyTitle = labels.emptyTitle;
+  $('announcement-feed').emptyDescription = labels.emptyDescription;
+  $('announcement-feed').loadingTitle = labels.loadingTitle;
+  $('announcement-feed').loadingDescription = labels.loadingDescription;
+  $('announcement-feed').errorTitle = labels.errorTitle;
+  $('announcement-feed').errorDescription = labels.errorDescription;
+}
+
+function updateContext(total) {
+  const totalPages = Math.max(Math.ceil(total / perPage), 1);
+  $('announcement-context').items = [
+    { icon: 'notification', label: d().classLabel, value: classId },
+    { icon: 'unordered-list', label: d().totalLabel, value: String(total) },
+    { icon: 'calendar', label: d().pageLabel, value: `${page} / ${totalPages}` },
+  ];
+}
+
+const load = async () => {
+  $('announcement-feed').state = 'loading';
+  const r = await api('/student/announcements/list?page='+page+'&page_size='+perPage+'&class_id='+encodeURIComponent(classId));
+  if (!r) {
+    $('announcement-feed').state = 'error';
+    updateContext(0);
+    return;
+  }
+
+  const list = r.announcements || [];
+  const total = r.total || list.length;
+  const unknownAuthor = await t('eclass.unknown');
+  const pageInfoTpl = await t('eclass.page_info');
+
+  $('announcement-feed').items = list.map((item) => ({
+    time: item.created_at || item.date || '',
+    title: item.title,
+    description: item.content || '',
+    icon: 'notification',
+    tone: 'notice',
+    meta: [`${d().authorLabel} · ${item.author || unknownAuthor}`, classId],
+  }));
+  $('announcement-feed').state = list.length ? 'ready' : 'empty';
+  $('page-info').textContent = pageInfoTpl.replace('{page}', page);
+  $('btn-prev').disabled = page <= 1;
+  $('btn-next').disabled = page * perPage >= total;
+  updateContext(total);
+};
+
+$('btn-prev').addEventListener('click', () => {
+  if (page > 1) {
+    page -= 1;
+    load();
+  }
+});
+
+$('btn-next').addEventListener('click', () => {
+  page += 1;
+  load();
+});
+
+await shell.init();
+load();
+</script>
+</body>
+</html>

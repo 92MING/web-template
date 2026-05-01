@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Template Gallery</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js?v=20260501-1"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+    }
+    [data-builtin-theme="dark"] {
+      --bg: #0b1220;
+      --surface: #111a2e;
+      --border: #1e2a44;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 clamp(12px,3vw,24px) 48px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0 22px; }
+    .search-wrap { flex: 1 1 280px; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+    .search-wrap input { flex: 1; border: none; outline: none; background: transparent; color: var(--text); font: inherit; }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { appearance: none; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--muted); padding: 7px 12px; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; transition: color .15s ease, border-color .15s ease, background .15s ease; }
+    .chip:hover { color: var(--text); border-color: var(--text); }
+    .chip.active { background: var(--builtin-primary,#2563eb); border-color: var(--builtin-primary,#2563eb); color: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 16px; }
+    .card { display: block; text-decoration: none; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .card:hover { transform: translateY(-3px); border-color: var(--builtin-primary,#2563eb); box-shadow: 0 12px 28px rgba(15,23,42,.10); }
+    .thumb { height: 160px; display: flex; flex-direction: column; justify-content: space-between; padding: 14px; color: #fff; position: relative; overflow: hidden; background-size: cover; background-position: top center; }
+    .thumb.has-preview { padding: 0; }
+    .thumb.has-preview::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%); pointer-events: none; }
+    .thumb.has-preview .thumb-tag,
+    .thumb.has-preview .thumb-title { position: absolute; }
+    .thumb.has-preview .thumb-tag { top: 12px; left: 12px; }
+    .thumb.has-preview .thumb-title { left: 14px; right: 14px; bottom: 12px; }
+    .thumb::after { content: ""; position: absolute; inset: -40% -40% auto auto; width: 200px; height: 200px; border-radius: 999px; background: rgba(255,255,255,.15); filter: blur(4px); }
+    .thumb-tag, .thumb-title { position: relative; z-index: 1; }
+    .thumb-tag { display: inline-flex; align-self: flex-start; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.22); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .thumb-title { font-size: 17px; font-weight: 700; line-height: 1.15; }
+    .info { padding: 14px 16px; }
+    .info h3 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+    .info p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .empty { grid-column: 1 / -1; padding: 32px; border: 1px dashed var(--border); border-radius: 14px; text-align: center; color: var(--muted); background: var(--surface); }
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+      .thumb { height: 110px; padding: 12px; }
+      .thumb-title { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="toolbar">
+      <label class="search-wrap" for="gallery-search">
+        <builtin-icon name="search" size="16" variant="outlined"></builtin-icon>
+        <input id="gallery-search" type="search" autocomplete="off">
+      </label>
+      <div class="filters" id="filters"></div>
+    </div>
+    <div class="grid" id="gallery"></div>
+  </div>
+
+  <script type="module">
+    import { getGalleryLang } from "/gallery-shell.js?v=20260501-1";
+
+    const TEMPLATES = [
+      { file: "generic-home.html",            tag: "frontpage", titleEn: "Generic Homepage",      titleZh: "通用首页",     descEn: "Standard business / product frontpage", descZh: "通用业务首页" },
+      { file: "content-home.html",            tag: "frontpage", titleEn: "Content Homepage",      titleZh: "内容首页",     descEn: "Blog / magazine landing",               descZh: "博客 / 杂志首页" },
+      { file: "video-home.html",              tag: "frontpage", titleEn: "Video Homepage",        titleZh: "视频首页",     descEn: "Streaming-service style hero",          descZh: "流媒体风格首页" },
+      { file: "shop-home.html",               tag: "frontpage", titleEn: "Shop Homepage",         titleZh: "商城首页",     descEn: "E-commerce frontpage with promos",      descZh: "带促销位的商城首页" },
+      { file: "saas-home.html",               tag: "frontpage", titleEn: "SaaS Homepage",         titleZh: "SaaS 首页",    descEn: "High-converting SaaS landing",          descZh: "SaaS 转化型落地" },
+      { file: "editorial-layout.html",        tag: "magazine",  titleEn: "Editorial Layout",      titleZh: "杂志阅读",     descEn: "Long-form magazine article",            descZh: "长文阅读版式" },
+      { file: "news-layout.html",             tag: "magazine",  titleEn: "News Layout",           titleZh: "新闻门户",     descEn: "News portal with breaking ticker",      descZh: "带头条快讯的新闻门户" },
+      { file: "onboarding-guide.html",        tag: "tutorial",  titleEn: "Onboarding Guide",      titleZh: "新手引导",     descEn: "Step-by-step walkthrough",              descZh: "分步引导教程" },
+      { file: "documentation-layout.html",    tag: "tutorial",  titleEn: "Documentation Layout",  titleZh: "文档中心",     descEn: "Docs with sidebar TOC",                 descZh: "带侧边目录的文档" },
+      { file: "wizard-form.html",             tag: "form",      titleEn: "Wizard Form",           titleZh: "向导表单",     descEn: "Multi-step form with progress",         descZh: "多步表单流程" },
+      { file: "survey-layout.html",           tag: "form",      titleEn: "Survey Layout",         titleZh: "问卷调查",     descEn: "Questionnaire / feedback form",         descZh: "问卷 / 反馈" },
+      { file: "video-player.html",            tag: "video",     titleEn: "Video Player",          titleZh: "视频播放",     descEn: "YouTube-style watch page",              descZh: "视频观看页" },
+      { file: "video-listing.html",           tag: "video",     titleEn: "Video Listing",         titleZh: "视频列表",     descEn: "Browse / discover grid",                descZh: "视频浏览网格" },
+      { file: "video-platform.html",          tag: "video",     titleEn: "Video Platform",        titleZh: "视频平台",     descEn: "Full YouTube-style homepage",           descZh: "完整视频平台" },
+      { file: "product-detail.html",          tag: "ecommerce", titleEn: "Product Detail",        titleZh: "商品详情",     descEn: "PDP with gallery and reviews",          descZh: "带画廊与评论的详情页" },
+      { file: "ecommerce-product-grid.html",  tag: "ecommerce", titleEn: "Product Grid",          titleZh: "商品列表",     descEn: "Category listing with filters",         descZh: "带筛选的列表页" },
+      { file: "checkout-layout.html",         tag: "ecommerce", titleEn: "Checkout",              titleZh: "结账页",       descEn: "Payment & order summary",               descZh: "支付与订单汇总" },
+      { file: "cart-drawer.html",             tag: "ecommerce", titleEn: "Cart Drawer",           titleZh: "购物车抽屉",   descEn: "Sliding cart panel",                    descZh: "侧滑购物车" },
+      { file: "personal-profile.html",        tag: "profile",   titleEn: "Personal Profile",      titleZh: "个人资料",     descEn: "Social-style profile",                  descZh: "社交风格资料" },
+      { file: "portfolio-layout.html",        tag: "profile",   titleEn: "Portfolio",             titleZh: "作品集",       descEn: "Creative portfolio",                    descZh: "创作者作品集" },
+      { file: "chat-room.html",               tag: "chat",      titleEn: "Chat Room",             titleZh: "聊天室",       descEn: "Full chat interface",                   descZh: "聊天室界面" },
+      { file: "message-thread.html",          tag: "chat",      titleEn: "Message Thread",        titleZh: "消息会话",     descEn: "Message bubble list",                   descZh: "消息气泡列表" },
+      { file: "analytics-dashboard.html",     tag: "dashboard", titleEn: "Analytics Dashboard",   titleZh: "数据看板",     descEn: "Reporting dashboard",                   descZh: "报表看板" },
+      { file: "admin-dashboard.html",         tag: "dashboard", titleEn: "Admin Dashboard",       titleZh: "后台管理",     descEn: "Management dashboard",                  descZh: "管理后台" },
+      { file: "master-detail.html",          tag: "dashboard", titleEn: "Master Detail",         titleZh: "主从布局",     descEn: "Master-detail split view",              descZh: "主从分栏布局" },
+      { file: "workspace-home.html",          tag: "dashboard", titleEn: "Workspace Home",        titleZh: "工作空间",     descEn: "Team workspace dashboard",              descZh: "团队工作台" },
+      { file: "product-launch.html",          tag: "landing",   titleEn: "Product Launch",        titleZh: "新品发布",     descEn: "Waitlist / countdown landing",          descZh: "倒计时落地页" },
+      { file: "lead-capture.html",            tag: "landing",   titleEn: "Lead Capture",          titleZh: "线索收集",     descEn: "Marketing landing page",                descZh: "市场转化页" },
+      { file: "login-page.html",              tag: "auth",      titleEn: "Login Page",            titleZh: "登录页",       descEn: "Auth with multiple layouts",            descZh: "多版式登录" },
+      { file: "social-profile.html",          tag: "social",    titleEn: "Social Profile",        titleZh: "社交资料",     descEn: "LinkedIn / Facebook style",             descZh: "LinkedIn / Facebook 风格" },
+      { file: "company-about.html",           tag: "company",   titleEn: "Company About",         titleZh: "关于公司",     descEn: "Corporate About page",                  descZh: "企业介绍页" },
+      { file: "contact-us.html",              tag: "company",   titleEn: "Contact Us",            titleZh: "联系我们",     descEn: "Contact form + FAQ",                    descZh: "联系表单 + 常见问题" },
+      { file: "blog-article.html",            tag: "blog",      titleEn: "Blog Article",          titleZh: "博客文章",     descEn: "Medium-style article reader",           descZh: "Medium 风格文章" },
+      { file: "file-manager.html",            tag: "cloud",     titleEn: "File Manager",          titleZh: "文件管理",     descEn: "Google Drive-style manager",            descZh: "云盘风格管理器" },
+      { file: "live-stream-room.html",        tag: "live",      titleEn: "Live Stream Room",      titleZh: "直播间",       descEn: "Twitch / Bilibili style",               descZh: "Twitch / B 站风格" },
+    ];
+
+    const TAG_LABELS = {
+      en: { all: "All", frontpage: "Frontpage", magazine: "Magazine", tutorial: "Tutorial", form: "Form", video: "Video", ecommerce: "E-commerce", profile: "Profile", chat: "Chat", dashboard: "Dashboard", landing: "Landing", auth: "Auth", social: "Social", company: "Company", blog: "Blog", cloud: "Cloud", live: "Live" },
+      zh: { all: "全部", frontpage: "首页", magazine: "杂志", tutorial: "教程", form: "表单", video: "视频", ecommerce: "电商", profile: "个人主页", chat: "聊天", dashboard: "仪表盘", landing: "落地页", auth: "登录", social: "社交", company: "公司", blog: "博客", cloud: "云盘", live: "直播" },
+    };
+
+    const TAG_COLORS = {
+      frontpage: 'linear-gradient(135deg,#2563eb,#0ea5e9)',
+      magazine:  'linear-gradient(135deg,#ea580c,#f59e0b)',
+      tutorial:  'linear-gradient(135deg,#8b5cf6,#6366f1)',
+      form:      'linear-gradient(135deg,#7c3aed,#a855f7)',
+      video:     'linear-gradient(135deg,#ef4444,#f97316)',
+      ecommerce: 'linear-gradient(135deg,#059669,#10b981)',
+      profile:   'linear-gradient(135deg,#0f766e,#14b8a6)',
+      chat:      'linear-gradient(135deg,#2563eb,#22c55e)',
+      dashboard: 'linear-gradient(135deg,#111827,#334155)',
+      landing:   'linear-gradient(135deg,#db2777,#f43f5e)',
+      auth:      'linear-gradient(135deg,#4f46e5,#7c3aed)',
+      social:    'linear-gradient(135deg,#ec4899,#f97316)',
+      company:   'linear-gradient(135deg,#0f766e,#2563eb)',
+      blog:      'linear-gradient(135deg,#0891b2,#14b8a6)',
+      cloud:     'linear-gradient(135deg,#1d4ed8,#38bdf8)',
+      live:      'linear-gradient(135deg,#dc2626,#fb7185)',
+    };
+
+    const COPY = {
+      en: { searchPlaceholder: "Find a template, industry, or layout", empty: "No template matched that search." },
+      zh: { searchPlaceholder: "搜索模板 / 行业 / 版式", empty: "没有匹配的模板。" },
+    };
+
+    const galleryEl = document.getElementById('gallery');
+    const filtersEl = document.getElementById('filters');
+    const searchEl = document.getElementById('gallery-search');
+    const allTags = ['all', ...Array.from(new Set(TEMPLATES.map(t => t.tag)))];
+
+    let activeTag = 'all';
+    let query = '';
+
+    function lang() { return getGalleryLang(); }
+    function tagLabel(tag) { return TAG_LABELS[lang()][tag] ?? tag; }
+    function templateTitle(t) { return lang() === 'zh' ? t.titleZh : t.titleEn; }
+    function templateDesc(t) { return lang() === 'zh' ? t.descZh : t.descEn; }
+
+    function renderFilters() {
+      filtersEl.replaceChildren();
+      for (const tag of allTags) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chip' + (tag === activeTag ? ' active' : '');
+        btn.textContent = tagLabel(tag);
+        btn.addEventListener('click', () => { activeTag = tag; renderFilters(); renderGallery(); });
+        filtersEl.appendChild(btn);
+      }
+    }
+
+    function renderGallery() {
+      galleryEl.replaceChildren();
+      const visible = TEMPLATES.filter(t => {
+        if (activeTag !== 'all' && t.tag !== activeTag) return false;
+        if (!query) return true;
+        const hay = `${t.titleEn} ${t.titleZh} ${t.descEn} ${t.descZh} ${t.tag}`.toLowerCase();
+        return hay.includes(query);
+      });
+      if (!visible.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = COPY[lang()].empty;
+        galleryEl.appendChild(empty);
+        return;
+      }
+      for (const t of visible) {
+        const card = document.createElement('a');
+        card.className = 'card';
+        card.href = t.file;
+        const slug = t.file.replace(/\.html$/, '');
+        const previewUrl = `/pages/_previews/${slug}.jpg`;
+        const fallbackBg = TAG_COLORS[t.tag] || TAG_COLORS.frontpage;
+        // Use background-image with gradient fallback layered behind. Image
+        // simply won't render if the file doesn't exist (no broken icon)
+        // because we use background-image, not <img>.
+        const thumbStyle = `background:url('${previewUrl}'),${fallbackBg};background-size:cover,auto;background-position:top center;`;
+        card.innerHTML = `
+          <div class="thumb has-preview" style="${thumbStyle}">
+            <span class="thumb-tag">${tagLabel(t.tag)}</span>
+            <div class="thumb-title">${templateTitle(t)}</div>
+          </div>
+          <div class="info">
+            <h3>${templateTitle(t)}</h3>
+            <p>${templateDesc(t)}</p>
+          </div>
+        `;
+        galleryEl.appendChild(card);
+      }
+    }
+
+    function applyLanguage() {
+      searchEl.placeholder = COPY[lang()].searchPlaceholder;
+      renderFilters();
+      renderGallery();
+    }
+
+    searchEl.addEventListener('input', e => {
+      query = e.target.value.trim().toLowerCase();
+      renderGallery();
+    });
+
+    document.addEventListener('builtin-gallery-lang-change', applyLanguage);
+
+    applyLanguage();
+  </script>
+</body>
+</html>

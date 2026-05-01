@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>课程详情 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<script type="module" src="/shared/i18n.js?v=20260429-3"></script>
+<style>
+  .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
+  .list-item { padding: 0.5rem; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  a { text-decoration: none; }
+  button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--builtin-border, #d1d5db);
+    border-radius: var(--builtin-radius, 6px);
+    background: var(--builtin-button-bg, #ffffff);
+    color: var(--builtin-color-text, #111827);
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  @media (max-width: 720px) {
+    .container { padding: 0.75rem; }
+  }
+</style>
+<link rel="stylesheet" href="/eclass-pages.css?v=20260501-1">
+</head>
+<body>
+<div class="container">
+  <builtin-page-header id="page-header" icon="book" title="课程详情" data-i18n-title="eclass.course_detail" back-href="courses.html" back-label="返回课程列表" data-i18n-back-label="eclass.back"></builtin-page-header>
+  <builtin-detail-header id="detail-header" icon="book" eyebrow="课程详情"></builtin-detail-header>
+
+  <builtin-tabs id="course-tabs" type="underline" active="overview" items='[{"label":"Overview","value":"overview"},{"label":"Syllabus","value":"syllabus"},{"label":"Materials","value":"materials"}]'>
+    <div data-tab="overview">
+      <builtin-card>
+        <div slot="header"><strong id="overview-title" data-i18n="eclass.loading">加载中...</strong></div>
+        <p id="overview-description" style="margin:0 0 1rem;line-height:1.7;color:var(--builtin-color-muted,#666);" data-i18n="eclass.loading">加载中...</p>
+        <builtin-metadata-list id="course-meta" columns="2"></builtin-metadata-list>
+      </builtin-card>
+    </div>
+    <div data-tab="syllabus">
+      <builtin-card>
+        <div slot="header"><strong data-i18n="eclass.syllabus">教学大纲</strong></div>
+        <div id="syllabus-list" data-i18n="eclass.loading">加载中...</div>
+      </builtin-card>
+    </div>
+    <div data-tab="materials">
+      <builtin-card>
+        <div slot="header"><strong data-i18n="eclass.materials">教材资料</strong></div>
+        <div id="materials-list" data-i18n="eclass.loading">加载中...</div>
+      </builtin-card>
+    </div>
+  </builtin-tabs>
+</div>
+
+<script type="module">
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.course_detail',
+  translationPath: '/translate.json?v=20260429-3',
+  onApplyI18n: async ({ t, $ }) => {
+    $('detail-header').eyebrow = await t('eclass.course_detail');
+  }
+});
+
+const { $, api, t } = shell;
+
+const params = new URLSearchParams(location.search);
+const courseId = params.get('course_id') || 'c1';
+let classId = params.get('class_id') || '';
+
+async function resolveClassId() {
+  if (classId) return classId;
+  const r = await api('/classroom/list');
+  const first = (r?.classrooms || r?.items || [])[0];
+  classId = first?.class_id || first?.id || 'c1';
+  return classId;
+}
+
+// Translate tab labels dynamically
+async function updateTabLabels() {
+  const overview = await t('eclass.overview') || 'Overview';
+  const syllabus = await t('eclass.syllabus') || 'Syllabus';
+  const materials = await t('eclass.materials') || 'Materials';
+  $('course-tabs').items = [
+    { label: overview, value: 'overview' },
+    { label: syllabus, value: 'syllabus' },
+    { label: materials, value: 'materials' },
+  ];
+}
+
+const load = async () => {
+  const cid = await resolveClassId();
+  const r = await api('/classroom/' + cid + '/courses/' + courseId);
+  const c = (r && r.course) || r || {};
+
+  const noDescription = await t('eclass.description');
+  const unknownCourse = await t('eclass.unknown_course');
+  const instructor = await t('eclass.instructor');
+  const enrolledStudents = await t('eclass.enrolled_students');
+  const unknown = await t('eclass.unknown');
+
+  $('detail-header').title = c.title || unknownCourse;
+  $('detail-header').description = c.description || noDescription;
+  $('detail-header').meta = [
+    { icon: 'user', label: instructor, value: c.teacher || unknown },
+    { icon: 'team', label: enrolledStudents, value: String(c.enrolled_count || 0) },
+  ];
+
+  $('overview-title').textContent = c.title || unknownCourse;
+  $('overview-description').textContent = c.description || noDescription;
+  $('course-meta').items = [
+    { icon: 'user', label: instructor, value: c.teacher || unknown },
+    { icon: 'team', label: enrolledStudents, value: String(c.enrolled_count || 0) },
+  ];
+
+  const syllabus = Array.isArray(c.syllabus)
+    ? c.syllabus
+    : typeof c.syllabus === 'string'
+      ? c.syllabus.split('、').map(item => item.trim()).filter(Boolean)
+      : [];
+  const noSyllabus = await t('eclass.no_syllabus');
+  $('syllabus-list').innerHTML = syllabus.length
+    ? syllabus.map((s, i) => `<div class="list-item">${i+1}. ${s}</div>`).join('')
+    : `<div class="list-item">${noSyllabus}</div>`;
+
+  const materials = Array.isArray(c.materials) ? c.materials : [];
+  const noMaterials = await t('eclass.no_materials');
+  $('materials-list').innerHTML = materials.length
+    ? materials.map(m => `<div class="list-item">${m.name || m.title || m}</div>`).join('')
+    : `<div class="list-item">${noMaterials}</div>`;
+};
+
+await shell.init();
+await updateTabLabels();
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 服务概览</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <link rel="stylesheet" href="/html-assets/css/ai-services-panel.css" />
+  <script src="/vendor/chart/chart.js"></script>
+  <script src="/html-assets/js/page-controls.js"></script>
+  <style>
+    .ai-services-overview-page .panel-page {
+      padding: 4px;
+    }
+
+    .ai-services-overview-page .panel-page-shell {
+      gap: 6px;
+    }
+
+    .ai-services-overview-page .panel-hero {
+      grid-template-columns: minmax(0, 1.4fr) minmax(220px, auto);
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .ai-services-overview-page .panel-kicker {
+      font-size: 9px;
+      letter-spacing: .14em;
+    }
+
+    .ai-services-overview-page .panel-title {
+      margin-top: 3px;
+      font-size: 15px;
+      line-height: 1.05;
+    }
+
+    .ai-services-overview-page .panel-pill,
+    .ai-services-overview-page .panel-btn,
+    .ai-services-overview-page .ai-services-select-wrap {
+      min-height: 28px;
+      font-size: 10px;
+    }
+
+    .ai-services-overview-page .panel-btn {
+      padding: 0 9px;
+    }
+
+    .ai-services-overview-page .status-box {
+      padding: 6px 9px;
+      border-radius: var(--proj-radius-lg);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .ai-overview-summary-grid,
+    .ai-overview-kind-grid,
+    .ai-overview-chart-grid {
+      display: grid;
+      gap: 6px;
+    }
+
+    .ai-overview-summary-grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .ai-overview-summary-card,
+    .ai-overview-kind-card,
+    .ai-overview-panel {
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      background: var(--proj-page-surface, var(--proj-surface-elevated));
+      box-shadow: var(--proj-page-shadow-soft, 0 10px 28px rgba(15, 23, 42, 0.05));
+    }
+
+    .ai-overview-summary-card {
+      padding: 8px 10px;
+    }
+
+    .ai-overview-summary-label,
+    .ai-overview-section-kicker,
+    .ai-overview-kind-meta {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-overview-summary-value {
+      margin-top: 3px;
+      font-size: 16px;
+      line-height: 1.1;
+      font-weight: 900;
+      color: var(--proj-page-text);
+    }
+
+    .ai-overview-summary-note {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-overview-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 11px 0;
+      flex-wrap: wrap;
+    }
+
+    .ai-overview-section-title {
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 800;
+      color: var(--proj-page-text);
+    }
+
+    .ai-overview-section-body {
+      padding: 10px 11px 11px;
+    }
+
+    .ai-overview-kind-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .ai-overview-kind-card {
+      padding: 9px 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .ai-overview-kind-card[data-tone="err"] {
+      border-color: rgba(239, 68, 68, 0.24);
+    }
+
+    .ai-overview-kind-card[data-tone="warn"] {
+      border-color: rgba(245, 158, 11, 0.24);
+    }
+
+    .ai-overview-kind-card[data-tone="ok"] {
+      border-color: rgba(16, 185, 129, 0.24);
+    }
+
+    .ai-overview-kind-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .ai-overview-kind-title {
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--proj-page-text);
+    }
+
+    .ai-overview-kind-subtitle {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-overview-kind-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+      color: var(--proj-page-muted);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .ai-overview-kind-pill.ok {
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.22);
+      background: rgba(16, 185, 129, 0.12);
+    }
+
+    .ai-overview-kind-pill.warn {
+      color: #b45309;
+      border-color: rgba(245, 158, 11, 0.22);
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .ai-overview-kind-pill.err {
+      color: #b91c1c;
+      border-color: rgba(239, 68, 68, 0.22);
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .ai-overview-kind-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .ai-overview-kind-stat {
+      padding: 7px 8px;
+      border-radius: var(--proj-radius-lg);
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 90%, transparent);
+    }
+
+    .ai-overview-kind-stat span {
+      display: block;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-overview-kind-stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 14px;
+      line-height: 1.1;
+      color: var(--proj-page-text);
+    }
+
+    .ai-overview-kind-note {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-overview-chart-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ai-overview-chart-card {
+      padding: 9px 10px;
+      border-radius: var(--proj-radius-lg);
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+      min-height: 220px;
+    }
+
+    .ai-overview-chart-title {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+      margin-bottom: 8px;
+    }
+
+    .ai-overview-chart-wrap {
+      position: relative;
+      height: 180px;
+    }
+
+    .ai-overview-chart-wrap > canvas {
+      width: 100% !important;
+    }
+
+    .ai-services-overview-page .hidden {
+      display: none !important;
+    }
+
+    .ai-overview-chart-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--proj-radius-lg);
+      border: 1px dashed var(--proj-page-border, var(--panel-border-soft));
+      color: var(--proj-page-muted);
+      font-size: 10px;
+      background: color-mix(in srgb, var(--proj-page-surface) 88%, transparent);
+    }
+
+    .ai-overview-log-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .ai-overview-log-row {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 92px) minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+      padding: 8px 9px;
+      border-radius: var(--proj-radius-lg);
+      border: 1px solid rgba(239, 68, 68, 0.16);
+      background: rgba(239, 68, 68, 0.06);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .ai-overview-log-time,
+    .ai-overview-log-kind,
+    .ai-overview-log-duration {
+      color: var(--proj-page-muted);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ai-overview-log-kind {
+      font-weight: 800;
+      color: var(--proj-page-text);
+    }
+
+    .ai-overview-log-message {
+      min-width: 0;
+      color: var(--proj-page-text);
+      word-break: break-word;
+    }
+
+    @media (max-width: 1200px) {
+      .ai-overview-summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .ai-overview-chart-grid,
+      .ai-services-overview-page .panel-hero {
+        grid-template-columns: 1fr;
+      }
+
+      .ai-overview-log-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .ai-overview-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body class="panel-page-body ai-services-overview-page">
+  <main class="panel-page">
+    <div class="panel-page-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker">AI Services</div>
+          <h1 class="panel-title">AI 服务概览</h1>
+        </div>
+        <div class="panel-hero-actions ai-services-hero-stack">
+          <div id="config-badge" class="panel-pill"><span class="panel-dot"></span><span id="config-status">配置未加载</span></div>
+          <div class="panel-action-row">
+            <label class="ai-services-select-wrap" for="auto-refresh-select">
+              自动刷新
+              <select id="auto-refresh-select">
+                <option value="0">关闭</option>
+                <option value="10000" selected>10s</option>
+                <option value="30000">30s</option>
+                <option value="60000">60s</option>
+              </select>
+            </label>
+            <button id="refresh-btn" type="button" class="panel-btn">刷新</button>
+          </div>
+          <div class="ai-services-action-meta">
+            <span>最近刷新 <strong id="last-refresh-label">—</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="notice-box" class="status-box hidden" data-kind="info"></section>
+
+      <section id="overview-summary" class="ai-overview-summary-grid">
+        <article class="ai-overview-summary-card">
+          <div class="ai-overview-summary-label">加载中</div>
+          <div class="ai-overview-summary-value">—</div>
+        </article>
+      </section>
+
+      <section class="panel-card ai-overview-panel">
+        <div class="ai-overview-section-head">
+          <div>
+            <div class="ai-overview-section-kicker">Runtime</div>
+            <div class="ai-overview-section-title">服务类型概览</div>
+          </div>
+        </div>
+        <div class="ai-overview-section-body">
+          <div id="overview-kinds" class="ai-overview-kind-grid">
+            <div class="ai-services-empty is-compact">正在整理服务类型状态…</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card ai-overview-panel">
+        <div class="ai-overview-section-head">
+          <div>
+            <div class="ai-overview-section-kicker">Charts</div>
+            <div class="ai-overview-section-title">概览图表</div>
+          </div>
+        </div>
+        <div class="ai-overview-section-body">
+          <div class="ai-overview-chart-grid">
+            <article class="ai-overview-chart-card">
+              <div class="ai-overview-chart-title">按服务类别成功 / 失败</div>
+              <div class="ai-overview-chart-wrap"><canvas id="service-kind-chart" height="180"></canvas><div id="service-kind-chart-state" class="ai-overview-chart-empty hidden"></div></div>
+            </article>
+            <article class="ai-overview-chart-card">
+              <div class="ai-overview-chart-title">Top 操作平均耗时</div>
+              <div class="ai-overview-chart-wrap"><canvas id="operation-chart" height="180"></canvas><div id="operation-chart-state" class="ai-overview-chart-empty hidden"></div></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card ai-overview-panel">
+        <div class="ai-overview-section-head">
+          <div>
+            <div class="ai-overview-section-kicker">Failures</div>
+            <div class="ai-overview-section-title">最近失败调用</div>
+          </div>
+        </div>
+        <div class="ai-overview-section-body">
+          <div id="recent-failure-list" class="ai-overview-log-list">
+            <div class="ai-services-empty is-compact">正在载入失败调用…</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+<script>
+'use strict';
+const _baseUrl = (location.origin || '');
+const _logWindowHours = 24;
+const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+let _autoRefreshTimer = null;
+let _autoRefreshMs = 10000;
+const charts = { kind: null, operation: null };
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function safeNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function normalizeKindKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/service$/i, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function kindLabelFromKey(value) {
+  const key = normalizeKindKey(value);
+  const labels = {
+    completion: 'completion',
+    embedding: 'embedding',
+    s2t: 's2t',
+    t2s: 't2s',
+  };
+  return labels[key] || String(value || 'unknown');
+}
+
+function formatPercent(numerator, denominator) {
+  if (!denominator) return '—';
+  return ((numerator / denominator) * 100).toFixed(1) + '%';
+}
+
+function formatDurationMs(ms) {
+  const value = safeNumber(ms);
+  if (!value) return '—';
+  if (value < 1000) return value.toFixed(0) + 'ms';
+  return (value / 1000).toFixed(2) + 's';
+}
+
+function formatTimestamp(text) {
+  if (!text) return '—';
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return String(text);
+  return date.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+function clientTone(client) {
+  const score = safeNumber(client?.score);
+  const failCount = safeNumber(client?.fail_count);
+  const cooldownUntil = safeNumber(client?.cooldown_until);
+  const inCooldown = cooldownUntil > (Date.now() / 1000);
+  if (inCooldown || failCount >= 3 || score < 0.4) return 'err';
+  if (score < 0.8) return 'warn';
+  return 'ok';
+}
+
+function kindTone(failureRate, degradedCount, clientCount) {
+  if (!clientCount) return 'warn';
+  if (failureRate >= 0.2 || degradedCount >= clientCount) return 'err';
+  if (failureRate >= 0.05 || degradedCount > 0) return 'warn';
+  return 'ok';
+}
+
+function destroyChart(key) {
+  if (!charts[key]) return;
+  charts[key].destroy();
+  charts[key] = null;
+}
+
+function setChartState(canvasId, stateId, message) {
+  const canvas = document.getElementById(canvasId);
+  const state = document.getElementById(stateId);
+  if (!canvas || !state) return;
+  if (message) {
+    canvas.classList.add('hidden');
+    state.classList.remove('hidden');
+    state.textContent = message;
+    return;
+  }
+  canvas.classList.remove('hidden');
+  state.classList.add('hidden');
+  state.textContent = '';
+}
+
+const ADMIN_LOGIN_PATH = '/admin/login';
+const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+let adminAuthRedirectPending = false;
+
+function clearAdminAuthArtifacts() {
+  try {
+    window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+  } catch {}
+  document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+function redirectToAdminLogin() {
+  if (adminAuthRedirectPending) return;
+  adminAuthRedirectPending = true;
+  clearAdminAuthArtifacts();
+  const nextPath = window.parent && window.parent !== window
+    ? '/admin/panel'
+    : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+      return;
+    }
+  } catch {}
+  window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+}
+
+async function fetchAdminJson(path, options = {}) {
+  const response = await fetch(path, { credentials: 'same-origin', ...options });
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  const data = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : await response.text().catch(() => '');
+  if (!response.ok) {
+    if (response.status === 401) {
+      redirectToAdminLogin();
+      throw new Error('登录状态已失效，正在跳转登录页。');
+    }
+    if (typeof data === 'string') {
+      throw new Error(data || `HTTP ${response.status}`);
+    }
+    throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+  }
+  if (typeof data === 'string') {
+    throw new Error('接口未返回 JSON。');
+  }
+  return data;
+}
+
+async function fetchOverviewSnapshot() {
+  return fetchAdminJson(_baseUrl + '/admin/api/ai-services/overview');
+}
+
+async function fetchServiceLogStats(groupBy) {
+  const now = Math.floor(Date.now() / 1000);
+  const since = now - (_logWindowHours * 3600);
+  const params = new URLSearchParams({ group_by: groupBy, since: String(since), until: String(now) });
+  return fetchAdminJson('/admin/api/logs/service/stats?' + params.toString());
+}
+
+async function fetchRecentServiceFailures() {
+  const now = Math.floor(Date.now() / 1000);
+  const since = now - (_logWindowHours * 3600);
+  const params = new URLSearchParams({ success: 'false', limit: '8', since: String(since), until: String(now) });
+  return fetchAdminJson('/admin/api/logs/service/logs?' + params.toString());
+}
+
+function summarizeKinds(snapshot, kindStats) {
+  const statsMap = new Map((Array.isArray(kindStats) ? kindStats : []).map(item => [normalizeKindKey(item.group), item]));
+  const buckets = new Map();
+  for (const service of Array.isArray(snapshot.services) ? snapshot.services : []) {
+    const key = normalizeKindKey(service.service_type);
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        key,
+        label: kindLabelFromKey(service.service_type),
+        services: 0,
+        clients: 0,
+        degraded: 0,
+      });
+    }
+    const row = buckets.get(key);
+    row.services += 1;
+    const clients = Array.isArray(service.clients) ? service.clients : [];
+    row.clients += clients.length;
+    row.degraded += clients.filter(client => clientTone(client) !== 'ok').length;
+  }
+  return Array.from(buckets.values()).map(row => {
+    const stat = statsMap.get(row.key) || null;
+    const calls = safeNumber(stat?.call_count);
+    const failures = safeNumber(stat?.failure_count);
+    const avgDuration = safeNumber(stat?.avg_duration_ms);
+    const failureRate = calls ? (failures / calls) : 0;
+    return {
+      ...row,
+      calls,
+      failures,
+      avgDuration,
+      failureRate,
+      lastCalledAt: stat?.last_called_at || null,
+      tone: kindTone(failureRate, row.degraded, row.clients),
+    };
+  }).sort((a, b) => (b.calls - a.calls) || (b.services - a.services) || a.label.localeCompare(b.label));
+}
+
+function renderOverviewSummary(snapshot, kindStats, operationStats) {
+  const services = Array.isArray(snapshot.services) ? snapshot.services : [];
+  const serviceKinds = new Set(services.map(service => normalizeKindKey(service.service_type)).filter(Boolean));
+  const clientCount = services.reduce((sum, service) => sum + (Array.isArray(service.clients) ? service.clients.length : 0), 0);
+  const degradedCount = services.reduce((sum, service) => sum + (Array.isArray(service.clients) ? service.clients.filter(client => clientTone(client) !== 'ok').length : 0), 0);
+  const statRows = Array.isArray(kindStats) ? kindStats : [];
+  const totalCalls = statRows.reduce((sum, item) => sum + safeNumber(item.call_count), 0);
+  const totalSuccess = statRows.reduce((sum, item) => sum + safeNumber(item.success_count), 0);
+  const weightedDurationBase = (Array.isArray(operationStats) ? operationStats : []).reduce((sum, item) => sum + safeNumber(item.call_count), 0) || totalCalls;
+  const weightedDuration = (Array.isArray(operationStats) ? operationStats : []).reduce((sum, item) => sum + (safeNumber(item.avg_duration_ms) * safeNumber(item.call_count)), 0);
+  const avgDuration = weightedDurationBase ? weightedDuration / weightedDurationBase : 0;
+  const topKind = summarizeKinds(snapshot, kindStats)[0] || null;
+  const summary = document.getElementById('overview-summary');
+  summary.innerHTML = `
+    <article class="ai-overview-summary-card">
+      <div class="ai-overview-summary-label">Service Types</div>
+      <div class="ai-overview-summary-value">${serviceKinds.size}</div>
+      <div class="ai-overview-summary-note">${escHtml(snapshot.config_source || 'defaults')}</div>
+    </article>
+    <article class="ai-overview-summary-card">
+      <div class="ai-overview-summary-label">Service Instances</div>
+      <div class="ai-overview-summary-value">${services.length}</div>
+      <div class="ai-overview-summary-note">version ${safeNumber(snapshot.config_version)}</div>
+    </article>
+    <article class="ai-overview-summary-card">
+      <div class="ai-overview-summary-label">Client Instances</div>
+      <div class="ai-overview-summary-value">${clientCount}</div>
+      <div class="ai-overview-summary-note">异常 ${degradedCount}</div>
+    </article>
+    <article class="ai-overview-summary-card">
+      <div class="ai-overview-summary-label">24h Success Rate</div>
+      <div class="ai-overview-summary-value">${formatPercent(totalSuccess, totalCalls)}</div>
+      <div class="ai-overview-summary-note">${totalSuccess} 成功 / ${Math.max(totalCalls - totalSuccess, 0)} 失败</div>
+    </article>
+    <article class="ai-overview-summary-card">
+      <div class="ai-overview-summary-label">Avg Duration</div>
+      <div class="ai-overview-summary-value">${formatDurationMs(avgDuration)}</div>
+      <div class="ai-overview-summary-note">最近 ${_logWindowHours} 小时</div>
+    </article>
+    <article class="ai-overview-summary-card">
+      <div class="ai-overview-summary-label">Top Kind</div>
+      <div class="ai-overview-summary-value">${escHtml(topKind?.label || '—')}</div>
+      <div class="ai-overview-summary-note">${topKind ? `${topKind.calls} calls` : '暂无调用'}</div>
+    </article>
+  `;
+}
+
+function renderServiceTypeCards(snapshot, kindStats) {
+  const rows = summarizeKinds(snapshot, kindStats);
+  const root = document.getElementById('overview-kinds');
+  if (!rows.length) {
+    root.innerHTML = '<div class="ai-services-empty is-compact">当前还没有 AI service runtime 实例。</div>';
+    return;
+  }
+  root.innerHTML = rows.map(row => `
+    <article class="ai-overview-kind-card" data-tone="${row.tone}">
+      <div class="ai-overview-kind-head">
+        <div>
+          <div class="ai-overview-kind-meta">${escHtml(row.label)}</div>
+          <div class="ai-overview-kind-title">${row.services} 个 service 实例</div>
+          <div class="ai-overview-kind-subtitle">${row.clients} 个 client 实例，${row.degraded} 个异常 / 冷却</div>
+        </div>
+        <span class="ai-overview-kind-pill ${row.tone}">${row.failures ? formatPercent(row.failures, row.calls) : '0.0%'}</span>
+      </div>
+      <div class="ai-overview-kind-stats">
+        <div class="ai-overview-kind-stat"><span>调用量</span><strong>${row.calls}</strong></div>
+        <div class="ai-overview-kind-stat"><span>平均耗时</span><strong>${formatDurationMs(row.avgDuration)}</strong></div>
+        <div class="ai-overview-kind-stat"><span>失败数</span><strong>${row.failures}</strong></div>
+        <div class="ai-overview-kind-stat"><span>最后调用</span><strong>${escHtml(formatTimestamp(row.lastCalledAt))}</strong></div>
+      </div>
+      <div class="ai-overview-kind-note">这里只保留 service type 级别摘要，不展开全部 client 细节。</div>
+    </article>
+  `).join('');
+}
+
+function renderKindChart(kindStats) {
+  destroyChart('kind');
+  const rows = (Array.isArray(kindStats) ? kindStats : []).filter(item => safeNumber(item.call_count) > 0);
+  if (!rows.length) {
+    setChartState('service-kind-chart', 'service-kind-chart-state', '最近 24 小时没有可展示的服务调用');
+    return;
+  }
+  setChartState('service-kind-chart', 'service-kind-chart-state', '');
+  charts.kind = new Chart(document.getElementById('service-kind-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(item => kindLabelFromKey(item.group)),
+      datasets: [
+        { label: '成功', data: rows.map(item => safeNumber(item.success_count)), backgroundColor: '#34d399', borderRadius: 5, maxBarThickness: 20 },
+        { label: '失败', data: rows.map(item => safeNumber(item.failure_count)), backgroundColor: '#f87171', borderRadius: 5, maxBarThickness: 20 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 10 }, padding: 8 } } },
+      scales: {
+        x: { stacked: true, ticks: { font: { size: 10 } } },
+        y: { stacked: true, beginAtZero: true, ticks: { font: { size: 10 } } },
+      },
+    },
+  });
+}
+
+function renderOperationChart(operationStats) {
+  destroyChart('operation');
+  const rows = (Array.isArray(operationStats) ? operationStats : [])
+    .filter(item => safeNumber(item.call_count) > 0)
+    .sort((a, b) => safeNumber(b.avg_duration_ms) - safeNumber(a.avg_duration_ms))
+    .slice(0, 6);
+  if (!rows.length) {
+    setChartState('operation-chart', 'operation-chart-state', '最近 24 小时没有操作耗时数据');
+    return;
+  }
+  setChartState('operation-chart', 'operation-chart-state', '');
+  charts.operation = new Chart(document.getElementById('operation-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(item => item.group),
+      datasets: [{ label: '平均耗时 (ms)', data: rows.map(item => safeNumber(item.avg_duration_ms)), backgroundColor: COLORS.slice(0, rows.length), borderRadius: 5, maxBarThickness: 22 }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } },
+      },
+    },
+  });
+}
+
+function renderRecentFailures(rows) {
+  const root = document.getElementById('recent-failure-list');
+  if (!Array.isArray(rows) || !rows.length) {
+    root.innerHTML = '<div class="ai-services-empty is-compact">最近 24 小时没有失败调用。</div>';
+    return;
+  }
+  root.innerHTML = rows.map(row => `
+    <article class="ai-overview-log-row">
+      <div class="ai-overview-log-time">${escHtml(formatTimestamp(row.created_at))}</div>
+      <div class="ai-overview-log-kind">${escHtml(kindLabelFromKey(row.service_kind))}</div>
+      <div class="ai-overview-log-message">${escHtml(row.error_message || row.error_type || row.operation || 'unknown error')}</div>
+      <div class="ai-overview-log-duration">${escHtml(formatDurationMs(row.duration_ms))}</div>
+    </article>
+  `).join('');
+}
+
+function updateLastRefreshLabel(date = new Date()) {
+  const label = document.getElementById('last-refresh-label');
+  if (!label) return;
+  label.textContent = date.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+function restartAutoRefresh() {
+  if (_autoRefreshTimer) {
+    window.clearInterval(_autoRefreshTimer);
+    _autoRefreshTimer = null;
+  }
+  if (_autoRefreshMs > 0) {
+    _autoRefreshTimer = window.setInterval(loadOverview, _autoRefreshMs);
+  }
+}
+
+function updateConfigBadge(snapshot) {
+  const badge = document.getElementById('config-badge');
+  const dot = badge.querySelector('.panel-dot');
+  const status = document.getElementById('config-status');
+  if (snapshot?.config_loaded) {
+    dot.className = 'panel-dot ok';
+    status.textContent = '配置已加载';
+  } else {
+    dot.className = 'panel-dot warn';
+    status.textContent = '默认/硬编码模式';
+  }
+}
+
+async function loadOverview() {
+  const notice = document.getElementById('notice-box');
+  try {
+    const [snapshot, kindStats, operationStats, recentFailures] = await Promise.all([
+      fetchOverviewSnapshot(),
+      fetchServiceLogStats('service_kind'),
+      fetchServiceLogStats('operation'),
+      fetchRecentServiceFailures(),
+    ]);
+    updateLastRefreshLabel();
+    updateConfigBadge(snapshot);
+    renderOverviewSummary(snapshot, kindStats, operationStats);
+    renderServiceTypeCards(snapshot, kindStats);
+    renderKindChart(kindStats);
+    renderOperationChart(operationStats);
+    renderRecentFailures(recentFailures);
+    const reloadCount = Array.isArray(snapshot.reload_state) ? snapshot.reload_state.length : 0;
+    notice.textContent = `${snapshot.services?.length || 0} 个 service 实例，${reloadCount} 个 worker reload 状态。`;
+    notice.dataset.kind = snapshot.config_loaded ? 'info' : 'warn';
+    notice.classList.remove('hidden');
+  } catch (error) {
+    notice.textContent = '加载失败: ' + (error.message || error);
+    notice.dataset.kind = 'error';
+    notice.classList.remove('hidden');
+    document.getElementById('overview-kinds').innerHTML = '<div class="ai-services-empty is-compact">概览加载失败。</div>';
+    document.getElementById('recent-failure-list').innerHTML = '<div class="ai-services-empty is-compact">失败调用加载失败。</div>';
+    setChartState('service-kind-chart', 'service-kind-chart-state', '加载失败');
+    setChartState('operation-chart', 'operation-chart-state', '加载失败');
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadOverview);
+document.getElementById('auto-refresh-select').addEventListener('change', (event) => {
+  _autoRefreshMs = Number(event.target.value || 0);
+  restartAutoRefresh();
+});
+loadOverview();
+restartAutoRefresh();
+window.addEventListener('beforeunload', () => {
+  destroyChart('kind');
+  destroyChart('operation');
+  if (_autoRefreshTimer) window.clearInterval(_autoRefreshTimer);
+});
+</script>
+</body>
+</html>

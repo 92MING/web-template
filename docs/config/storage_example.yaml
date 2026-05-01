@@ -1,0 +1,105 @@
+# Framework storage config example
+#
+# 自动发现顺序：
+#   1. 环境变量 __STORAGE_CONFIG__（JSON 序列化）
+#   2. config/dev_storage.{yaml,yml,json,toml}   当 __MODE__=dev
+#   3. config/prod_storage.{yaml,yml,json,toml}  当 __MODE__=prod
+#   4. config/storage.{yaml,yml,json,toml}
+#   5. 如果都没有，则各 section 按各自默认值启动
+#
+# 这份文件不属于 server.yaml；它由 StorageConfig.Global() 独立加载。
+
+kv:
+  default:
+    type: sqlite
+    namespace: server
+    db_path: tmp/storage/kv.sqlite3
+  cache:
+    type: sqlite
+    namespace: server_cache
+    db_path: tmp/storage/kv_cache.sqlite3
+    default_expire: 3600
+  file_metadata:            # 文件引用计数 (fallback -> default)
+    type: sqlite
+    namespace: file_metadata
+    db_path: tmp/storage/kv_file_meta.sqlite3
+  ai_services_context:      # AI 服务共享上下文缓存 (fallback -> default)
+    type: sqlite
+    namespace: ai_ctx
+    db_path: tmp/storage/kv_ai_ctx.sqlite3
+
+orm:
+  default:
+    type: sqlite
+    namespace: server
+    db_path: tmp/storage/orm.sqlite3
+  cache:
+    type: sqlite
+    namespace: server_cache
+    db_path: tmp/storage/orm_cache.sqlite3
+    default_expire: 3600
+  log:                      # DefaultORMLogStore 日志存储
+    type: sqlite
+    namespace: server_logs
+    db_path: tmp/storage/log.sqlite3
+  embedding_cache:          # AI embedding 缓存 (fallback -> cache)
+    type: sqlite
+    namespace: embedding_cache
+    db_path: tmp/storage/orm_embedding_cache.sqlite3
+    default_expire: 86400
+  content_analyzer:         # 内容分析/提取缓存 (fallback -> cache)
+    type: sqlite
+    namespace: content_analyzer
+    db_path: tmp/storage/orm_content_analyzer.sqlite3
+    default_expire: 86400
+  project_records:          # 业务项目记录 (fallback -> cache)
+    type: sqlite
+    namespace: project_records
+    db_path: tmp/storage/orm_ppt.sqlite3
+
+vector:
+  default:
+    type: milvus-lite
+    namespace: server
+    db_path: tmp/storage/vector.db
+    metric_type: COSINE
+  cache:
+    type: milvus-lite
+    namespace: server_cache
+    db_path: tmp/storage/vector_cache.db
+    metric_type: COSINE
+    default_expire: 3600
+
+object:
+  default:
+    type: local
+    namespace: server
+    root_path: tmp/storage/objects
+    metadata_db:
+      type: sqlite
+      namespace: server_objects_meta
+      db_path: tmp/storage/objects_meta.sqlite3
+  cache:
+    type: local
+    namespace: server_cache
+    root_path: tmp/storage/objects_cache
+    metadata_db:
+      type: sqlite
+      namespace: server_objects_cache_meta
+      db_path: tmp/storage/objects_cache_meta.sqlite3
+  temp_file_upload:
+    type: local
+    namespace: server_uploads
+    root_path: tmp/storage/uploads
+    metadata_db:
+      type: sqlite
+      namespace: server_uploads_meta
+      db_path: tmp/storage/uploads_meta.sqlite3
+  project_assets:           # 业务项目资源 (fallback -> cache)
+    type: local
+    namespace: ppt_assets
+    root_path: tmp/storage/ppt_assets
+    metadata_db:
+      type: sqlite
+      namespace: ppt_assets_meta
+      db_path: tmp/storage/ppt_assets_meta.sqlite3

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RTC Room</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: #0f172a; color: #e2e8f0;
+    font-family: system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  .stage {
+    flex: 1; display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px; padding: 16px;
+    align-content: center; justify-items: center;
+  }
+  .tile {
+    width: 100%; max-width: 480px; aspect-ratio: 16/10;
+    background: #1e293b; border-radius: 16px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; position: relative; overflow: hidden;
+    border: 2px solid transparent;
+    transition: border-color .2s ease;
+  }
+  .tile.self { border-color: #3b82f6; }
+  .tile.speaking { border-color: #22c55e; }
+  .avatar {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    display: grid; place-items: center;
+    font-size: 28px; font-weight: 700; color: #fff;
+  }
+  .name {
+    font-size: 15px; font-weight: 600;
+    background: rgba(15,23,42,0.7);
+    padding: 4px 12px; border-radius: 999px;
+  }
+  .toolbar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 16px; padding: 14px;
+    background: rgba(15,23,42,0.9);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid #1e293b;
+  }
+  .tool-btn {
+    width: 48px; height: 48px; border-radius: 50%;
+    border: none; background: #334155; color: #e2e8f0;
+    display: grid; place-items: center; cursor: pointer;
+    transition: background .2s ease;
+  }
+  .tool-btn:hover { background: #475569; }
+  .tool-btn.danger { background: #dc2626; }
+  .tool-btn.danger:hover { background: #b91c1c; }
+  .tool-btn.active { background: #22c55e; }
+  .info-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: #0f172a;
+    border-bottom: 1px solid #1e293b; font-size: 13px; color: #94a3b8;
+  }
+  .badge {
+    background: #dc2626; color: #fff; font-size: 11px;
+    padding: 2px 8px; border-radius: 999px; font-weight: 700;
+  }
+  .badge.live { background: #dc2626; }
+</style>
+</head>
+<body>
+<div class="info-bar">
+  <div id="room-info">Room: <strong id="room-id"></strong></div>
+  <div><span class="badge live">LIVE</span> <span id="participant-count">1 人在线</span></div>
+</div>
+<div class="stage" id="stage"></div>
+<div class="toolbar">
+  <button class="tool-btn" id="btn-mic" title="麦克风">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+  </button>
+  <button class="tool-btn" id="btn-cam" title="摄像头">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+  </button>
+  <button class="tool-btn" id="btn-screen" title="屏幕共享">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+  </button>
+  <button class="tool-btn danger" id="btn-leave" title="离开会议">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 22H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h5"/><polyline points="17 16 21 12 17 8"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  </button>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room_id') || 'rtc-default';
+const userId = params.get('user_id') || 'guest';
+const classId = params.get('class_id') || '';
+
+let micOn = true;
+let camOn = true;
+let participants = [];
+let pollTimer = null;
+
+function getInitials(name) {
+  return (name || 'U').slice(0, 2).toUpperCase();
+}
+
+function renderTiles() {
+  const stage = document.getElementById('stage');
+  stage.innerHTML = participants.map((p) => `
+    <div class="tile ${p.user_id === userId ? 'self' : ''}">
+      <div class="avatar">${getInitials(p.name)}</div>
+      <div class="name">${p.name} ${p.user_id === userId ? '(我)' : ''}</div>
+    </div>
+  `).join('');
+  document.getElementById('participant-count').textContent = `${participants.length} 人在线`;
+}
+
+async function joinRoom() {
+  if (!classId) return;
+  try {
+    const res = await fetch(`/api/classroom/${classId}/rtc/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('eclass_token') || ''}` },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      participants = (data.room?.participants || []).map((uid) => ({ user_id: uid, name: uid }));
+      if (!participants.find((p) => p.user_id === userId)) {
+        participants.push({ user_id: userId, name: userId });
+      }
+      renderTiles();
+    }
+  } catch (e) {
+    console.error('join failed', e);
+    participants = [{ user_id: userId, name: userId }];
+    renderTiles();
+  }
+}
+
+async function leaveRoom() {
+  if (!classId) return;
+  try {
+    await fetch(`/api/classroom/${classId}/rtc/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('eclass_token') || ''}` },
+      body: JSON.stringify({}),
+    });
+  } catch (e) {
+    console.error('leave failed', e);
+  }
+}
+
+async function pollStatus() {
+  if (!classId) return;
+  try {
+    const res = await fetch(`/api/classroom/${classId}/rtc/status`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('eclass_token') || ''}` },
+    });
+    const data = await res.json();
+    if (data.ok && data.active) {
+      participants = data.room?.participants || [];
+      if (!participants.find((p) => p.user_id === userId)) {
+        participants.push({ user_id: userId, name: userId });
+      }
+      renderTiles();
+    } else if (data.ok && !data.active) {
+      // Meeting ended
+      clearInterval(pollTimer);
+      alert('会议已结束');
+      window.parent.postMessage({ type: 'rtc-ended' }, '*');
+    }
+  } catch (e) {
+    console.error('poll failed', e);
+  }
+}
+
+document.getElementById('room-id').textContent = roomId;
+
+document.getElementById('btn-mic').addEventListener('click', () => {
+  micOn = !micOn;
+  document.getElementById('btn-mic').classList.toggle('active', micOn);
+});
+
+document.getElementById('btn-cam').addEventListener('click', () => {
+  camOn = !camOn;
+  document.getElementById('btn-cam').classList.toggle('active', camOn);
+});
+
+document.getElementById('btn-leave').addEventListener('click', async () => {
+  clearInterval(pollTimer);
+  await leaveRoom();
+  window.parent.postMessage({ type: 'rtc-left' }, '*');
+});
+
+window.addEventListener('beforeunload', () => {
+  clearInterval(pollTimer);
+  leaveRoom();
+});
+
+joinRoom();
+pollTimer = setInterval(pollStatus, 3000);
+</script>
+</body>
+</html>

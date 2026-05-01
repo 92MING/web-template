@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>发布通告 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 820px; --builtin-shell-padding: 32px 16px 56px; }
+</style>
+<link rel="stylesheet" href="/eclass-tools.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="card">
+    <builtin-schema-form id="ann-form" submit-label="发布通告" layout="vertical" style="margin-top:24px;"></builtin-schema-form>
+  </section>
+  <section class="card timeline-wrap">
+    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">历史通告</h2>
+    <builtin-activity-feed id="notice-feed"></builtin-activity-feed>
+  </section>
+</builtin-app-shell>
+
+<script type="module">
+import { BuiltinToast } from '/shared/components.js?v=20260429-2';
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    back: '返回老师端', eyebrow: '老师端工作台', title: '发布通告', lead: '课堂通知从首页拆出来，老师在这里向指定教室发布通告。',
+    list_title: '历史通告', class_id: '教室 ID', ann_title: '通告标题', ann_body: '通告内容',
+    submit: '发布通告', ok: '通告已发布', fill: '请填写教室 ID、标题和内容'
+  },
+  en: {
+    back: 'Back to Teacher', eyebrow: 'Teacher Workspace', title: 'Post Notice', lead: 'Class notices are split out from home into this dedicated publishing page.',
+    list_title: 'Past Notices', class_id: 'Classroom ID', ann_title: 'Notice title', ann_body: 'Notice body',
+    submit: 'Post notice', ok: 'Notice posted', fill: 'Classroom ID, title and body are required'
+  }
+};
+
+const $ = id => document.getElementById(id);
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.announcements',
+  validateRole: (role) => role === 'teacher',
+  getInvalidRoleRedirect: () => 'student.html',
+  onApplyI18n: async ({ t, lang }) => {
+    const appShell = $('app-shell');
+    const labels = copy[lang] || copy['zh-cn'];
+    appShell.eyebrow = labels.eyebrow;
+    appShell.title = labels.title;
+    appShell.subtitle = labels.lead;
+    appShell.backHref = 'teacher.html';
+    appShell.backLabel = labels.back;
+    appShell.breadcrumbs = [
+      { label: labels.back, href: 'teacher.html' },
+      { label: labels.title },
+    ];
+    appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+    updateForm();
+    render();
+  },
+});
+
+const { api } = shell;
+let lang = localStorage.getItem('eclass_lang') || 'zh-cn';
+
+function d() { return copy[lang] || copy['zh-cn']; }
+
+function render() {
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+  document.querySelectorAll('[data-copy]').forEach(el => el.textContent = d()[el.dataset.copy] || el.textContent);
+  $('notice-feed').emptyTitle = lang === 'en' ? 'No notices yet' : '还没有历史通告';
+  $('notice-feed').emptyDescription = lang === 'en' ? 'Published notices will appear here for the selected classroom.' : '当前教室已发布的通告会在这里显示。';
+  $('notice-feed').loadingTitle = lang === 'en' ? 'Loading notices' : '正在加载通告';
+  $('notice-feed').loadingDescription = lang === 'en' ? 'Fetching the latest classroom announcements.' : '正在获取当前教室的历史通告。';
+  $('notice-feed').errorTitle = lang === 'en' ? 'Failed to load notices' : '加载通告失败';
+  $('notice-feed').errorDescription = lang === 'en' ? 'Try again after checking your classroom selection.' : '请确认教室后重试。';
+}
+
+const form = $('ann-form');
+
+function updateForm() {
+  const labels = d();
+  form.schema = [
+    { name: 'class_id', label: labels.class_id, type: 'text', required: true, default: form.getValue()?.class_id || 'c1' },
+    { name: 'title', label: labels.ann_title, type: 'text', required: true },
+    { name: 'body', label: labels.ann_body, type: 'textarea', required: true, rows: 4 }
+  ];
+  form.submitLabel = labels.submit;
+}
+updateForm();
+
+form.addEventListener('builtin-submit', async (e) => {
+  const { class_id, title, body } = e.detail.value;
+  if (!class_id || !title || !body) {
+    BuiltinToast.show(d().fill, { type: 'warning' });
+    return;
+  }
+  const payload = await api('/teacher/announcements', {
+    method: 'POST',
+    body: JSON.stringify({ class_id, title, body })
+  });
+  if (!payload) return;
+  BuiltinToast.show(payload.ok ? d().ok : 'Failed', { type: payload.ok ? 'success' : 'error' });
+  if (payload.ok) loadTimeline();
+});
+
+async function loadTimeline() {
+  const classId = (form.getValue()?.class_id) || 'c1';
+  $('notice-feed').state = 'loading';
+  const data = await api(`/student/announcements/list?page=1&page_size=20&class_id=${encodeURIComponent(classId)}`) || { announcements: [] };
+  if (!data) {
+    $('notice-feed').state = 'error';
+    return;
+  }
+  const list = data.announcements || [];
+  $('notice-feed').items = list.map(a => ({
+    time: a.date || a.created_at || '',
+    title: a.title,
+    description: a.content || '',
+    icon: 'notification',
+    tone: 'notice',
+    meta: [classId],
+  }));
+  $('notice-feed').state = list.length ? 'ready' : 'empty';
+}
+
+await shell.init();
+lang = localStorage.getItem('eclass_lang') || 'zh-cn';
+loadTimeline();
+</script>
+</body>
+</html>

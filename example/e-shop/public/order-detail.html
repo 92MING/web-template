@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f5f5f5">
+<title>订单详情 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
+  .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
+  .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .header h1 { margin: 0; font-size: 1.5rem; }
+  .header-actions { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
+  .nav-links { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .nav-links a {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 6px 12px; border: 1px solid var(--builtin-border, #d1d5db);
+    border-radius: var(--builtin-radius, 6px); background: var(--builtin-button-bg, #ffffff);
+    color: var(--builtin-color-text, #111827); text-decoration: none; font-size: 14px;
+  }
+  .nav-links a:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  .order-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+  .item-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  .item-row:last-child { border-bottom: none; }
+  .total-bar { margin-top:1rem;padding-top:1rem;border-top:2px solid var(--builtin-border-soft, #e5e7eb);text-align:right;font-size:1.25rem;font-weight:700; }
+  .total-bar span { color: var(--builtin-primary); }
+  @media (max-width: 720px) {
+    .container { padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem max(0.5rem, env(safe-area-inset-bottom)); }
+    .order-meta-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <builtin-icon name="file-text" size="24" variant="outlined"></builtin-icon>
+    <h1 data-i18n="eshop.order_detail">订单详情</h1>
+    <div class="header-actions">
+      <div class="nav-links">
+        <a href="orders.html" data-i18n="eshop.back_to_orders">返回订单列表</a>
+      </div>
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
+      <builtin-theme-toggle></builtin-theme-toggle>
+    </div>
+  </div>
+  <div id="order-detail" data-i18n="eshop.loading">加载中...</div>
+</div>
+<script type="module">
+import { initEshop, api, t, applyI18n, USER_ID } from './eshop-utils.js';
+
+await initEshop();
+
+const $ = id => document.getElementById(id);
+const orderId = new URLSearchParams(location.search).get('order_id');
+
+(async () => {
+  if (!orderId) {
+    $('order-detail').innerHTML = '<builtin-alert variant="error" data-i18n="eshop.missing_order_id">缺少订单号</builtin-alert>';
+    await applyI18n();
+    return;
+  }
+  const r = await api('/shop/orders/' + encodeURIComponent(orderId) + '?user_id=' + USER_ID);
+  if (!r || r.error || !r.order) {
+    $('order-detail').innerHTML = '<builtin-alert variant="error" data-i18n="eshop.order_not_found">订单不存在</builtin-alert>';
+    await applyI18n();
+    return;
+  }
+  const o = r.order;
+  let total = 0;
+  const itemsHtml = o.items.map(i => {
+    const price = i.price || 0;
+    const subtotal = price * i.quantity;
+    total += subtotal;
+    return `
+      <div class="item-row">
+        <span>${i.name || i.product_id} x${i.quantity}</span>
+        <span>¥${subtotal}</span>
+      </div>
+    `;
+  }).join('');
+
+  const timelineItems = [];
+  timelineItems.push({ time: new Date(o.created_at * 1000).toLocaleString(), title: await t('eshop.order_created') || '订单创建', description: await t('eshop.order_submitted') || '订单已提交', dotColor: '#2563eb' });
+  if (o.status !== 'pending') {
+    timelineItems.push({ time: new Date((o.created_at + 3600) * 1000).toLocaleString(), title: await t('eshop.order_confirmed') || '订单确认', description: await t('eshop.order_confirmed_desc') || '商家已确认订单', dotColor: '#16a34a' });
+  }
+  if (o.status === 'shipped' || o.status === 'delivered') {
+    timelineItems.push({ time: new Date((o.created_at + 86400) * 1000).toLocaleString(), title: await t('eshop.order_shipped') || '已发货', description: await t('eshop.order_shipped_desc') || '商品已发出', dotColor: '#d97706' });
+  }
+  if (o.status === 'delivered') {
+    timelineItems.push({ time: new Date((o.created_at + 172800) * 1000).toLocaleString(), title: await t('eshop.order_delivered') || '已送达', description: await t('eshop.order_delivered_desc') || '订单已完成', dotColor: '#16a34a' });
+  }
+
+  const finalTotal = o.final_total !== undefined ? o.final_total : total;
+  const discount = o.discount || 0;
+
+  $('order-detail').innerHTML = `
+    <builtin-card variant="elevated" style="margin-bottom:1rem;">
+      <div slot="header"><strong data-i18n="eshop.order_info">订单信息</strong></div>
+      <div class="order-meta-grid">
+        <div><strong data-i18n="eshop.order_id">订单号</strong>: ${o.order_id}</div>
+        <div><strong data-i18n="eshop.status">状态</strong>: <builtin-badge variant="success" text="${o.status}"></builtin-badge></div>
+        <div><strong data-i18n="eshop.created_at">创建时间</strong>: ${new Date(o.created_at * 1000).toLocaleString()}</div>
+        <div><strong data-i18n="eshop.user_id">用户ID</strong>: ${o.user_id}</div>
+      </div>
+    </builtin-card>
+    <builtin-card variant="elevated" style="margin-bottom:1rem;">
+      <div slot="header"><strong data-i18n="eshop.product_list">商品列表</strong></div>
+      ${itemsHtml}
+      ${discount > 0 ? `<div style="margin-top:0.5rem;text-align:right;color:var(--builtin-color-muted);font-size:14px;">优惠: -¥${discount}</div>` : ''}
+      <div class="total-bar">
+        <strong data-i18n="eshop.total">合计</strong>: <span>¥${finalTotal}</span>
+      </div>
+    </builtin-card>
+    <builtin-card variant="elevated" style="margin-bottom:1rem;">
+      <div slot="header"><strong data-i18n="eshop.order_tracking">订单跟踪</strong></div>
+      <builtin-timeline id="order-timeline"></builtin-timeline>
+    </builtin-card>
+  `;
+  const timelineEl = document.getElementById('order-timeline');
+  if (timelineEl) timelineEl.items = timelineItems;
+  await applyI18n();
+})();
+</script>
+</body>
+</html>

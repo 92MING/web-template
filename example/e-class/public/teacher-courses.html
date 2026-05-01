@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>课程管理 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
+  .course-item { display: grid; gap: 0.5rem; padding: 1rem; border-bottom: 1px solid var(--line); }
+  .course-item:last-child { border-bottom: none; }
+  .course-title { font-weight: 700; font-size: 1.05rem; }
+  .course-desc { color: var(--muted); font-size: 0.9rem; }
+  .course-meta { font-size: 0.8rem; color: var(--muted); display: flex; gap: 1rem; }
+  .course-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+</style>
+<link rel="stylesheet" href="/eclass-tools.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="card">
+    <builtin-schema-form id="course-form" submit-label="创建课程" layout="vertical"></builtin-schema-form>
+  </section>
+  <section class="card list-wrap">
+    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">课程列表</h2>
+    <div id="list-state"></div>
+    <div id="course-list"></div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">课程管理上下文</strong></div>
+    <builtin-metadata-list id="course-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { BuiltinToast } from '/shared/components.js?v=20260429-2';
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    back: '返回老师端',
+    eyebrow: '老师端课程',
+    title: '课程管理',
+    documentTitle: '课程管理 - 数字教室',
+    lead: '创建、编辑和管理班级课程，学生端会实时同步。',
+    list_title: '课程列表',
+    class_id: '教室 ID',
+    course_title: '课程标题',
+    course_desc: '课程描述',
+    syllabus: '教学大纲',
+    syllabus_hint: '每行一个章节',
+    submit: '创建课程',
+    update: '更新课程',
+    ok_create: '课程已创建',
+    ok_update: '课程已更新',
+    ok_delete: '课程已删除',
+    fill: '请填写教室 ID 和课程标题',
+    contextTitle: '课程管理上下文',
+    loadingTitle: '正在加载课程列表',
+    loadingDescription: '正在获取当前教室下已创建的课程。',
+    emptyTitle: '还没有课程',
+    emptyDescription: '创建第一条课程后，这里会出现当前教室的课程列表。',
+    errorTitle: '加载课程失败',
+    errorDescription: '请稍后重试，或返回老师端重新进入。',
+    classLabel: '当前教室',
+    totalLabel: '课程总数',
+    edit: '编辑',
+    delete: '删除',
+    cancel: '取消',
+  },
+  en: {
+    back: 'Back to Teacher',
+    eyebrow: 'Teacher Courses',
+    title: 'Course Management',
+    documentTitle: 'Course Management - Digital Classroom',
+    lead: 'Create, edit and manage classroom courses. Changes sync to students in real time.',
+    list_title: 'Course List',
+    class_id: 'Classroom ID',
+    course_title: 'Course Title',
+    course_desc: 'Description',
+    syllabus: 'Syllabus',
+    syllabus_hint: 'One chapter per line',
+    submit: 'Create Course',
+    update: 'Update Course',
+    ok_create: 'Course created',
+    ok_update: 'Course updated',
+    ok_delete: 'Course deleted',
+    fill: 'Classroom ID and title are required',
+    contextTitle: 'Course Management Context',
+    loadingTitle: 'Loading courses',
+    loadingDescription: 'Fetching courses for the selected classroom.',
+    emptyTitle: 'No courses yet',
+    emptyDescription: 'Courses will appear here after you create the first one.',
+    errorTitle: 'Failed to load courses',
+    errorDescription: 'Try again in a moment or return to the teacher workspace.',
+    classLabel: 'Classroom',
+    totalLabel: 'Courses',
+    edit: 'Edit',
+    delete: 'Delete',
+    cancel: 'Cancel',
+  }
+};
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.courses',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'teacher',
+  getInvalidRoleRedirect: () => 'student.html',
+  onApplyI18n: async ({ lang: nextLang }) => {
+    lang = nextLang;
+    applyShellCopy();
+    updateForm();
+  },
+});
+
+const { $, api } = shell;
+const form = $('course-form');
+let lang = localStorage.getItem('eclass_lang') || 'zh-cn';
+let editingCourseId = null;
+
+function d() {
+  return copy[lang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  document.title = labels.documentTitle;
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'teacher.html';
+  appShell.backLabel = labels.back;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'teacher.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+}
+
+function renderListState(mode) {
+  const labels = d();
+  const host = $('list-state');
+  if (mode === 'idle') { host.innerHTML = ''; return; }
+  if (mode === 'loading') {
+    host.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    host.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="teacher.html"></builtin-empty-state>`;
+    return;
+  }
+  host.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext(list) {
+  const classId = (form.getValue()?.class_id) || 'c1';
+  $('course-context').items = [
+    { icon: 'book', label: d().classLabel, value: classId },
+    { icon: 'unordered-list', label: d().totalLabel, value: String(list.length) },
+  ];
+}
+
+function updateForm() {
+  const labels = d();
+  form.schema = [
+    { name: 'class_id', label: labels.class_id, type: 'text', required: true, default: form.getValue()?.class_id || 'c1' },
+    { name: 'title', label: labels.course_title, type: 'text', required: true },
+    { name: 'description', label: labels.course_desc, type: 'textarea', rows: 3 },
+    { name: 'syllabus', label: labels.syllabus, type: 'textarea', rows: 4, hint: labels.syllabus_hint },
+  ];
+  form.submitLabel = editingCourseId ? labels.update : labels.submit;
+}
+
+function renderList(list) {
+  const labels = d();
+  const host = $('course-list');
+  if (!list.length) {
+    host.innerHTML = '';
+    renderListState('empty');
+    return;
+  }
+  renderListState('idle');
+  host.innerHTML = list.map((c) => {
+    const syllabusPreview = Array.isArray(c.syllabus)
+      ? c.syllabus.slice(0, 3).join(' / ')
+      : (c.syllabus || '');
+    return `
+      <div class="course-item" data-id="${c.id}">
+        <div class="course-title">${c.title || ''}</div>
+        <div class="course-desc">${c.description || ''}</div>
+        <div class="course-meta">
+          <span>${c.teacher || ''}</span>
+          <span>${c.created_at || ''}</span>
+        </div>
+        <div class="course-meta" style="font-size:0.8rem;color:var(--muted);">${syllabusPreview}${Array.isArray(c.syllabus) && c.syllabus.length > 3 ? ' ...' : ''}</div>
+        <div class="course-actions">
+          <button class="ghost-btn btn-edit" data-id="${c.id}" type="button"><builtin-icon name="edit" size="14"></builtin-icon> ${labels.edit}</button>
+          <button class="ghost-btn danger btn-delete" data-id="${c.id}" type="button"><builtin-icon name="delete" size="14"></builtin-icon> ${labels.delete}</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  host.querySelectorAll('.btn-edit').forEach((btn) => {
+    btn.addEventListener('click', () => startEdit(list, btn.dataset.id));
+  });
+  host.querySelectorAll('.btn-delete').forEach((btn) => {
+    btn.addEventListener('click', () => doDelete(btn.dataset.id));
+  });
+}
+
+function startEdit(list, courseId) {
+  const course = list.find((c) => c.id === courseId);
+  if (!course) return;
+  editingCourseId = courseId;
+  const syllabusText = Array.isArray(course.syllabus) ? course.syllabus.join('\n') : (course.syllabus || '');
+  form.setValue({
+    class_id: form.getValue()?.class_id || 'c1',
+    title: course.title || '',
+    description: course.description || '',
+    syllabus: syllabusText,
+  });
+  updateForm();
+  form.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function doDelete(courseId) {
+  const labels = d();
+  const classId = (form.getValue()?.class_id) || 'c1';
+  const res = await api(`/classroom/${classId}/courses/${courseId}`, { method: 'DELETE' });
+  if (res && res.ok) {
+    BuiltinToast.show(labels.ok_delete, { type: 'success' });
+    loadList();
+  } else {
+    BuiltinToast.show(res?.error || 'Failed', { type: 'error' });
+  }
+}
+
+form.addEventListener('builtin-submit', async (event) => {
+  const labels = d();
+  const { class_id, title, description, syllabus } = event.detail.value;
+  if (!class_id || !title) {
+    BuiltinToast.show(labels.fill, { type: 'warning' });
+    return;
+  }
+  const payloadBody = {
+    title,
+    description: description || '',
+    syllabus: (syllabus || '').split('\n').map((s) => s.trim()).filter(Boolean),
+  };
+
+  let payload;
+  if (editingCourseId) {
+    payload = await api(`/classroom/${class_id}/courses/${editingCourseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payloadBody),
+    });
+  } else {
+    payload = await api(`/classroom/${class_id}/courses`, {
+      method: 'POST',
+      body: JSON.stringify(payloadBody),
+    });
+  }
+
+  if (!payload) {
+    BuiltinToast.show('Failed', { type: 'error' });
+    return;
+  }
+
+  BuiltinToast.show(payload.ok ? (editingCourseId ? labels.ok_update : labels.ok_create) : (payload.error || 'Failed'), { type: payload.ok ? 'success' : 'error' });
+  if (payload.ok) {
+    editingCourseId = null;
+    form.reset();
+    updateForm();
+    loadList();
+  }
+});
+
+async function loadList() {
+  renderListState('loading');
+  const classId = (form.getValue()?.class_id) || 'c1';
+  const data = await api(`/classroom/${classId}/courses?page_size=100`);
+  if (!data) {
+    renderList([]);
+    updateContext([]);
+    renderListState('error');
+    return;
+  }
+  const list = data.courses || [];
+  updateContext(list);
+  renderList(list);
+}
+
+await shell.init();
+updateForm();
+applyShellCopy();
+loadList();
+</script>
+</body>
+</html>

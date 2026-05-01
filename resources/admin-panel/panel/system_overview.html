@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统概览</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <script src="/vendor/chart/chart.js"></script>
+  <style>
+    html { font-size: 13px; }
+    body {
+      min-height: 100vh;
+      background: #0b1220;
+    }
+    html:not(.dark) body {
+      background: #f4f7fb;
+      color: #1e293b;
+    }
+    .glass {
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+    }
+    html:not(.dark) .glass {
+      background: rgba(255, 255, 255, 0.98);
+      border-color: rgba(148, 163, 184, 0.25);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    }
+    .chip {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(15, 23, 42, 0.62);
+    }
+    html:not(.dark) .chip {
+      background: rgba(255, 255, 255, 0.88);
+      border-color: rgba(148, 163, 184, 0.3);
+    }
+    .chart-shell {
+      border: 1px solid rgba(255,255,255,.05);
+      background: rgba(2, 6, 23, 0.5);
+      border-radius: .75rem;
+      padding: .5rem;
+    }
+    .alert-item {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 8px;
+      padding: 7px 9px;
+      background: rgba(2, 6, 23, 0.42);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .alert-item.ok   { border-color: rgba(52,211,153,.24); background: rgba(6,78,59,.24); }
+    .alert-item.warn { border-color: rgba(251,191,36,.24); background: rgba(120,53,15,.22); }
+    .alert-item.err  { border-color: rgba(248,113,113,.24); background: rgba(127,29,29,.22); }
+    html:not(.dark) .alert-item { background: rgba(241,245,249,.85); border-color: rgba(148,163,184,.25); color: #334155; }
+    html:not(.dark) .alert-item.ok   { border-color: rgba(16,185,129,.35); background: rgba(209,250,229,.6); color: #065f46; }
+    html:not(.dark) .alert-item.warn { border-color: rgba(245,158,11,.35); background: rgba(254,243,199,.6); color: #92400e; }
+    html:not(.dark) .alert-item.err  { border-color: rgba(239,68,68,.35); background: rgba(254,226,226,.6); color: #991b1b; }
+    .bar-fill { transition: width .35s ease; }
+    html:not(.dark) .glass .text-slate-500,
+    html:not(.dark) .chip .text-slate-500 {
+      color: #475569 !important;
+      font-weight: 600;
+    }
+    html:not(.dark) .glass .text-slate-400,
+    html:not(.dark) .chip .text-slate-400 {
+      color: #64748b !important;
+    }
+    html:not(.dark) .glass .text-white,
+    html:not(.dark) .chip .text-white,
+    html:not(.dark) .glass .text-slate-100,
+    html:not(.dark) .chip .text-slate-100 {
+      color: #0f172a !important;
+    }
+    html:not(.dark) .text-indigo-300 { color: #4f46e5 !important; }
+    html:not(.dark) .text-cyan-300 { color: #0891b2 !important; }
+    html:not(.dark) .text-emerald-300 { color: #059669 !important; }
+    html:not(.dark) .text-sky-300 { color: #0284c7 !important; }
+    html:not(.dark) .text-amber-300 { color: #d97706 !important; }
+    html:not(.dark) .text-orange-300 { color: #ea580c !important; }
+    html:not(.dark) .text-violet-300 { color: #7c3aed !important; }
+    html:not(.dark) .text-rose-300 { color: #e11d48 !important; }
+    html:not(.dark) .chart-shell {
+      border-color: rgba(148,163,184,.18);
+      background: rgba(255,255,255,.5);
+    }
+    html:not(.dark) select {
+      background: #fff;
+      color: #1e293b;
+      border-color: rgba(148,163,184,.35);
+    }
+    * { scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+    *::-webkit-scrollbar { width: 8px; height: 8px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb { background: #475569; border-radius: 9999px; border: 2px solid transparent; background-clip: content-box; }
+    body[data-proj-embedded="1"] .page-header { display: none; }
+    .overview-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: .5rem;
+    }
+    .metric-card {
+      box-sizing: border-box;
+      min-height: 34px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: .5rem;
+      padding: .45rem .7rem;
+      border-radius: .75rem;
+    }
+    .metric-title {
+      flex: 0 0 auto;
+      color: #64748b;
+      font-size: 11px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .metric-value {
+      min-width: 0;
+      overflow: hidden;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      line-height: 1.1;
+    }
+    .metric-value.is-strong {
+      font-size: 13px;
+    }
+    .overview-bottom-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: .5rem;
+    }
+    .overview-section-heading {
+      margin-bottom: .4rem;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .025em;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .disk-bars-grid,
+    .alert-list {
+      display: grid;
+      gap: .4rem;
+    }
+    .disk-row {
+      box-sizing: border-box;
+      border: 1px solid rgba(255, 255, 255, .05);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, .45);
+      padding: .45rem .6rem;
+    }
+    .disk-row-meta {
+      margin-bottom: .35rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      font-size: 11px;
+      line-height: 1;
+    }
+    .disk-row-mount,
+    .disk-row-usage {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .disk-row-mount {
+      color: #e2e8f0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .disk-row-usage {
+      color: #94a3b8;
+      text-align: right;
+    }
+    html:not(.dark) .disk-row {
+      border-color: rgba(148, 163, 184, .22);
+      background: rgba(248, 250, 252, .86);
+    }
+    html:not(.dark) .disk-row-mount { color: #0f172a; }
+    html:not(.dark) .disk-row-usage { color: #475569; }
+    @media (min-width: 1024px) {
+      .overview-bottom-grid {
+        grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+        align-items: start;
+      }
+    }
+    @media (min-width: 1320px) {
+      .disk-bars-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="text-slate-100">
+  <main class="min-h-screen p-2 md:p-2.5">
+    <div class="space-y-2">
+
+      <!-- ── header ─────────────────────────────────────────────── -->
+      <section class="glass rounded-2xl px-3 py-2 page-header">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span id="health-dot" class="h-2 w-2 rounded-full bg-slate-500 shrink-0"></span>
+          <span class="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400"></span>
+          <span class="text-sm font-semibold text-white">系统概览</span>
+          <span id="server-addr" class="font-mono text-xs text-slate-400 ml-auto">—</span>
+        </div>
+      </section>
+
+      <!-- ── host info grid (lscpu-style) ───────────────────────── -->
+      <section class="glass rounded-2xl p-3">
+        <div class="mb-2 flex items-center justify-between gap-2 flex-wrap">
+          <div class="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Host Profile</div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-8 text-xs">
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">主机名</span><div id="hi-hostname" class="font-mono text-slate-100 truncate mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">系统</span><div id="hi-os" class="text-slate-100 truncate mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">架构</span><div id="hi-arch" class="text-slate-100 mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">CPU 核心</span><div id="hi-cpu" class="text-slate-100 mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">Python</span><div id="hi-python" class="font-mono text-slate-100 truncate mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">主机 Uptime</span><div id="hi-uptime" class="text-slate-100 mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">服务 Uptime</span><div id="hi-service-uptime" class="text-slate-100 mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">开机时间</span><div id="hi-boot" class="text-slate-100 truncate mt-1">—</div></div>
+        </div>
+      </section>
+
+      <!-- ── key metrics row ────────────────────────────────────── -->
+      <section class="overview-metrics">
+        <div class="chip metric-card"><span class="metric-title">CPU</span><div id="cpu-avg-badge" class="metric-value is-strong font-bold text-indigo-300">—%</div></div>
+        <div class="chip metric-card"><span class="metric-title">内存</span><div id="mem-pct-badge" class="metric-value is-strong font-bold text-cyan-300">—%</div></div>
+        <div class="chip metric-card"><span class="metric-title">下行</span><div id="net-down-badge" class="metric-value font-semibold text-emerald-300">—</div></div>
+        <div class="chip metric-card"><span class="metric-title">上行</span><div id="net-up-badge" class="metric-value font-semibold text-sky-300">—</div></div>
+        <div class="chip metric-card"><span class="metric-title">磁盘读</span><div id="disk-read-badge" class="metric-value font-semibold text-amber-300">—</div></div>
+        <div class="chip metric-card"><span class="metric-title">磁盘写</span><div id="disk-write-badge" class="metric-value font-semibold text-orange-300">—</div></div>
+        <div class="chip metric-card"><span class="metric-title">进程</span><div id="process-count-badge" class="metric-value font-semibold text-violet-300">—</div></div>
+        <div class="chip metric-card"><span class="metric-title">温度 / 频率</span><div class="metric-value"><span id="cpu-temp-badge" class="font-semibold text-rose-300">—</span> <span id="cpu-freq-badge" class="text-slate-400">—</span></div></div>
+      </section>
+
+      <!-- ── charts 2×2 ─────────────────────────────────────────── -->
+      <section class="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <div class="glass rounded-2xl p-2.5">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">CPU 占用</div>
+          <div class="chart-shell"><canvas id="cpu-chart" height="56"></canvas></div>
+        </div>
+        <div class="glass rounded-2xl p-2.5">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">内存</span>
+            <span id="mem-used-label" class="text-[11px] text-slate-500">—</span>
+          </div>
+          <div class="chart-shell"><canvas id="mem-chart" height="56"></canvas></div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <!-- network chart -->
+        <div class="glass rounded-2xl p-2.5">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">网络吞吐</span>
+            <select id="network-device-select" class="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1 text-xs text-slate-100 outline-none">
+              <option value="__aggregate__">全部汇总</option>
+            </select>
+          </div>
+          <div class="chart-shell"><canvas id="network-chart" height="64"></canvas></div>
+          <div class="mt-1.5 grid grid-cols-2 gap-1.5 text-[11px] md:grid-cols-4">
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">下行</span><div id="network-selected-down" class="text-slate-100">—</div></div>
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">上行</span><div id="network-selected-up" class="text-slate-100">—</div></div>
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">收包</span><div id="network-selected-packets-recv" class="text-slate-100">—</div></div>
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">发包</span><div id="network-selected-packets-sent" class="text-slate-100">—</div></div>
+          </div>
+        </div>
+        <!-- disk IO chart -->
+        <div class="glass rounded-2xl p-2.5">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">磁盘 IO</span>
+            <select id="disk-io-device-select" class="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1 text-xs text-slate-100 outline-none">
+              <option value="__aggregate__">全部汇总</option>
+            </select>
+          </div>
+          <div class="chart-shell"><canvas id="disk-io-chart" height="64"></canvas></div>
+          <div class="mt-1.5 grid grid-cols-2 gap-1.5 text-[11px] md:grid-cols-4">
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">读取</span><div id="disk-selected-read" class="text-slate-100">—</div></div>
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">写入</span><div id="disk-selected-write" class="text-slate-100">—</div></div>
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">读次数</span><div id="disk-selected-read-count" class="text-slate-100">—</div></div>
+            <div class="chip rounded-lg px-2 py-1"><span class="text-slate-500">写次数</span><div id="disk-selected-write-count" class="text-slate-100">—</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <div class="glass rounded-2xl p-2.5">
+          <div class="mb-1.5 flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">网络接口排行</span>
+            <span id="network-selected-addresses" class="text-[11px] text-slate-500">全部汇总 · 收包 0 · 发包 0</span>
+          </div>
+          <div id="network-top-list" class="space-y-1.5"></div>
+        </div>
+        <div class="glass rounded-2xl p-2.5">
+          <div class="mb-1.5 flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">磁盘 IO 排行</span>
+            <span id="disk-selected-meta" class="text-[11px] text-slate-500">全部汇总 · 0 read IOPS · 0 write IOPS</span>
+          </div>
+          <div id="disk-io-top-list" class="space-y-1.5"></div>
+        </div>
+      </section>
+
+      <!-- ── disk bars + alerts ─────────────────────────────────── -->
+      <section class="overview-bottom-grid">
+        <div class="glass rounded-2xl p-2.5">
+          <div class="overview-section-heading">硬盘分区</div>
+          <div id="disk-bars" class="disk-bars-grid"></div>
+        </div>
+        <div class="glass rounded-2xl p-2.5">
+          <div class="overview-section-heading">告警</div>
+          <div id="system-alert-list" class="alert-list"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    function fmtMB(mb) {
+      return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb.toFixed(0) + ' MB';
+    }
+    function fmtGB(gb) {
+      return gb >= 1 ? gb.toFixed(1) + ' GB' : (gb * 1024).toFixed(0) + ' MB';
+    }
+    function fmtBytesPerSec(bytes) {
+      const value = Number(bytes || 0);
+      if (!Number.isFinite(value) || value <= 0) return '0 B/s';
+      const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+      let size = value;
+      let idx = 0;
+      while (size >= 1024 && idx < units.length - 1) {
+        size /= 1024;
+        idx += 1;
+      }
+      return `${size >= 10 || idx === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[idx]}`;
+    }
+    function fmtIops(value) {
+      const num = Number(value || 0);
+      if (!Number.isFinite(num)) return '—';
+      return num.toFixed(num >= 10 ? 0 : 1);
+    }
+    function fmtUptime(secs) {
+      secs = Math.floor(secs || 0);
+      const d = Math.floor(secs / 86400);
+      const h = Math.floor((secs % 86400) / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      const parts = [];
+      if (d) parts.push(d + '天');
+      if (h) parts.push(h + '时');
+      parts.push(m + '分');
+      if (!d) parts.push(s + '秒');
+      return parts.join('');
+    }
+    function pctColor(p) {
+      return p < 60 ? '#34d399' : p < 80 ? '#fbbf24' : '#f87171';
+    }
+    function escapeHtml(text) {
+      const el = document.createElement('span');
+      el.textContent = text;
+      return el.innerHTML;
+    }
+
+    const MAX_POINTS = 60;
+    const HISTORY_WINDOW_SECONDS = 60;
+    const DEVICE_STATE_KEY = 'proj-system-overview-device-state-v1';
+    const historyRows = [];
+    const cpuHistory = [];
+    const memHistory = [];
+    const netDownHistory = [];
+    const netUpHistory = [];
+    const diskReadHistory = [];
+    const diskWriteHistory = [];
+    let selectedNetworkDevice = '__aggregate__';
+    let selectedDiskDevice = '__aggregate__';
+    let cpuChart = null;
+    let memChart = null;
+    let networkChart = null;
+    let diskIoChart = null;
+    let sysTimer = null;
+    let hostInfoTick = 0;
+    let uptimeBase = null;
+    let uptimeTimer = null;
+    let hostExtendedInfo = null;
+    let fetchInFlight = false;
+
+    function setHealthState(ok) {
+      const dot = document.getElementById('health-dot');
+      if (!dot) return;
+      dot.className = `h-2 w-2 rounded-full ${ok ? 'bg-emerald-400' : 'bg-rose-400'}`;
+    }
+
+    function normalizeDeviceStateValue(value) {
+      return typeof value === 'string' && value ? value : '__aggregate__';
+    }
+
+    function readStoredDeviceState() {
+      try {
+        return JSON.parse(localStorage.getItem(DEVICE_STATE_KEY) || '{}') || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function readUrlDeviceState() {
+      try {
+        const url = new URL(window.location.href);
+        return {
+          selectedNetworkDevice: url.searchParams.get('network') || '',
+          selectedDiskDevice: url.searchParams.get('disk') || '',
+        };
+      } catch {
+        return { selectedNetworkDevice: '', selectedDiskDevice: '' };
+      }
+    }
+
+    function restoreDeviceStateFromUrl() {
+      const urlState = readUrlDeviceState();
+      if (urlState.selectedNetworkDevice) selectedNetworkDevice = normalizeDeviceStateValue(urlState.selectedNetworkDevice);
+      if (urlState.selectedDiskDevice) selectedDiskDevice = normalizeDeviceStateValue(urlState.selectedDiskDevice);
+      return urlState;
+    }
+
+    function saveDeviceState() {
+      try {
+        localStorage.setItem(DEVICE_STATE_KEY, JSON.stringify({ selectedNetworkDevice, selectedDiskDevice }));
+      } catch {}
+      syncDeviceStateToUrl();
+    }
+
+    function restoreDeviceState() {
+      const storedState = readStoredDeviceState();
+      selectedNetworkDevice = normalizeDeviceStateValue(storedState.selectedNetworkDevice);
+      selectedDiskDevice = normalizeDeviceStateValue(storedState.selectedDiskDevice);
+      restoreDeviceStateFromUrl();
+    }
+
+    function syncDeviceStateToUrl() {
+      try {
+        const url = new URL(window.location.href);
+        if (selectedNetworkDevice && selectedNetworkDevice !== '__aggregate__') url.searchParams.set('network', selectedNetworkDevice);
+        else url.searchParams.delete('network');
+        if (selectedDiskDevice && selectedDiskDevice !== '__aggregate__') url.searchParams.set('disk', selectedDiskDevice);
+        else url.searchParams.delete('disk');
+        window.history.replaceState(null, '', url.toString());
+      } catch {}
+    }
+
+    function makeLineChart(canvasId, datasets, options = {}) {
+      const gridColor = 'rgba(148, 163, 184, 0.10)';
+      const textColor = '#94a3b8';
+      return new Chart(document.getElementById(canvasId).getContext('2d'), {
+        type: 'line',
+        data: { labels: [], datasets },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: options.legend ?? false, labels: { color: textColor, boxWidth: 8, font: { size: 10 } } },
+            tooltip: options.tooltip || {},
+          },
+          scales: {
+            x: { display: false },
+            y: {
+              min: options.min ?? 0,
+              ticks: { color: textColor, maxTicksLimit: 4, font: { size: 10 }, callback: options.tickFormatter || ((v) => v) },
+              grid: { color: gridColor },
+            },
+          },
+        },
+      });
+    }
+
+    function initCharts() {
+      cpuChart?.destroy();
+      memChart?.destroy();
+      networkChart?.destroy();
+      diskIoChart?.destroy();
+      cpuChart = makeLineChart('cpu-chart', [{
+        label: 'CPU %',
+        data: [],
+        borderColor: '#818cf8',
+        backgroundColor: 'rgba(129,140,248,.14)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: .28,
+      }], { tickFormatter: (v) => v + '%' });
+      memChart = makeLineChart('mem-chart', [{
+        label: 'MEM %',
+        data: [],
+        borderColor: '#22d3ee',
+        backgroundColor: 'rgba(34,211,238,.12)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: .28,
+      }], { tickFormatter: (v) => v + '%' });
+      networkChart = makeLineChart('network-chart', [
+        { label: '下行', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,.10)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: .24 },
+        { label: '上行', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.10)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: .24 },
+      ], { legend: true, tickFormatter: (v) => fmtBytesPerSec(v) });
+      diskIoChart = makeLineChart('disk-io-chart', [
+        { label: '读取', data: [], borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,.10)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: .24 },
+        { label: '写入', data: [], borderColor: '#fb923c', backgroundColor: 'rgba(251,146,60,.10)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: .24 },
+      ], { legend: true, tickFormatter: (v) => fmtBytesPerSec(v) });
+    }
+
+    function syncChart(chart, labels, histories) {
+      if (!chart) return;
+      chart.data.labels = labels;
+      histories.forEach((history, index) => {
+        chart.data.datasets[index].data = history.map((item) => item.value);
+      });
+      chart.update('none');
+    }
+
+    function trimHistory(history) {
+      while (history.length > MAX_POINTS) history.shift();
+    }
+
+    function appendMetric(history, label, value) {
+      history.push({ label, value });
+      trimHistory(history);
+    }
+
+    async function loadServerConfig() {
+      try {
+        const cfg = await fetch('/api/server/config').then((r) => r.json());
+        document.getElementById('server-addr').textContent = `${cfg.host}:${cfg.port}`;
+      } catch {}
+    }
+
+    function toMillis(timestamp) {
+      if (!timestamp) return Date.now();
+      const normalized = String(timestamp).replace(' ', 'T');
+      const value = Date.parse(normalized);
+      return Number.isFinite(value) ? value : Date.now();
+    }
+
+    function sumMetricMap(metricMap, fields) {
+      const totals = Object.fromEntries(fields.map((field) => [field, 0]));
+      Object.values(metricMap || {}).forEach((item) => {
+        if (!item || typeof item !== 'object') return;
+        fields.forEach((field) => { totals[field] += Number(item[field] || 0); });
+      });
+      return totals;
+    }
+
+    function getMetricMapKeys(rows, fieldName) {
+      const set = new Set();
+      (rows || []).forEach((row) => { Object.keys(row?.[fieldName] || {}).forEach((key) => set.add(key)); });
+      return Array.from(set).sort();
+    }
+
+    function getMetricMapItem(metricMap, selectedKey, fields) {
+      if (!metricMap || typeof metricMap !== 'object') return Object.fromEntries(fields.map((f) => [f, 0]));
+      if (!selectedKey || selectedKey === '__aggregate__') return sumMetricMap(metricMap, fields);
+      const raw = metricMap[selectedKey];
+      if (!raw || typeof raw !== 'object') return Object.fromEntries(fields.map((f) => [f, 0]));
+      return Object.fromEntries(fields.map((f) => [f, Number(raw[f] || 0)]));
+    }
+
+    function updateDeviceSelect(selectId, keys, selectedValue, aggregateLabel) {
+      const select = document.getElementById(selectId);
+      if (!select) return selectedValue;
+      const nextValue = keys.includes(selectedValue) ? selectedValue : '__aggregate__';
+      select.innerHTML = '';
+      const agg = document.createElement('option');
+      agg.value = '__aggregate__';
+      agg.textContent = aggregateLabel;
+      select.appendChild(agg);
+      keys.forEach((key) => { const o = document.createElement('option'); o.value = key; o.textContent = key; select.appendChild(o); });
+      select.value = nextValue;
+      return nextValue;
+    }
+
+    function deviceDisplayName(value, aggregateLabel) {
+      return !value || value === '__aggregate__' ? aggregateLabel : value;
+    }
+
+    function computeLeaderboardRows(currentMap, previousMap, options = {}) {
+      const incomingKey = options.incomingKey || 'bytes_recv';
+      const outgoingKey = options.outgoingKey || 'bytes_sent';
+      const dt = Math.max(0.001, Number(options.dtSeconds || 1));
+      const keys = new Set([...Object.keys(currentMap || {}), ...Object.keys(previousMap || {})]);
+      return Array.from(keys).map((key) => {
+        const current = currentMap?.[key] || {};
+        const previous = previousMap?.[key] || {};
+        const incomingRate = Math.max(0, (Number(current[incomingKey] || 0) - Number(previous[incomingKey] || 0)) / dt);
+        const outgoingRate = Math.max(0, (Number(current[outgoingKey] || 0) - Number(previous[outgoingKey] || 0)) / dt);
+        const totalRate = incomingRate + outgoingRate;
+        return {
+          key,
+          incomingRate,
+          outgoingRate,
+          totalRate,
+          current,
+        };
+      }).filter((row) => row.totalRate > 0 || Object.keys(row.current || {}).length).sort((a, b) => b.totalRate - a.totalRate).slice(0, 5);
+    }
+
+    function renderLeaderboardRows(containerId, rows, options = {}) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      if (!rows.length) {
+        container.innerHTML = `<div class="rounded-lg border border-white/5 bg-slate-950/35 px-3 py-2 text-xs text-slate-500">${options.emptyLabel || '暂无数据'}</div>`;
+        return;
+      }
+      container.innerHTML = rows.map((row, index) => `
+        <div class="rounded-lg border border-white/5 bg-slate-950/35 px-3 py-2">
+          <div class="flex items-center justify-between gap-3 text-xs">
+            <div class="min-w-0">
+              <div class="truncate font-mono text-slate-100">${index + 1}. ${escapeHtml(row.key)}</div>
+              <div class="mt-0.5 truncate text-slate-500">${escapeHtml(row.detail)}</div>
+            </div>
+            <div class="shrink-0 font-semibold text-slate-100">${escapeHtml(row.totalLabel)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function getSnapshotIoTotals(snapshot) {
+      return {
+        network: sumMetricMap(snapshot.network_data || {}, ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']),
+        disk: sumMetricMap(snapshot.disk_io_data || {}, ['read_bytes', 'write_bytes', 'read_count', 'write_count']),
+      };
+    }
+
+    function getSnapshotSelectedIo(snapshot, networkKey, diskKey) {
+      return {
+        network: getMetricMapItem(snapshot.network_data || {}, networkKey, ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']),
+        disk: getMetricMapItem(snapshot.disk_io_data || {}, diskKey, ['read_bytes', 'write_bytes', 'read_count', 'write_count']),
+      };
+    }
+
+    function computeRates(prev, current) {
+      if (!prev) return { netDown: 0, netUp: 0, diskRead: 0, diskWrite: 0, diskReadIops: 0, diskWriteIops: 0 };
+      const dt = Math.max(.001, (toMillis(current.timestamp) - toMillis(prev.timestamp)) / 1000);
+      const p = getSnapshotIoTotals(prev), c = getSnapshotIoTotals(current);
+      return {
+        netDown: Math.max(0, (c.network.bytes_recv - p.network.bytes_recv) / dt),
+        netUp: Math.max(0, (c.network.bytes_sent - p.network.bytes_sent) / dt),
+        diskRead: Math.max(0, (c.disk.read_bytes - p.disk.read_bytes) / dt),
+        diskWrite: Math.max(0, (c.disk.write_bytes - p.disk.write_bytes) / dt),
+        diskReadIops: Math.max(0, (c.disk.read_count - p.disk.read_count) / dt),
+        diskWriteIops: Math.max(0, (c.disk.write_count - p.disk.write_count) / dt),
+      };
+    }
+
+    function computeSelectedRates(prev, current) {
+      if (!current || !prev) return { netDown: 0, netUp: 0, diskRead: 0, diskWrite: 0, diskReadIops: 0, diskWriteIops: 0 };
+      const dt = Math.max(.001, (toMillis(current.timestamp) - toMillis(prev.timestamp)) / 1000);
+      const p = getSnapshotSelectedIo(prev, selectedNetworkDevice, selectedDiskDevice);
+      const c = getSnapshotSelectedIo(current, selectedNetworkDevice, selectedDiskDevice);
+      return {
+        netDown: Math.max(0, (c.network.bytes_recv - p.network.bytes_recv) / dt),
+        netUp: Math.max(0, (c.network.bytes_sent - p.network.bytes_sent) / dt),
+        diskRead: Math.max(0, (c.disk.read_bytes - p.disk.read_bytes) / dt),
+        diskWrite: Math.max(0, (c.disk.write_bytes - p.disk.write_bytes) / dt),
+        diskReadIops: Math.max(0, (c.disk.read_count - p.disk.read_count) / dt),
+        diskWriteIops: Math.max(0, (c.disk.write_count - p.disk.write_count) / dt),
+      };
+    }
+
+    function refreshDeviceOptions() {
+      const prevNetworkDevice = selectedNetworkDevice;
+      const prevDiskDevice = selectedDiskDevice;
+      selectedNetworkDevice = updateDeviceSelect('network-device-select', getMetricMapKeys(historyRows, 'network_data'), selectedNetworkDevice, '全部汇总');
+      selectedDiskDevice = updateDeviceSelect('disk-io-device-select', getMetricMapKeys(historyRows, 'disk_io_data'), selectedDiskDevice, '全部汇总');
+      if (prevNetworkDevice !== selectedNetworkDevice || prevDiskDevice !== selectedDiskDevice) {
+        syncDeviceStateToUrl();
+      }
+    }
+
+    function refreshSelectedIoHistories() {
+      netDownHistory.length = 0;
+      netUpHistory.length = 0;
+      diskReadHistory.length = 0;
+      diskWriteHistory.length = 0;
+      historyRows.forEach((snapshot, index) => {
+        const prev = index > 0 ? historyRows[index - 1] : null;
+        const label = (snapshot.timestamp || '').slice(11, 16) || '';
+        const rates = computeSelectedRates(prev, snapshot);
+        appendMetric(netDownHistory, label, rates.netDown);
+        appendMetric(netUpHistory, label, rates.netUp);
+        appendMetric(diskReadHistory, label, rates.diskRead);
+        appendMetric(diskWriteHistory, label, rates.diskWrite);
+      });
+      const labels = cpuHistory.map((item) => item.label);
+      syncChart(networkChart, labels, [netDownHistory, netUpHistory]);
+      syncChart(diskIoChart, labels, [diskReadHistory, diskWriteHistory]);
+      const latest = historyRows.length ? historyRows[historyRows.length - 1] : null;
+      const prev = historyRows.length > 1 ? historyRows[historyRows.length - 2] : null;
+      const rates = computeSelectedRates(prev, latest);
+      const totals = latest ? getSnapshotSelectedIo(latest, selectedNetworkDevice, selectedDiskDevice) : { network: {}, disk: {} };
+      document.getElementById('network-selected-down').textContent = fmtBytesPerSec(rates.netDown);
+      document.getElementById('network-selected-up').textContent = fmtBytesPerSec(rates.netUp);
+      document.getElementById('network-selected-packets-recv').textContent = String(Number(totals.network.packets_recv || 0));
+      document.getElementById('network-selected-packets-sent').textContent = String(Number(totals.network.packets_sent || 0));
+      document.getElementById('disk-selected-read').textContent = fmtBytesPerSec(rates.diskRead);
+      document.getElementById('disk-selected-write').textContent = fmtBytesPerSec(rates.diskWrite);
+      document.getElementById('disk-selected-read-count').textContent = String(Number(totals.disk.read_count || 0));
+      document.getElementById('disk-selected-write-count').textContent = String(Number(totals.disk.write_count || 0));
+      document.getElementById('network-selected-addresses').textContent = `${deviceDisplayName(selectedNetworkDevice, '全部汇总')} · 收包 ${Number(totals.network.packets_recv || 0)} · 发包 ${Number(totals.network.packets_sent || 0)}`;
+      document.getElementById('disk-selected-meta').textContent = `${deviceDisplayName(selectedDiskDevice, '全部汇总')} · ${fmtIops(rates.diskReadIops)} read IOPS · ${fmtIops(rates.diskWriteIops)} write IOPS`;
+      refreshOverviewLeaderboards(latest, prev);
+    }
+
+    function refreshOverviewLeaderboards(latest, prev) {
+      const dtSeconds = !latest || !prev ? 1 : Math.max(0.001, (toMillis(latest.timestamp) - toMillis(prev.timestamp)) / 1000);
+      const networkRows = computeLeaderboardRows(latest?.network_data || {}, prev?.network_data || {}, {
+        incomingKey: 'bytes_recv',
+        outgoingKey: 'bytes_sent',
+        dtSeconds,
+      }).map((row) => ({
+        key: row.key,
+        detail: `${fmtBytesPerSec(row.incomingRate)} down · ${fmtBytesPerSec(row.outgoingRate)} up`,
+        totalLabel: fmtBytesPerSec(row.totalRate),
+      }));
+      const diskRows = computeLeaderboardRows(latest?.disk_io_data || {}, prev?.disk_io_data || {}, {
+        incomingKey: 'read_bytes',
+        outgoingKey: 'write_bytes',
+        dtSeconds,
+      }).map((row) => ({
+        key: row.key,
+        detail: `${fmtBytesPerSec(row.incomingRate)} read · ${fmtBytesPerSec(row.outgoingRate)} write`,
+        totalLabel: fmtBytesPerSec(row.totalRate),
+      }));
+      renderLeaderboardRows('network-top-list', networkRows, { emptyLabel: '暂无网络接口数据' });
+      renderLeaderboardRows('disk-io-top-list', diskRows, { emptyLabel: '暂无磁盘 IO 数据' });
+    }
+
+    function renderAlerts(snapshot, rates) {
+      const container = document.getElementById('system-alert-list');
+      const items = [];
+      const cpu = Number(snapshot.cpu_avg || 0);
+      const mem = Number(snapshot.mem_pct || 0);
+      const temp = Number(snapshot.cpu_temp);
+      const diskEntries = Object.entries(snapshot.disk_data || {}).sort((a, b) => Number(b[1]?.percent || 0) - Number(a[1]?.percent || 0));
+      const hottestDisk = diskEntries[0];
+
+      if (cpu >= 85) items.push({ tone: 'err', title: `CPU ${cpu.toFixed(1)}%` });
+      else if (cpu >= 70) items.push({ tone: 'warn', title: `CPU ${cpu.toFixed(1)}%` });
+      if (mem >= 88) items.push({ tone: 'err', title: `内存 ${mem.toFixed(1)}%` });
+      else if (mem >= 75) items.push({ tone: 'warn', title: `内存 ${mem.toFixed(1)}%` });
+      if (Number.isFinite(temp) && temp >= 80) items.push({ tone: 'warn', title: `温度 ${temp.toFixed(1)}°C` });
+      if (hottestDisk && Number(hottestDisk[1]?.percent || 0) >= 85) {
+        items.push({ tone: 'warn', title: `${hottestDisk[0]} ${Number(hottestDisk[1].percent).toFixed(1)}%` });
+      }
+      if (!items.length) {
+        items.push({ tone: 'ok', title: '系统正常' });
+      }
+      container.innerHTML = items.map((item) => `<div class="alert-item ${item.tone}"><span class="font-semibold text-slate-100">${escapeHtml(item.title)}</span></div>`).join('');
+    }
+
+    function renderDiskUsage(disks) {
+      const diskContainer = document.getElementById('disk-bars');
+      diskContainer.innerHTML = '';
+      const entries = Object.entries(disks || {});
+      if (!entries.length) {
+        diskContainer.innerHTML = '<div class="text-xs text-slate-500">无磁盘数据</div>';
+        return;
+      }
+      entries.forEach(([mount, info]) => {
+        const pct = Number(info.percent || 0);
+        const row = document.createElement('div');
+        row.className = 'disk-row';
+        row.innerHTML = `
+          <div class="disk-row-meta">
+            <span class="disk-row-mount">${mount}</span>
+            <span class="disk-row-usage">${fmtGB(info.used_gb || 0)} / ${fmtGB(info.total_gb || 0)} · <span style="color:${pctColor(pct)}">${pct.toFixed(1)}%</span></span>
+          </div>
+          <div class="h-1.5 overflow-hidden rounded-full bg-slate-800/80">
+            <div class="bar-fill h-full rounded-full" style="width:${pct}%;background:${pctColor(pct)}"></div>
+          </div>`;
+        diskContainer.appendChild(row);
+      });
+    }
+
+    function updateHeadline(snapshot, rates) {
+      document.getElementById('cpu-avg-badge').textContent = `${Number(snapshot.cpu_avg || 0).toFixed(1)}%`;
+      document.getElementById('mem-pct-badge').textContent = `${Number(snapshot.mem_pct || 0).toFixed(1)}%`;
+      document.getElementById('mem-used-label').textContent = `${fmtMB(Number(snapshot.mem_used || 0))} / ${fmtMB(Number(snapshot.mem_total || 0))}`;
+      document.getElementById('net-down-badge').textContent = fmtBytesPerSec(rates.netDown);
+      document.getElementById('net-up-badge').textContent = fmtBytesPerSec(rates.netUp);
+      document.getElementById('disk-read-badge').textContent = fmtBytesPerSec(rates.diskRead);
+      document.getElementById('disk-write-badge').textContent = fmtBytesPerSec(rates.diskWrite);
+      document.getElementById('process-count-badge').textContent = String(snapshot.process_count ?? '—');
+      document.getElementById('cpu-temp-badge').textContent = snapshot.cpu_temp != null ? `${Number(snapshot.cpu_temp).toFixed(1)} °C` : '—';
+      document.getElementById('cpu-freq-badge').textContent = snapshot.cpu_freq != null ? `${(Number(snapshot.cpu_freq) / 1000).toFixed(2)} GHz` : '—';
+    }
+
+    function applySnapshot(snapshot, options = {}) {
+      if (!snapshot) return;
+      const label = (snapshot.timestamp || '').slice(11, 16) || new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      const prev = historyRows.length ? historyRows[historyRows.length - 1] : null;
+      const duplicate = !!prev && String(prev.timestamp || '') === String(snapshot.timestamp || '');
+      if (duplicate) historyRows.pop();
+      historyRows.push(snapshot);
+      while (historyRows.length > MAX_POINTS) historyRows.shift();
+      refreshDeviceOptions();
+
+      const rates = computeRates(historyRows.length >= 2 ? historyRows[historyRows.length - 2] : null, snapshot);
+      updateHeadline(snapshot, rates);
+      renderAlerts(snapshot, rates);
+      renderDiskUsage(snapshot.disk_data || {});
+
+      appendMetric(cpuHistory, label, Number(snapshot.cpu_avg || 0));
+      appendMetric(memHistory, label, Number(snapshot.mem_pct || 0));
+      appendMetric(netDownHistory, label, rates.netDown);
+      appendMetric(netUpHistory, label, rates.netUp);
+      appendMetric(diskReadHistory, label, rates.diskRead);
+      appendMetric(diskWriteHistory, label, rates.diskWrite);
+
+      const labels = cpuHistory.map((item) => item.label);
+      syncChart(cpuChart, labels, [cpuHistory]);
+      syncChart(memChart, labels, [memHistory]);
+      refreshSelectedIoHistories();
+    }
+
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function fetchAdminJson(path, options = {}) {
+      const response = await fetch(path, { credentials: 'same-origin', ...options });
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      const data = contentType.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : await response.text().catch(() => '');
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        if (typeof data === 'string') {
+          throw new Error(data || `HTTP ${response.status}`);
+        }
+        throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+      }
+      if (typeof data === 'string') {
+        throw new Error('接口未返回 JSON。');
+      }
+      return data;
+    }
+
+    async function fetchLatestSnapshot() {
+      if (fetchInFlight) return;
+      fetchInFlight = true;
+      try {
+        const data = await fetchAdminJson('/admin/api/system', { cache: 'no-store' });
+        setHealthState(true);
+        applySnapshot(data, { append: true });
+        return data;
+      } catch {
+        setHealthState(false);
+        return null;
+      } finally {
+        fetchInFlight = false;
+      }
+    }
+
+    async function loadSystemHistory() {
+      historyRows.length = 0;
+      cpuHistory.length = 0;
+      memHistory.length = 0;
+      netDownHistory.length = 0;
+      netUpHistory.length = 0;
+      diskReadHistory.length = 0;
+      diskWriteHistory.length = 0;
+      fetchHostInfo();
+      const latest = await fetchLatestSnapshot();
+      try {
+        const rows = await fetchAdminJson(`/admin/api/system_last_infos?seconds=${HISTORY_WINDOW_SECONDS}`, { cache: 'no-store' });
+        if (Array.isArray(rows) && rows.length) {
+          historyRows.length = 0;
+          cpuHistory.length = 0;
+          memHistory.length = 0;
+          netDownHistory.length = 0;
+          netUpHistory.length = 0;
+          diskReadHistory.length = 0;
+          diskWriteHistory.length = 0;
+          rows.forEach((row) => applySnapshot(row, { append: true }));
+          if (latest && String(rows[rows.length - 1]?.timestamp || '') !== String(latest.timestamp || '')) {
+            applySnapshot(latest, { append: true });
+          }
+        }
+      } catch {}
+    }
+
+    function startSystemPolling() {
+      if (sysTimer) return;
+      // Try WebSocket first, fall back to HTTP polling
+      if (!metricsWs || metricsWs.readyState > WebSocket.OPEN) {
+        connectMetricsWs();
+      }
+      // HTTP fallback timer: only active when WS is not connected
+      sysTimer = setInterval(() => {
+        if (metricsWs && metricsWs.readyState === WebSocket.OPEN) return;
+        fetchLatestSnapshot();
+        hostInfoTick += 1;
+        if (hostInfoTick % 5 === 0) fetchHostInfo();
+      }, 2000);
+    }
+
+    function stopSystemPolling() {
+      if (sysTimer) { clearInterval(sysTimer); sysTimer = null; }
+      hostInfoTick = 0;
+      if (metricsWs) {
+        try { metricsWs.close(); } catch {}
+        metricsWs = null;
+      }
+      if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    }
+
+    let metricsWs = null;
+    let wsReconnectTimer = null;
+    let wsReconnectDelay = 1000;
+
+    function scheduleMetricsReconnect() {
+      if (!sysTimer || wsReconnectTimer) return;
+      const jitter = 0.75 + (Math.random() * 0.5);
+      const delay = Math.round(wsReconnectDelay * jitter);
+      wsReconnectTimer = setTimeout(() => {
+        wsReconnectTimer = null;
+        connectMetricsWs();
+      }, delay);
+      wsReconnectDelay = Math.min(wsReconnectDelay * 1.6, 10000);
+    }
+
+    function metricsWsUrl() {
+      const loc = window.location;
+      const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = new URL('/admin/ws/system/metrics', loc.origin);
+      url.protocol = proto;
+      return url.toString();
+    }
+
+    function connectMetricsWs() {
+      if (metricsWs && metricsWs.readyState <= WebSocket.OPEN) return;
+      try {
+        metricsWs = new WebSocket(metricsWsUrl());
+      } catch { return; }
+      metricsWs.onopen = () => {
+        if (wsReconnectTimer) {
+          clearTimeout(wsReconnectTimer);
+          wsReconnectTimer = null;
+        }
+        wsReconnectDelay = 1000;
+      };
+      metricsWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setHealthState(true);
+          applySnapshot(data, { append: true });
+          hostInfoTick += 1;
+          if (hostInfoTick % 5 === 0) fetchHostInfo();
+        } catch {}
+      };
+      metricsWs.onclose = () => {
+        metricsWs = null;
+        scheduleMetricsReconnect();
+      };
+      metricsWs.onerror = () => {};
+    }
+
+    function startUptimeTicker() {
+      if (uptimeTimer) return;
+      uptimeTimer = setInterval(() => {
+        if (!uptimeBase) return;
+        const elapsed = (Date.now() - uptimeBase.fetchedAt) / 1000;
+        document.getElementById('hi-uptime').textContent = fmtUptime((uptimeBase.host || 0) + elapsed);
+        if (uptimeBase.service != null) {
+          document.getElementById('hi-service-uptime').textContent = fmtUptime((uptimeBase.service || 0) + elapsed);
+        }
+      }, 1000);
+    }
+
+    async function fetchHostInfo() {
+      try {
+        const data = await fetchAdminJson('/admin/api/system/extended', { cache: 'no-store' });
+        document.getElementById('hi-hostname').textContent = data.hostname || '—';
+        document.getElementById('hi-os').textContent = (data.os || '') + (data.architecture ? ` (${data.architecture})` : '');
+        document.getElementById('hi-python').textContent = data.python_version || '—';
+        document.getElementById('hi-cpu').textContent = (data.cpu_count_logical || '—') + (data.cpu_count_physical ? ` / ${data.cpu_count_physical} 物理` : '');
+        document.getElementById('hi-arch').textContent = data.architecture || '—';
+        document.getElementById('hi-boot').textContent = data.boot_time ? new Date(data.boot_time).toLocaleString('zh-CN') : '—';
+        hostExtendedInfo = data;
+        uptimeBase = {
+          host: data.uptime_seconds || 0,
+          service: data.service_uptime_seconds ?? null,
+          fetchedAt: Date.now(),
+        };
+        document.getElementById('hi-uptime').textContent = fmtUptime(uptimeBase.host);
+        document.getElementById('hi-service-uptime').textContent = uptimeBase.service != null ? fmtUptime(uptimeBase.service) : '—';
+        startUptimeTicker();
+        refreshSelectedIoHistories();
+      } catch {}
+    }
+
+    window.addEventListener('pagehide', () => {
+      stopSystemPolling();
+      if (uptimeTimer) { clearInterval(uptimeTimer); uptimeTimer = null; }
+    });
+
+    document.getElementById('network-device-select').addEventListener('change', (event) => {
+      selectedNetworkDevice = event.target.value || '__aggregate__';
+      refreshDeviceOptions();
+      refreshSelectedIoHistories();
+      saveDeviceState();
+    });
+
+    document.getElementById('disk-io-device-select').addEventListener('change', (event) => {
+      selectedDiskDevice = event.target.value || '__aggregate__';
+      refreshDeviceOptions();
+      refreshSelectedIoHistories();
+      saveDeviceState();
+    });
+
+    window.addEventListener('beforeunload', stopSystemPolling);
+
+    restoreDeviceState();
+    initCharts();
+    loadServerConfig();
+    loadSystemHistory().finally(() => startSystemPolling());
+  </script>
+</body>
+</html>

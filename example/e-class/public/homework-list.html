@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>作业列表 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1080px; --builtin-shell-secondary-width: 320px; }
+  .section { display: grid; gap: 1rem; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--builtin-color-muted, #6b7280);
+    margin-top: 0.5rem;
+  }
+  @media (min-width: 768px) {
+    .grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  }
+</style>
+<link rel="stylesheet" href="/eclass-pages.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="section">
+    <div id="homework-state"></div>
+    <div id="homework-grid" class="grid"></div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">作业上下文</strong></div>
+    <builtin-metadata-list id="homework-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    eyebrow: '学生端作业',
+    title: '作业列表',
+    lead: '集中查看当前班级的作业状态、截止时间和提交进度。',
+    back: '返回学生端',
+    contextTitle: '作业上下文',
+    emptyTitle: '当前没有作业',
+    emptyDescription: '老师发布新作业后，这里会按状态显示待完成内容。',
+    loadingTitle: '正在加载作业',
+    loadingDescription: '正在获取当前学生的作业列表。',
+    errorTitle: '加载作业失败',
+    errorDescription: '请稍后重试，或返回学生端重新进入。',
+    classLabel: '当前教室',
+    studentLabel: '学生',
+    totalLabel: '作业总数',
+    submittedLabel: '已提交',
+    pendingLabel: '待提交',
+  },
+  en: {
+    eyebrow: 'Student Homework',
+    title: 'Homework',
+    lead: 'Track homework status, due dates, and completion context for the current classroom.',
+    back: 'Back to Student',
+    contextTitle: 'Homework Context',
+    emptyTitle: 'No homework yet',
+    emptyDescription: 'Published homework will appear here with status context.',
+    loadingTitle: 'Loading homework',
+    loadingDescription: 'Fetching homework for the current student.',
+    errorTitle: 'Failed to load homework',
+    errorDescription: 'Try again in a moment or return to the student workspace.',
+    classLabel: 'Classroom',
+    studentLabel: 'Student',
+    totalLabel: 'Homework',
+    submittedLabel: 'Submitted',
+    pendingLabel: 'Pending',
+  }
+};
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.homework',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'student',
+  getInvalidRoleRedirect: () => 'teacher.html',
+  onApplyI18n: async ({ lang }) => {
+    currentLang = lang;
+    applyShellCopy();
+  },
+});
+
+const { $, api, t } = shell;
+const classId = new URLSearchParams(location.search).get('class_id') || 'c1';
+const studentId = localStorage.getItem('eclass_user') || 's1';
+let currentLang = localStorage.getItem('eclass_lang') || 'zh-cn';
+
+function d() {
+  return copy[currentLang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'student.html';
+  appShell.backLabel = labels.back;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'student.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: currentLang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+}
+
+function renderState(mode) {
+  const labels = d();
+  const state = $('homework-state');
+  if (mode === 'idle') {
+    state.innerHTML = '';
+    return;
+  }
+  if (mode === 'loading') {
+    state.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    state.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="student.html"></builtin-empty-state>`;
+    return;
+  }
+  state.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext(list) {
+  const submitted = list.filter((item) => item.status === 'submitted' || item.status === 'graded').length;
+  const pending = list.filter((item) => item.status !== 'submitted' && item.status !== 'graded').length;
+  $('homework-context').items = [
+    { icon: 'book', label: d().classLabel, value: classId },
+    { icon: 'user', label: d().studentLabel, value: studentId },
+    { icon: 'unordered-list', label: d().totalLabel, value: String(list.length) },
+    { icon: 'check', label: d().submittedLabel, value: String(submitted) },
+    { icon: 'clock-circle', label: d().pendingLabel, value: String(pending) },
+  ];
+}
+
+const statusBadge = async (status) => {
+  let variant = 'warning';
+  let textKey = 'eclass.pending';
+  if (status === 'graded') {
+    variant = 'success';
+    textKey = 'eclass.graded';
+  }
+  if (status === 'submitted') {
+    variant = 'primary';
+    textKey = 'eclass.submitted';
+  }
+  const text = await t(textKey);
+  return `<builtin-badge variant="${variant}">${text}</builtin-badge>`;
+};
+
+const load = async () => {
+  renderState('loading');
+  const r = await api('/student/homework/list?class_id='+encodeURIComponent(classId)+'&student_id='+encodeURIComponent(studentId));
+  if (!r) {
+    $('homework-grid').innerHTML = '';
+    updateContext([]);
+    renderState('error');
+    return;
+  }
+
+  const list = r.homework || [];
+  updateContext(list);
+  if (!list.length) {
+    $('homework-grid').innerHTML = '';
+    renderState('empty');
+    return;
+  }
+
+  const [deadlineLabel, notSet] = await Promise.all([
+    t('eclass.deadline'),
+    t('eclass.not_set')
+  ]);
+
+  const rows = await Promise.all(list.map(async (item) => {
+    const badge = await statusBadge(item.status);
+    return `
+      <builtin-card variant="elevated">
+        <div slot="header" style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;">
+          <strong>${item.title}</strong>
+          ${badge}
+        </div>
+        <p style="margin:0;color:var(--builtin-color-muted,#6b7280);font-size:0.875rem;line-height:1.6;">${item.description || ''}</p>
+        <div class="meta-row">
+          <builtin-icon name="calendar" size="16"></builtin-icon> ${deadlineLabel}：${item.due_date || notSet}
+        </div>
+        <div class="meta-row">
+          <builtin-icon name="book" size="16"></builtin-icon> ${classId}
+        </div>
+      </builtin-card>
+    `;
+  }));
+
+  $('homework-grid').innerHTML = rows.join('');
+  renderState('idle');
+};
+
+await shell.init();
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后端 Role</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <script src="/html-assets/js/page-controls.js"></script>
+  <script src="/html-assets/js/core-ui-utils.js"></script>
+  <style>
+    html {
+      font-size: 11px;
+      height: 100%;
+    }
+
+    body.panel-page-body {
+      height: 100%;
+    }
+
+    .backend-role-page .panel-page {
+      min-height: 100%;
+      height: 100%;
+      padding: 4px;
+    }
+
+    .backend-role-page .panel-page-shell {
+      gap: 6px;
+      height: 100%;
+    }
+
+    .backend-role-page .panel-hero {
+      grid-template-columns: minmax(0, 1.35fr) minmax(220px, auto);
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .backend-role-page .panel-kicker,
+    .backend-role-page .panel-stat-kicker,
+    .backend-role-page .mini-label,
+    .backend-role-page .stack-note,
+    .backend-role-page .kv-label {
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+
+    .backend-role-page .panel-title {
+      margin-top: 3px;
+      font-size: 14px;
+      line-height: 1.06;
+    }
+
+    .backend-role-page .panel-subtitle,
+    .backend-role-page .panel-note,
+    .backend-role-page .status-box,
+    .backend-role-page .panel-pill,
+    .backend-role-page .panel-btn,
+    .backend-role-page .field-input,
+    .backend-role-page .field-textarea,
+    .backend-role-page .select-input,
+    .backend-role-page .route-chip,
+    .backend-role-page .empty-box,
+    .backend-role-page .mini-value,
+    .backend-role-page .mini-table th,
+    .backend-role-page .mini-table td {
+      font-size: 10px;
+    }
+
+    .backend-role-page .panel-btn {
+      min-height: 28px;
+      padding: 0 8px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .backend-role-page .status-box {
+      padding: 5px 8px;
+      border-radius: var(--proj-radius-lg);
+      line-height: 1.45;
+    }
+
+    .backend-role-page .panel-stat-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .backend-role-page .panel-stat-card {
+      border-radius: var(--proj-radius-lg);
+      padding: 4px 8px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .backend-role-page .panel-stat-value {
+      margin-top: 0;
+      font-size: 13px;
+    }
+
+    .backend-role-page .panel-note {
+      margin-top: 0;
+      margin-left: auto;
+      color: var(--proj-page-muted);
+    }
+
+    .role-shell {
+      display: grid;
+      grid-template-columns: minmax(240px, 290px) 8px minmax(0, 1fr);
+      min-height: 0;
+      flex: 1 1 auto;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      overflow: hidden;
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+    }
+
+    .role-shell.is-collapsed {
+      grid-template-columns: 0 8px minmax(0, 1fr);
+    }
+
+    .role-shell.is-collapsed .role-sidebar {
+      display: none;
+    }
+
+    .role-sidebar {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+      min-width: 0;
+      overflow: hidden;
+      border-right: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+    }
+
+    .sidebar-section {
+      padding: 8px 8px 0;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      align-items: center;
+    }
+
+    .field-input,
+    .field-textarea,
+    .select-input {
+      width: 100%;
+      min-height: 28px;
+      padding: 6px 8px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: var(--proj-page-surface-strong, rgba(255,255,255,.96));
+      color: var(--proj-page-text);
+      outline: none;
+      transition: border-color .12s ease, box-shadow .12s ease;
+    }
+
+    .field-input:focus,
+    .field-textarea:focus,
+    .select-input:focus {
+      border-color: rgba(37, 99, 235, 0.36);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+    }
+
+    .field-textarea {
+      min-height: 68px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .filter-fold,
+    .detail-fold,
+    .stack-card {
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+      overflow: hidden;
+    }
+
+    .filter-fold > summary,
+    .detail-fold > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px;
+    }
+
+    .filter-fold > summary::-webkit-details-marker,
+    .detail-fold > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .filter-fold[open] > summary,
+    .detail-fold[open] > summary {
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .stack-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px 0;
+    }
+
+    .stack-card-body,
+    .detail-fold-body,
+    .filter-grid,
+    .form-grid,
+    .kv-grid {
+      display: grid;
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .stack-title {
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--proj-page-text);
+    }
+
+    .stack-note,
+    .kv-label {
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .filter-grid.two,
+    .form-grid.two,
+    .kv-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .form-field,
+    .kv-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .form-field.full,
+    .kv-item.full {
+      grid-column: 1 / -1;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .route-chip,
+    .status-pill,
+    .card-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+      color: var(--proj-page-muted);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .route-chip button {
+      margin-left: 6px;
+      border: none;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .status-pill.ok {
+      color: #047857;
+      border-color: rgba(16, 185, 129, 0.26);
+      background: rgba(16, 185, 129, 0.12);
+    }
+
+    .status-pill.err {
+      color: #b91c1c;
+      border-color: rgba(239, 68, 68, 0.26);
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .assist-note {
+      color: var(--proj-page-muted);
+      line-height: 1.45;
+    }
+
+    .switch-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--proj-page-muted);
+    }
+
+    .sidebar-list-head,
+    .detail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .sidebar-list-head {
+      padding-bottom: 6px;
+    }
+
+    .sidebar-list-title,
+    .detail-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--proj-page-text);
+    }
+
+    .detail-subtitle {
+      font-size: 10px;
+      color: var(--proj-page-muted);
+      line-height: 1.45;
+    }
+
+    .detail-actions,
+    .inline-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .role-list {
+      min-height: 0;
+      overflow: auto;
+      padding: 0 8px 8px;
+      display: grid;
+      gap: 6px;
+      align-content: start;
+    }
+
+    .role-row {
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 12px;
+      padding: 8px;
+      display: grid;
+      gap: 4px;
+      cursor: pointer;
+      background: color-mix(in srgb, var(--proj-page-surface) 97%, transparent);
+      transition: border-color .12s ease, background .12s ease, transform .12s ease;
+    }
+
+    .role-row:hover {
+      border-color: var(--proj-page-border-strong, var(--panel-border-strong));
+      transform: translateY(-1px);
+    }
+
+    .role-row.active {
+      border-color: rgba(37, 99, 235, 0.26);
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .role-row-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .role-row-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--proj-page-text);
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .role-row-subtitle,
+    .role-row-meta {
+      color: var(--proj-page-muted);
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .empty-box {
+      min-height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--proj-page-muted);
+      border: 1px dashed var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 16px;
+      padding: 20px;
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+    }
+
+    .detail-scroll {
+      min-height: 0;
+      overflow: auto;
+      padding: 0 8px 8px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 320px);
+      gap: 8px;
+      min-height: 0;
+      align-items: start;
+    }
+
+    .route-editor,
+    .rate-limit-editor {
+      display: grid;
+      gap: 6px;
+    }
+
+    .route-editor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .route-editor-input-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .route-editor-input-row > .field-input,
+    .route-editor-input-row > .select-input {
+      flex: 1 1 140px;
+      min-width: 100px;
+    }
+
+    .mono {
+      font-family: Consolas, 'SFMono-Regular', monospace;
+    }
+
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .mini-table th,
+    .mini-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .mini-table th {
+      color: var(--proj-page-muted);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .sidebar-splitter {
+      position: relative;
+      background: transparent;
+      cursor: col-resize;
+    }
+
+    .sidebar-splitter::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 1px;
+      background: var(--proj-page-border, var(--panel-border-soft));
+      height: 100%;
+    }
+
+    .splitter-toggle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--proj-page-border-strong, var(--panel-border-strong));
+      background: var(--proj-page-surface);
+      color: var(--proj-page-muted);
+      border-radius: var(--proj-radius-sm);
+      cursor: pointer;
+      padding: 0;
+      font-size: 11px;
+      line-height: 1;
+      z-index: 1;
+    }
+
+    @media (max-width: 1080px) {
+      .backend-role-page .panel-stat-grid,
+      .filter-grid.two,
+      .form-grid.two,
+      .kv-grid.two,
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .backend-role-page .panel-hero,
+      .role-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .role-shell,
+      .role-shell.is-collapsed {
+        display: block;
+      }
+
+      .sidebar-splitter {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body class="panel-page-body backend-role-page">
+  <main class="panel-page">
+    <div class="panel-page-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker">Backend Role</div>
+          <h1 class="panel-title">Role 管理</h1>
+          <p class="panel-subtitle">恢复 permission role 管理面板，支持筛选、查看引用、编辑白名单/黑名单与限流规则。</p>
+        </div>
+        <div class="panel-hero-actions">
+          <div id="toolbar-badge" class="panel-pill"><span class="panel-dot warn"></span><span>等待载入</span></div>
+          <div class="panel-action-row">
+            <button id="refresh-btn" type="button" class="panel-btn">刷新</button>
+            <button id="create-btn" type="button" class="panel-btn panel-btn-primary">新建 Role</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-stat-grid">
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Total</div>
+          <div id="summary-total" class="panel-stat-value">0</div>
+          <div id="summary-loaded" class="panel-note">当前载入 0 条</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Active</div>
+          <div id="summary-active" class="panel-stat-value">0</div>
+          <div class="panel-note">可正常使用的 role</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Banned</div>
+          <div id="summary-banned" class="panel-stat-value">0</div>
+          <div class="panel-note">已封禁 role</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Refs</div>
+          <div id="summary-refs" class="panel-stat-value">0</div>
+          <div class="panel-note">APIKey 引用总数</div>
+        </article>
+      </section>
+
+      <section id="status-box" class="status-box" data-kind="info">正在载入 Role 列表...</section>
+
+      <section id="role-shell" class="role-shell">
+        <aside class="role-sidebar">
+          <div class="sidebar-section">
+            <div class="search-row">
+              <input id="search-input" class="field-input" placeholder="按 role 名称、备注筛选" />
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <details id="filter-fold" class="filter-fold">
+              <summary>
+                <div>
+                  <div class="stack-note">Filter</div>
+                  <div class="stack-title">快速过滤</div>
+                </div>
+                <span id="filter-summary" class="card-chip">全部</span>
+              </summary>
+              <div class="filter-grid two">
+                <label class="form-field">
+                  <span class="mini-label">状态</span>
+                  <select id="status-filter" class="select-input">
+                    <option value="all">全部</option>
+                    <option value="active">仅可用</option>
+                    <option value="banned">仅封禁</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span class="mini-label">路由片段</span>
+                  <input id="route-filter" class="field-input" list="role-route-suggestions" placeholder="如 /api 或 /admin" />
+                </label>
+              </div>
+            </details>
+          </div>
+
+          <div class="sidebar-list-head">
+            <div class="sidebar-list-title">Role 列表</div>
+            <span id="list-count" class="card-chip">0</span>
+          </div>
+          <div id="role-list" class="role-list"></div>
+        </aside>
+
+        <div id="sidebar-splitter" class="sidebar-splitter" role="separator" aria-orientation="vertical">
+          <button id="splitter-toggle" type="button" class="splitter-toggle" aria-label="toggle">‹</button>
+        </div>
+
+        <section class="role-detail">
+          <div class="detail-head">
+            <div>
+              <div id="detail-title" class="detail-title">选择一个 Role</div>
+              <div id="detail-subtitle" class="detail-subtitle">左侧选择后可查看引用情况、编辑权限规则与限流。</div>
+            </div>
+            <div class="detail-actions">
+              <button id="reload-detail-btn" type="button" class="panel-btn">重新载入</button>
+              <button id="delete-btn" type="button" class="panel-btn panel-btn-danger" hidden>删除</button>
+            </div>
+          </div>
+
+          <div class="detail-scroll">
+            <div id="detail-empty" class="empty-box">还没有选中 Role。先在左侧选择一项，或点击“新建 Role”。</div>
+
+            <div id="detail-stack" class="hidden">
+              <div class="detail-grid">
+                <div class="detail-primary">
+                  <details id="editor-fold" class="detail-fold" open>
+                    <summary>
+                      <div>
+                        <div class="stack-note">Edit</div>
+                        <div class="stack-title">创建 / 编辑</div>
+                      </div>
+                      <div class="inline-actions">
+                        <button id="start-edit-btn" type="button" class="panel-btn">编辑</button>
+                        <button id="cancel-edit-btn" type="button" class="panel-btn hidden">取消</button>
+                        <button id="save-edit-btn" type="button" class="panel-btn panel-btn-primary hidden">保存</button>
+                      </div>
+                    </summary>
+                    <div class="detail-fold-body">
+                      <div class="form-grid two">
+                        <label class="form-field">
+                          <span class="mini-label">Role Name</span>
+                          <input id="form-name" class="field-input mono" />
+                        </label>
+                        <label class="form-field">
+                          <span class="mini-label">Status</span>
+                          <select id="form-banned" class="select-input">
+                            <option value="false">可用</option>
+                            <option value="true">已封禁</option>
+                          </select>
+                        </label>
+                        <label class="form-field full">
+                          <span class="mini-label">Comment</span>
+                          <textarea id="form-comment" class="field-textarea"></textarea>
+                        </label>
+                        <div class="form-field full route-editor">
+                          <div class="route-editor-head">
+                            <span class="mini-label">Whitelist</span>
+                            <label class="switch-line">
+                              <input id="form-whitelist-all" type="checkbox" />
+                              <span>允许全部</span>
+                            </label>
+                          </div>
+                          <div id="form-whitelist-chips" class="chip-row"></div>
+                          <div class="route-editor-input-row">
+                            <input id="form-whitelist-input" class="field-input mono" list="role-route-suggestions" placeholder="输入路由 pattern，如 /api/*" />
+                            <button id="form-whitelist-add-btn" type="button" class="panel-btn">添加</button>
+                          </div>
+                          <div class="assist-note">输入 /api 时，下方会给出现有路由提示；点添加后会写入列表。</div>
+                          <textarea id="form-whitelist" style="display:none"></textarea>
+                        </div>
+                        <div class="form-field full route-editor">
+                          <div class="route-editor-head">
+                            <span class="mini-label">Blacklist</span>
+                          </div>
+                          <div id="form-blacklist-chips" class="chip-row"></div>
+                          <div class="route-editor-input-row">
+                            <input id="form-blacklist-input" class="field-input mono" list="role-route-suggestions" placeholder="输入路由 pattern，如 /admin/*" />
+                            <button id="form-blacklist-add-btn" type="button" class="panel-btn">添加</button>
+                          </div>
+                          <div class="assist-note">输入 /api 时，下方会给出现有路由提示；点添加后会写入列表。</div>
+                          <textarea id="form-blacklist" style="display:none"></textarea>
+                        </div>
+                        <div class="form-field full rate-limit-editor">
+                          <span class="mini-label">Rate Limit</span>
+                          <div id="rate-limit-chips" class="chip-row"></div>
+                          <div class="route-editor-input-row">
+                            <input id="rate-limit-pattern" class="field-input mono" style="flex:1 1 140px;min-width:100px" list="role-route-suggestions" placeholder="路由 pattern，如 /api/*" />
+                            <input id="rate-limit-min-interval" class="field-input" type="number" min="0" style="width:84px" placeholder="最小间隔秒" />
+                            <select id="rate-limit-mode" class="select-input" style="width:90px">
+                              <option value="sliding_window">滑动窗口</option>
+                              <option value="fixed_window">固定窗口</option>
+                            </select>
+                            <input id="rate-limit-capacity" class="field-input" type="number" min="1" style="width:60px" placeholder="次数" />
+                            <select id="rate-limit-period" class="select-input" style="width:80px">
+                              <option value="1">每秒</option>
+                              <option value="60">每分钟</option>
+                              <option value="3600">每小时</option>
+                              <option value="86400">每天</option>
+                            </select>
+                            <input id="rate-limit-reset-time" class="field-input" type="time" style="width:100px;display:none" value="00:00" />
+                            <button type="button" class="panel-btn" id="rate-limit-add-btn">添加</button>
+                          </div>
+                          <textarea id="form-rate-limit" style="display:none"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+
+                <aside class="detail-insights">
+                  <section class="stack-card">
+                    <div class="stack-card-head">
+                      <div>
+                        <div class="stack-note">Snapshot</div>
+                        <div class="stack-title">当前状态</div>
+                      </div>
+                      <span id="snapshot-status" class="status-pill">—</span>
+                    </div>
+                    <div class="stack-card-body">
+                      <div class="kv-grid two">
+                        <div class="kv-item">
+                          <div class="kv-label">Object ID</div>
+                          <div id="snapshot-id" class="mini-value mono">—</div>
+                        </div>
+                        <div class="kv-item">
+                          <div class="kv-label">Created</div>
+                          <div id="snapshot-created" class="mini-value">—</div>
+                        </div>
+                        <div class="kv-item">
+                          <div class="kv-label">Edited</div>
+                          <div id="snapshot-edited" class="mini-value">—</div>
+                        </div>
+                        <div class="kv-item">
+                          <div class="kv-label">Refs</div>
+                          <div id="snapshot-refs" class="mini-value">0</div>
+                        </div>
+                        <div class="kv-item full">
+                          <div class="kv-label">Comment</div>
+                          <div id="snapshot-comment" class="mini-value">—</div>
+                        </div>
+                        <div class="kv-item full">
+                          <div class="kv-label">Whitelist</div>
+                          <div id="snapshot-whitelist" class="chip-row"></div>
+                        </div>
+                        <div class="kv-item full">
+                          <div class="kv-label">Blacklist</div>
+                          <div id="snapshot-blacklist" class="chip-row"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <details class="detail-fold" open>
+                    <summary>
+                      <div>
+                        <div class="stack-note">Rate Limit</div>
+                        <div class="stack-title">当前限流配置</div>
+                      </div>
+                    </summary>
+                    <div class="detail-fold-body">
+                      <div class="table-wrap">
+                        <table class="mini-table">
+                          <thead>
+                            <tr>
+                              <th>Pattern</th>
+                              <th>规则</th>
+                            </tr>
+                          </thead>
+                          <tbody id="rate-limit-body"></tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <datalist id="role-route-suggestions"></datalist>
+
+  <script>
+    'use strict';
+
+    const ui = window.ProjUtils || null;
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    const LS_PREFIX = 'proj.backend.role.';
+    const ADMIN_ROUTE_MARKER = '/admin/';
+    const adminBasePath = (() => {
+      const pathname = window.location.pathname || '';
+      const markerIndex = pathname.lastIndexOf(ADMIN_ROUTE_MARKER);
+      return markerIndex >= 0 ? pathname.slice(0, markerIndex) + '/admin' : '/admin';
+    })();
+    const state = {
+      items: [],
+      filteredItems: [],
+      selectedId: '',
+      selectedItem: null,
+      editing: false,
+      creating: false,
+      filter: {
+        query: '',
+        status: 'all',
+        route: '',
+      },
+    };
+
+    const els = {
+      toolbarBadge: document.getElementById('toolbar-badge'),
+      refreshBtn: document.getElementById('refresh-btn'),
+      createBtn: document.getElementById('create-btn'),
+      statusBox: document.getElementById('status-box'),
+      summaryTotal: document.getElementById('summary-total'),
+      summaryLoaded: document.getElementById('summary-loaded'),
+      summaryActive: document.getElementById('summary-active'),
+      summaryBanned: document.getElementById('summary-banned'),
+      summaryRefs: document.getElementById('summary-refs'),
+      searchInput: document.getElementById('search-input'),
+      statusFilter: document.getElementById('status-filter'),
+      routeFilter: document.getElementById('route-filter'),
+      filterSummary: document.getElementById('filter-summary'),
+      listCount: document.getElementById('list-count'),
+      roleList: document.getElementById('role-list'),
+      shell: document.getElementById('role-shell'),
+      sidebarSplitter: document.getElementById('sidebar-splitter'),
+      splitterToggle: document.getElementById('splitter-toggle'),
+      detailTitle: document.getElementById('detail-title'),
+      detailSubtitle: document.getElementById('detail-subtitle'),
+      detailEmpty: document.getElementById('detail-empty'),
+      detailStack: document.getElementById('detail-stack'),
+      reloadDetailBtn: document.getElementById('reload-detail-btn'),
+      deleteBtn: document.getElementById('delete-btn'),
+      startEditBtn: document.getElementById('start-edit-btn'),
+      cancelEditBtn: document.getElementById('cancel-edit-btn'),
+      saveEditBtn: document.getElementById('save-edit-btn'),
+      editorFold: document.getElementById('editor-fold'),
+      formName: document.getElementById('form-name'),
+      formBanned: document.getElementById('form-banned'),
+      formComment: document.getElementById('form-comment'),
+      formWhitelistAll: document.getElementById('form-whitelist-all'),
+      formWhitelistInput: document.getElementById('form-whitelist-input'),
+      formWhitelistAddBtn: document.getElementById('form-whitelist-add-btn'),
+      formWhitelistChips: document.getElementById('form-whitelist-chips'),
+      formWhitelist: document.getElementById('form-whitelist'),
+      formBlacklistInput: document.getElementById('form-blacklist-input'),
+      formBlacklistAddBtn: document.getElementById('form-blacklist-add-btn'),
+      formBlacklistChips: document.getElementById('form-blacklist-chips'),
+      formBlacklist: document.getElementById('form-blacklist'),
+      formRateLimit: document.getElementById('form-rate-limit'),
+      routeSuggestionList: document.getElementById('role-route-suggestions'),
+      snapshotStatus: document.getElementById('snapshot-status'),
+      snapshotId: document.getElementById('snapshot-id'),
+      snapshotCreated: document.getElementById('snapshot-created'),
+      snapshotEdited: document.getElementById('snapshot-edited'),
+      snapshotRefs: document.getElementById('snapshot-refs'),
+      snapshotComment: document.getElementById('snapshot-comment'),
+      snapshotWhitelist: document.getElementById('snapshot-whitelist'),
+      snapshotBlacklist: document.getElementById('snapshot-blacklist'),
+      rateLimitBody: document.getElementById('rate-limit-body'),
+    };
+
+    function adminPath(path) {
+      return path.startsWith('/admin') ? adminBasePath + path.slice('/admin'.length) : path;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function fmtDate(value) {
+      if (!value) return '—';
+      const stamp = typeof value === 'number' ? value * 1000 : Date.parse(String(value));
+      if (!Number.isFinite(stamp)) return String(value);
+      return new Date(stamp).toLocaleString(undefined, { hour12: false });
+    }
+
+    function setStatus(message, kind = 'info') {
+      els.statusBox.dataset.kind = kind;
+      els.statusBox.textContent = message;
+    }
+
+    function setToolbarBadge(kind, message) {
+      const dot = els.toolbarBadge.querySelector('.panel-dot');
+      const label = els.toolbarBadge.querySelector('span:last-child');
+      dot.className = 'panel-dot ' + kind;
+      label.textContent = message;
+    }
+
+    function roleLabel(item) {
+      return item?.name?.trim() || '未命名 Role';
+    }
+
+    function readPref(key, fallback) {
+      try {
+        const value = localStorage.getItem(LS_PREFIX + key);
+        return value == null ? fallback : value;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function writePref(key, value) {
+      try {
+        localStorage.setItem(LS_PREFIX + key, String(value));
+      } catch {}
+    }
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window ? adminPath('/admin/panel') : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${adminPath('/admin/login')}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(adminPath(path), {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        throw new Error(data.detail || data.message || ('HTTP ' + response.status));
+      }
+      return data;
+    }
+
+    function normalizePatternLines(raw) {
+      const lines = String(raw || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+      const dedup = [];
+      const seen = new Set();
+      lines.forEach((line) => {
+        const key = line.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        dedup.push(line);
+      });
+      return dedup;
+    }
+
+    function routeEditorElements(kind) {
+      if (kind === 'whitelist') {
+        return {
+          textarea: els.formWhitelist,
+          chips: els.formWhitelistChips,
+          input: els.formWhitelistInput,
+          addBtn: els.formWhitelistAddBtn,
+          allToggle: els.formWhitelistAll,
+        };
+      }
+      return {
+        textarea: els.formBlacklist,
+        chips: els.formBlacklistChips,
+        input: els.formBlacklistInput,
+        addBtn: els.formBlacklistAddBtn,
+        allToggle: null,
+      };
+    }
+
+    function createRouteEditorController(kind) {
+      const refs = routeEditorElements(kind);
+      let editorDisabled = false;
+      const controller = {
+        getValue() {
+          const lines = normalizePatternLines(refs.textarea?.value || '');
+          if (refs.allToggle && (refs.allToggle.checked || (lines.length === 1 && lines[0].toLowerCase() === 'all'))) {
+            return 'all';
+          }
+          return lines.filter((line) => line.toLowerCase() !== 'all');
+        },
+        setValue(value) {
+          if (!refs.textarea) return;
+          if (refs.allToggle) refs.allToggle.checked = value === 'all';
+          refs.textarea.value = value === 'all' ? 'all' : (Array.isArray(value) ? value : []).join('\n');
+          controller.render();
+        },
+        setDisabled(disabled) {
+          editorDisabled = !!disabled;
+          [refs.textarea, refs.input, refs.addBtn, refs.allToggle].forEach((el) => {
+            if (el) el.disabled = !!disabled;
+          });
+          if (refs.allToggle && refs.allToggle.checked) {
+            if (refs.input) refs.input.disabled = true;
+            if (refs.addBtn) refs.addBtn.disabled = true;
+          }
+        },
+        render() {
+          if (!refs.chips) return;
+          const value = controller.getValue();
+          const isAll = value === 'all';
+          if (refs.allToggle) refs.allToggle.checked = isAll;
+          if (refs.textarea) { refs.textarea.disabled = editorDisabled; refs.textarea.readOnly = true; }
+          if (refs.allToggle) refs.allToggle.disabled = editorDisabled;
+          if (refs.input) refs.input.disabled = editorDisabled || isAll;
+          if (refs.addBtn) refs.addBtn.disabled = editorDisabled || isAll;
+          const inputRow = refs.input?.closest('.route-editor-input-row');
+          if (inputRow) inputRow.style.display = isAll ? 'none' : '';
+          const items = isAll ? ['all'] : value;
+          refs.chips.innerHTML = items.length
+            ? items.map((item) => {
+                const canRemove = item !== 'all';
+                return '<span class="route-chip mono">'
+                  + escapeHtml(item)
+                  + (canRemove ? '<button type="button" data-pattern="' + escapeHtml(item) + '">×</button>' : '')
+                  + '</span>';
+              }).join('')
+            : '<span class="route-chip">—</span>';
+          Array.from(refs.chips.querySelectorAll('button[data-pattern]')).forEach((button) => {
+            button.addEventListener('click', () => controller.remove(button.dataset.pattern || ''));
+          });
+        },
+        add(value) {
+          const text = String(value ?? (refs.input?.value || '')).trim();
+          if (!text) return;
+          if (refs.allToggle && text.toLowerCase() === 'all') {
+            controller.setValue('all');
+          } else {
+            const current = controller.getValue();
+            const items = current === 'all' ? [] : current.slice();
+            if (!items.some((item) => item.toLowerCase() === text.toLowerCase())) items.push(text);
+            controller.setValue(items);
+          }
+          if (refs.input) refs.input.value = '';
+        },
+        remove(pattern) {
+          const current = controller.getValue();
+          const items = current === 'all' ? [] : current.filter((item) => item !== pattern);
+          controller.setValue(items);
+        },
+      };
+
+      refs.addBtn?.addEventListener('click', () => controller.add());
+      refs.input?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          controller.add();
+        }
+      });
+      refs.textarea?.addEventListener('input', () => controller.render());
+      refs.allToggle?.addEventListener('change', () => {
+        controller.setValue(refs.allToggle.checked ? 'all' : []);
+      });
+      controller.render();
+      return controller;
+    }
+
+    function createRateLimitEditor() {
+      const patternInput = document.getElementById('rate-limit-pattern');
+      const minIntervalInput = document.getElementById('rate-limit-min-interval');
+      const modeSelect = document.getElementById('rate-limit-mode');
+      const capacityInput = document.getElementById('rate-limit-capacity');
+      const periodSelect = document.getElementById('rate-limit-period');
+      const resetTimeInput = document.getElementById('rate-limit-reset-time');
+      const addBtn = document.getElementById('rate-limit-add-btn');
+      const chipsBox = document.getElementById('rate-limit-chips');
+      const textarea = els.formRateLimit;
+      let editorDisabled = false;
+
+      function parseValue() {
+        try { return JSON.parse(textarea?.value || '{}'); } catch { return {}; }
+      }
+
+      function updateModeVisibility() {
+        const mode = modeSelect?.value || 'sliding_window';
+        if (periodSelect) periodSelect.style.display = mode === 'sliding_window' ? '' : 'none';
+        if (resetTimeInput) resetTimeInput.style.display = mode === 'fixed_window' ? '' : 'none';
+      }
+
+      function buildChipLabel(pattern, config) {
+        const minInterval = Number(config?.minimum_interval_seconds || 0);
+        const limit = (config?.limits || [])[0];
+        if (!limit) return pattern + ' (无限制)';
+        const capacity = Number(limit.capacity || 0);
+        const mode = limit.mode === 'fixed_window' ? '固定' : '滑动';
+        let label = pattern + ' · ' + mode + ' · ' + capacity + '次';
+        if (limit.mode === 'sliding_window') {
+          const period = Number(limit.reset_interval_seconds || 60);
+          let periodLabel = period + '秒';
+          if (period === 1) periodLabel = '秒';
+          else if (period === 60) periodLabel = '分钟';
+          else if (period === 3600) periodLabel = '小时';
+          else if (period === 86400) periodLabel = '天';
+          label += '/' + periodLabel;
+        } else if (limit.mode === 'fixed_window' && limit.reset_time) {
+          const hour = String(limit.reset_time.hour || 0).padStart(2, '0');
+          const minute = String(limit.reset_time.minute || 0).padStart(2, '0');
+          label += ' · 重置' + hour + ':' + minute;
+        }
+        if (minInterval > 0) label += ' · 间隔' + minInterval + '秒';
+        return label;
+      }
+
+      function render() {
+        const data = parseValue();
+        const entries = Object.entries(data);
+        chipsBox.innerHTML = entries.length
+          ? entries.map(([pattern, config]) => {
+              return '<span class="route-chip mono">' + escapeHtml(buildChipLabel(pattern, config)) + '<button type="button" data-pattern="' + escapeHtml(pattern) + '">×</button></span>';
+            }).join('')
+          : '<span class="route-chip">—</span>';
+        chipsBox.querySelectorAll('button[data-pattern]').forEach((button) => {
+          button.disabled = editorDisabled;
+          button.addEventListener('click', () => {
+            const data = parseValue();
+            delete data[button.dataset.pattern];
+            if (textarea) textarea.value = JSON.stringify(data, null, 2);
+            render();
+          });
+        });
+        [patternInput, minIntervalInput, modeSelect, capacityInput, periodSelect, resetTimeInput, addBtn].forEach((el) => {
+          if (el) el.disabled = editorDisabled;
+        });
+        updateModeVisibility();
+      }
+
+      function add() {
+        const pattern = String(patternInput?.value || '').trim();
+        const minInterval = Number(minIntervalInput?.value || 0);
+        const capacity = Number(capacityInput?.value || 0);
+        const mode = modeSelect?.value || 'sliding_window';
+        if (!pattern || !capacity) return;
+        const data = parseValue();
+        let limit;
+        if (mode === 'fixed_window') {
+          const timeVal = String(resetTimeInput?.value || '00:00').split(':');
+          const hour = Math.max(0, Math.min(23, Number(timeVal[0] || 0)));
+          const minute = Math.max(0, Math.min(59, Number(timeVal[1] || 0)));
+          limit = { mode: 'fixed_window', reset_time: { hour, minute }, capacity };
+        } else {
+          const period = Number(periodSelect?.value || 60);
+          limit = { mode: 'sliding_window', reset_interval_seconds: period, capacity };
+        }
+        data[pattern] = { minimum_interval_seconds: minInterval, limits: [limit] };
+        if (textarea) textarea.value = JSON.stringify(data, null, 2);
+        if (patternInput) patternInput.value = '';
+        if (minIntervalInput) minIntervalInput.value = '';
+        if (capacityInput) capacityInput.value = '';
+        render();
+      }
+
+      addBtn?.addEventListener('click', add);
+      patternInput?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); add(); } });
+      capacityInput?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); add(); } });
+      modeSelect?.addEventListener('change', updateModeVisibility);
+      render();
+
+      return {
+        getValue() {
+          return parseValue();
+        },
+        setValue(value) {
+          if (textarea) textarea.value = JSON.stringify(value || {}, null, 2);
+          render();
+        },
+        setDisabled(disabled) {
+          editorDisabled = !!disabled;
+          render();
+        },
+      };
+    }
+
+    function renderChips(target, value) {
+      const items = value === 'all' ? ['all'] : (Array.isArray(value) ? value : []);
+      target.innerHTML = items.length
+        ? items.map((item) => `<span class="route-chip mono">${escapeHtml(item)}</span>`).join('')
+        : '<span class="route-chip">—</span>';
+    }
+
+    function renderRateLimitTable(value) {
+      const entries = Object.entries(value || {});
+      els.rateLimitBody.innerHTML = entries.length
+        ? entries.map(([pattern, config]) => {
+            const limits = Array.isArray(config?.limits) ? config.limits : [];
+            const desc = limits.length
+              ? limits.map((limit) => {
+                  if (limit.mode === 'fixed_window') {
+                    const hour = String(limit.reset_time?.hour || 0).padStart(2, '0');
+                    const minute = String(limit.reset_time?.minute || 0).padStart(2, '0');
+                    return `固定窗口 ${limit.capacity} 次，${hour}:${minute} 重置`;
+                  }
+                  return `滑动窗口 ${limit.capacity} 次 / ${limit.reset_interval_seconds || 60} 秒`;
+                }).join('；')
+              : '无限制';
+            return `<tr><td class="mono">${escapeHtml(pattern)}</td><td>${escapeHtml(desc)}</td></tr>`;
+          }).join('')
+        : '<tr><td colspan="2">—</td></tr>';
+    }
+
+    function summarizeFilters() {
+      const parts = [];
+      if (state.filter.status !== 'all') parts.push(state.filter.status);
+      if (state.filter.route) parts.push(state.filter.route);
+      if (state.filter.query) parts.push(state.filter.query);
+      return parts.length ? parts.join(' · ') : '全部';
+    }
+
+    function routeFilterMatches(item, routeQuery) {
+      if (!routeQuery) return true;
+      const values = [];
+      if (item.whitelist_routes === 'all') values.push('all');
+      else if (Array.isArray(item.whitelist_routes)) values.push(...item.whitelist_routes);
+      if (Array.isArray(item.blacklist_routes)) values.push(...item.blacklist_routes);
+      return values.some((entry) => String(entry || '').toLowerCase().includes(routeQuery));
+    }
+
+    function applyFilters() {
+      const query = state.filter.query.toLowerCase();
+      const routeQuery = state.filter.route.toLowerCase();
+      state.filteredItems = state.items.filter((item) => {
+        if (state.filter.status === 'active' && item.banned) return false;
+        if (state.filter.status === 'banned' && !item.banned) return false;
+        if (query) {
+          const haystack = [item.name, item.comment].filter(Boolean).join(' ').toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        return routeFilterMatches(item, routeQuery);
+      });
+      renderList();
+      updateSummary();
+      els.filterSummary.textContent = summarizeFilters();
+    }
+
+    function updateSummary() {
+      const activeCount = state.filteredItems.filter((item) => !item.banned).length;
+      const bannedCount = state.filteredItems.filter((item) => item.banned).length;
+      const refsCount = state.filteredItems.reduce((sum, item) => sum + Number(item.reference_count || 0), 0);
+      els.summaryTotal.textContent = String(state.items.length);
+      els.summaryLoaded.textContent = `当前载入 ${state.filteredItems.length} 条`;
+      els.summaryActive.textContent = String(activeCount);
+      els.summaryBanned.textContent = String(bannedCount);
+      els.summaryRefs.textContent = String(refsCount);
+      els.listCount.textContent = String(state.filteredItems.length);
+    }
+
+    function renderList() {
+      els.roleList.innerHTML = state.filteredItems.length
+        ? state.filteredItems.map((item) => {
+            const activeClass = item.id === state.selectedId ? ' active' : '';
+            const statusClass = item.banned ? 'err' : 'ok';
+            const subtitle = item.comment || '—';
+            return '<button type="button" class="role-row' + activeClass + '" data-id="' + escapeHtml(item.id) + '">'
+              + '<div class="role-row-head"><div class="role-row-title">' + escapeHtml(roleLabel(item)) + '</div><span class="status-pill ' + statusClass + '">' + (item.banned ? '已封禁' : '可用') + '</span></div>'
+              + '<div class="role-row-subtitle">' + escapeHtml(subtitle) + '</div>'
+              + '<div class="role-row-meta">引用 ' + escapeHtml(String(item.reference_count || 0)) + ' · 更新于 ' + escapeHtml(fmtDate(item.last_edit)) + '</div>'
+              + '</button>';
+          }).join('')
+        : '<div class="empty-box">没有匹配的 Role。</div>';
+      els.roleList.querySelectorAll('.role-row[data-id]').forEach((button) => {
+        button.addEventListener('click', () => {
+          void selectItem(button.dataset.id || '');
+        });
+      });
+    }
+
+    function fillForm(item) {
+      els.formName.value = item?.name || '';
+      els.formBanned.value = item?.banned ? 'true' : 'false';
+      els.formComment.value = item?.comment || '';
+      whitelistEditor.setValue(item?.whitelist_routes ?? 'all');
+      blacklistEditor.setValue(item?.blacklist_routes || []);
+      rateLimitEditor.setValue(item?.ratelimit || {});
+    }
+
+    function setEditMode(editing) {
+      state.editing = editing;
+      els.startEditBtn.classList.toggle('hidden', editing || state.creating || !state.selectedItem);
+      els.cancelEditBtn.classList.toggle('hidden', !editing);
+      els.saveEditBtn.classList.toggle('hidden', !editing);
+      [els.formName, els.formBanned, els.formComment].forEach((element) => {
+        element.disabled = !editing;
+      });
+      whitelistEditor.setDisabled(!editing);
+      blacklistEditor.setDisabled(!editing);
+      rateLimitEditor.setDisabled(!editing);
+      if (editing) els.editorFold.open = true;
+    }
+
+    function renderDetail() {
+      const item = state.selectedItem;
+      const hasItem = !!item || state.creating;
+      els.detailEmpty.classList.toggle('hidden', hasItem);
+      els.detailStack.classList.toggle('hidden', !hasItem);
+      els.reloadDetailBtn.disabled = !item;
+      els.deleteBtn.hidden = !item;
+      els.deleteBtn.disabled = !item;
+      if (!hasItem) {
+        els.detailTitle.textContent = '选择一个 Role';
+        els.detailSubtitle.textContent = '左侧选择后可查看引用情况、编辑权限规则与限流。';
+        return;
+      }
+      if (state.creating) {
+        els.detailTitle.textContent = '新建 Role';
+        els.detailSubtitle.textContent = '填写名称、权限规则与限流配置，然后保存。';
+        els.snapshotStatus.className = 'status-pill';
+        els.snapshotStatus.textContent = '未创建';
+        els.snapshotId.textContent = '—';
+        els.snapshotCreated.textContent = '—';
+        els.snapshotEdited.textContent = '—';
+        els.snapshotRefs.textContent = '0';
+        els.snapshotComment.textContent = els.formComment.value || '—';
+        renderChips(els.snapshotWhitelist, whitelistEditor.getValue());
+        renderChips(els.snapshotBlacklist, blacklistEditor.getValue());
+        renderRateLimitTable(rateLimitEditor.getValue());
+        setEditMode(true);
+        return;
+      }
+      els.detailTitle.textContent = roleLabel(item);
+      els.detailSubtitle.textContent = item.comment || '—';
+      els.snapshotStatus.className = 'status-pill ' + (item.banned ? 'err' : 'ok');
+      els.snapshotStatus.textContent = item.banned ? '已封禁' : '可用';
+      els.snapshotId.textContent = item.id || '—';
+      els.snapshotCreated.textContent = fmtDate(item.created_at);
+      els.snapshotEdited.textContent = fmtDate(item.last_edit);
+      els.snapshotRefs.textContent = String(item.reference_count || 0);
+      els.snapshotComment.textContent = item.comment || '—';
+      renderChips(els.snapshotWhitelist, item.whitelist_routes);
+      renderChips(els.snapshotBlacklist, item.blacklist_routes);
+      renderRateLimitTable(item.ratelimit || {});
+      fillForm(item);
+      setEditMode(state.editing);
+    }
+
+    function buildPayload() {
+      const name = String(els.formName.value || '').trim();
+      if (!name) throw new Error('Role 名称不能为空');
+      return {
+        name,
+        banned: String(els.formBanned.value || 'false') === 'true',
+        comment: String(els.formComment.value || '').trim() || null,
+        whitelist_routes: whitelistEditor.getValue(),
+        blacklist_routes: blacklistEditor.getValue() || [],
+        ratelimit: rateLimitEditor.getValue(),
+      };
+    }
+
+    async function selectItem(id) {
+      state.creating = false;
+      state.selectedId = id;
+      renderList();
+      await loadDetail(id);
+    }
+
+    async function loadDetail(id) {
+      if (!id) {
+        state.selectedItem = null;
+        renderDetail();
+        return;
+      }
+      const item = await api('/admin/permission-roles/' + encodeURIComponent(id));
+      state.selectedId = item.id;
+      state.selectedItem = item;
+      state.creating = false;
+      state.editing = false;
+      renderList();
+      renderDetail();
+    }
+
+    async function loadList(preserveSelection = true) {
+      setStatus('正在载入 Role 列表...', 'info');
+      const payload = await api('/admin/permission-roles');
+      state.items = Array.isArray(payload.items) ? payload.items : [];
+      if (preserveSelection && state.selectedId) {
+        const exists = state.items.find((item) => item.id === state.selectedId);
+        if (!exists) {
+          state.selectedId = '';
+          state.selectedItem = null;
+        }
+      }
+      applyFilters();
+      setStatus(state.items.length ? ('已载入 ' + state.items.length + ' 条 Role') : '暂无 Role', state.items.length ? 'success' : 'info');
+      setToolbarBadge(state.items.length ? 'ok' : 'warn', state.items.length ? '已同步' : '空列表');
+      if (state.selectedId) {
+        await loadDetail(state.selectedId);
+      } else if (state.creating) {
+        renderDetail();
+      } else {
+        renderDetail();
+      }
+    }
+
+    function beginCreate() {
+      state.creating = true;
+      state.selectedId = '';
+      state.selectedItem = null;
+      fillForm({ whitelist_routes: 'all', blacklist_routes: [], ratelimit: {} });
+      renderList();
+      renderDetail();
+    }
+
+    function beginEdit() {
+      if (!state.selectedItem) return;
+      setEditMode(true);
+    }
+
+    function cancelEdit() {
+      if (state.creating) {
+        state.creating = false;
+        state.selectedItem = null;
+        renderDetail();
+        return;
+      }
+      fillForm(state.selectedItem);
+      setEditMode(false);
+      renderDetail();
+    }
+
+    async function saveEdit() {
+      const payload = buildPayload();
+      if (state.creating) {
+        const created = await api('/admin/permission-roles', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        state.creating = false;
+        state.selectedId = created.id || '';
+        state.selectedItem = created;
+        setStatus('Role 创建成功', 'success');
+        setToolbarBadge('ok', '已创建');
+        await loadList(false);
+        if (state.selectedId) await loadDetail(state.selectedId);
+        return;
+      }
+      if (!state.selectedId) return;
+      await api('/admin/permission-roles/' + encodeURIComponent(state.selectedId), {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      setStatus('Role 更新成功', 'success');
+      setToolbarBadge('ok', '已保存');
+      state.editing = false;
+      await loadList(false);
+      await loadDetail(state.selectedId);
+    }
+
+    async function deleteCurrent() {
+      if (!state.selectedId) return;
+      const confirmed = ui && typeof ui.confirmDialog === 'function'
+        ? await ui.confirmDialog({
+            title: '删除确认',
+            text: '确认删除当前 Role 吗？若仍被 APIKey 引用，后端会拒绝。',
+            okText: '删除',
+            tone: 'danger',
+          })
+        : confirm('确认删除当前 Role 吗？');
+      if (!confirmed) return;
+      await api('/admin/permission-roles/' + encodeURIComponent(state.selectedId), { method: 'DELETE' });
+      state.selectedId = '';
+      state.selectedItem = null;
+      state.editing = false;
+      setStatus('Role 删除成功', 'success');
+      setToolbarBadge('ok', '已删除');
+      await loadList(false);
+    }
+
+    async function loadRouteSuggestions() {
+      try {
+        const payload = await api('/admin/openapi.json');
+        const paths = Object.keys(payload.paths || {}).sort();
+        els.routeSuggestionList.innerHTML = paths.map((path) => `<option value="${escapeHtml(path)}"></option>`).join('');
+      } catch {}
+    }
+
+    function restoreSidebarState() {
+      const collapsed = readPref('sidebar-collapsed', '0') === '1';
+      els.shell.classList.toggle('is-collapsed', collapsed);
+      els.splitterToggle.textContent = collapsed ? '›' : '‹';
+    }
+
+    function toggleSidebar() {
+      const collapsed = !els.shell.classList.contains('is-collapsed');
+      els.shell.classList.toggle('is-collapsed', collapsed);
+      els.splitterToggle.textContent = collapsed ? '›' : '‹';
+      writePref('sidebar-collapsed', collapsed ? '1' : '0');
+    }
+
+    const whitelistEditor = createRouteEditorController('whitelist');
+    const blacklistEditor = createRouteEditorController('blacklist');
+    const rateLimitEditor = createRateLimitEditor();
+
+    els.searchInput.addEventListener('input', () => {
+      state.filter.query = String(els.searchInput.value || '');
+      applyFilters();
+    });
+    els.statusFilter.addEventListener('change', () => {
+      state.filter.status = String(els.statusFilter.value || 'all');
+      applyFilters();
+    });
+    els.routeFilter.addEventListener('input', () => {
+      state.filter.route = String(els.routeFilter.value || '');
+      applyFilters();
+    });
+    els.refreshBtn.addEventListener('click', () => { void loadList(false); });
+    els.createBtn.addEventListener('click', beginCreate);
+    els.reloadDetailBtn.addEventListener('click', () => { if (state.selectedId) void loadDetail(state.selectedId); });
+    els.deleteBtn.addEventListener('click', () => { void deleteCurrent(); });
+    els.startEditBtn.addEventListener('click', beginEdit);
+    els.cancelEditBtn.addEventListener('click', cancelEdit);
+    els.saveEditBtn.addEventListener('click', () => {
+      void saveEdit().catch((error) => {
+        setStatus('保存失败: ' + (error.message || error), 'error');
+        setToolbarBadge('err', '保存失败');
+      });
+    });
+    els.splitterToggle.addEventListener('click', toggleSidebar);
+
+    restoreSidebarState();
+    setEditMode(false);
+
+    loadRouteSuggestions().catch(() => {});
+    loadList(false).catch((error) => {
+      setStatus('载入失败: ' + (error.message || error), 'error');
+      setToolbarBadge('err', '载入失败');
+    });
+  </script>
+</body>
+</html>

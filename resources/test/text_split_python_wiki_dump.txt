@@ -1,0 +1,73 @@
+Source: Adapted plain-text dump from the Wikipedia page "Python (programming language)" (retrieved 2026-03-19).
+License note: Wikipedia content is available under CC BY-SA 4.0. This file is a trimmed test fixture for local chunking tests.
+
+# Python (programming language)
+
+Python is a high-level, general-purpose programming language. Its design focuses on readability, significant indentation, and a programming style that scales from short scripts to large systems. The language supports structured programming, object-oriented programming, and functional programming. Python is dynamically typed, garbage collected, and often described as a glue language because it is practical for connecting components written in different languages.
+
+## Summary table
+| Field | Value |
+| --- | --- |
+| Paradigm | multi-paradigm, object-oriented, procedural, functional |
+| First appeared | 1991 |
+| Stable release | 3.14.3 |
+| File extensions | .py, .pyc, .pyd, .pyi, .pyw, .pyz |
+
+## History
+Guido van Rossum started Python in the late 1980s as a successor to ABC. Python 2.0 introduced list comprehensions, garbage collection improvements, and better Unicode support. Python 3.0 was released in 2008 as a major revision with intentional backward incompatibilities. As of 2026, the Python Software Foundation supports several active Python 3 branches following an annual release cycle and a multi-year support policy.
+
+## Design philosophy and features
+The language is shaped by the Zen of Python. Developers often quote short aphorisms such as:
+- Explicit is better than implicit.
+- Simple is better than complex.
+- Readability counts.
+- Errors should never pass silently unless explicitly silenced.
+
+Python offers dynamic name resolution, a large standard library, and extension points through modules and C extensions. It supports generator expressions, comprehensions, decorators, context managers, optional type annotations, and a range of runtime implementations including CPython, PyPy, MicroPython, and CircuitPython.
+
+## Syntax and semantics
+Python uses indentation to delimit blocks.
+
+### Example output
+# hello
+# already there
+
+### Code examples
+```python
+def printer(input1, input2="already there"):
+    print(input1)
+    print(input2)
+
+printer("hello")
+```
+
+```python
+text = input("Type a number: ")
+n = int(text)
+if n < 0:
+    raise ValueError("You must enter a non-negative integer")
+factorial = 1
+for i in range(2, n + 1):
+    factorial *= i
+print(factorial)
+```
+
+## Typing snapshot
+| Type | Mutability | Example |
+| --- | --- | --- |
+| bool | immutable | True |
+| dict | mutable | {"key": 1.0, "flag": False} |
+| list | mutable | [4.0, "string", True] |
+| tuple | immutable | (4.0, "string", True) |
+
+## Libraries and ecosystem
+Python's standard library includes modules for HTTP, MIME, regular expressions, unit testing, random number generation, and database access. The third-party ecosystem is centered around PyPI and includes libraries for numerical computing, web development, machine learning, data processing, automation, and scientific scripting.
+
+## Development environments
+Common environments include IDLE, IPython, PyCharm, Spyder, Visual Studio Code, notebook-style tools such as Jupyter, and browser-based IDE platforms. Many of these environments add features such as syntax highlighting, autocompletion, stateful sessions, and debugger integration.
+
+## Implementations and performance
+CPython compiles source code into bytecode and executes it on a virtual machine. PyPy uses a just-in-time compiler, while MicroPython and CircuitPython target microcontrollers. Performance strategies include just-in-time compilation, static compilation, optimized data structures, concurrency, and offloading intensive work to NumPy, C, or Fortran-backed libraries.
+
+## Language development
+Python evolves through the PEP process. Core developers discuss proposals, review implementation details, run extensive test suites, and publish previews before stable releases. The project emphasizes clarity, community review, documentation, and long-term maintainability.

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Message Thread</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js?v=20260501-2"></script>
+  <script type="module" src="/shared/templates.js?v=20260501-2"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top right, rgba(37, 99, 235, 0.16), transparent 30%),
+        linear-gradient(180deg, #eef4ff, #f8fbff);
+      color: #0f172a;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    [data-builtin-theme="dark"] body,
+    [data-builtin-theme="dark"] {
+      color: #e2e8f0;
+    }
+    .shell {
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 30px 60px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+    }
+    [data-builtin-theme="dark"] .shell {
+      background: rgba(15, 23, 42, 0.82);
+      border-color: rgba(71, 85, 105, 0.48);
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      flex-wrap: wrap;
+    }
+    .toolbar-copy h1 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .toolbar-copy p,
+    .event-log {
+      margin: 0;
+      color: #64748b;
+      font-size: 13px;
+    }
+    [data-builtin-theme="dark"] .toolbar-copy p,
+    [data-builtin-theme="dark"] .event-log {
+      color: #94a3b8;
+    }
+    .toolbar-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: min(360px, 100%);
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      background: rgba(255, 255, 255, 0.72);
+    }
+    [data-builtin-theme="dark"] .search-box {
+      background: rgba(15, 23, 42, 0.58);
+    }
+    .search-box input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+    builtin-tpl-chat-message-thread {
+      display: block;
+      padding: 18px 20px 24px;
+      height: min(78vh, 860px);
+    }
+    @media (max-width: 720px) {
+      body { padding: 12px; }
+      .shell { border-radius: 20px; }
+      .toolbar { padding: 14px; }
+      builtin-tpl-chat-message-thread { padding: 14px; height: auto; min-height: 75vh; }
+      .search-box { min-width: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="toolbar">
+      <div class="toolbar-copy">
+        <h1>Message Thread Demo</h1>
+        <p id="toolbar-copy">Search, quote, react, recall, and attachment bubbles are all driven by the shared thread component.</p>
+      </div>
+      <div class="toolbar-actions">
+        <label class="search-box">
+          <builtin-icon name="search" size="16" variant="outlined"></builtin-icon>
+          <input id="thread-search" type="search" autocomplete="off">
+        </label>
+        <div class="event-log" id="thread-event-log">Thread ready.</div>
+      </div>
+    </div>
+    <builtin-tpl-chat-message-thread id="message-thread"></builtin-tpl-chat-message-thread>
+  </div>
+
+  <script type="module">
+    const thread = document.getElementById("message-thread");
+    const searchInput = document.getElementById("thread-search");
+    const eventLog = document.getElementById("thread-event-log");
+    const copy = document.getElementById("toolbar-copy");
+
+    function currentLang() {
+      return (document.documentElement.lang || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+    }
+
+    function pick(zh, en) {
+      return currentLang() === "zh" ? zh : en;
+    }
+
+    function messages() {
+      return [
+        {
+          id: "thread-1",
+          sender: "Mina",
+          senderRole: pick("群主", "Owner"),
+          text: pick("请把上传附件、预览和附件气泡都当成一级消息形态。", "Treat uploads, previews, and attachment bubbles as first-class message shapes."),
+          time: "09:12",
+          category: pick("今天", "Today"),
+          reactions: [{ emoji: pick("收到", "ACK"), count: 4, active: true }],
+          attachments: [
+            { id: "f-1", type: "file", name: "chat-system-map.pdf", sizeLabel: "2.3 MB" },
+            {
+              id: "f-2",
+              type: "audio",
+              name: pick("语音说明", "Voice note"),
+              sizeLabel: "36s",
+              durationLabel: "36s",
+              url: "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+            },
+          ],
+        },
+        {
+          id: "thread-2",
+          sender: "Ops Bot",
+          kind: "event",
+          eventText: pick("Nora 离开了频道。管理员仍可从历史里检索她共享过的资料。", "Nora left the channel. Admins can still retrieve her shared files from history."),
+          time: "09:18",
+          category: pick("今天", "Today"),
+        },
+        {
+          id: "thread-3",
+          sender: "You",
+          text: pick("我会把撤回、编辑、点赞和引用都挂成统一动作面。", "I will expose recall, edit, like, and quote as one shared action surface."),
+          time: "09:21",
+          self: true,
+          read: true,
+          edited: true,
+          delivery: pick("已同步", "Synced"),
+          reactions: [{ emoji: pick("安排", "ON IT"), count: 2 }],
+        },
+        {
+          id: "thread-4",
+          sender: "Jules",
+          senderRole: pick("管理员", "Admin"),
+          text: pick("这里再加一张移动端截图，用来验证搜索高亮和预览入口。", "Adding one more mobile screenshot here to verify search highlighting and the preview entry."),
+          replyTo: pick("我会把撤回、编辑、点赞和引用都挂成统一动作面。", "I will expose recall, edit, like, and quote as one shared action surface."),
+          time: "09:24",
+          badge: pick("附件", "Attachment"),
+          attachments: [
+            {
+              id: "f-3",
+              type: "image",
+              name: "mobile-thread-state.png",
+              sizeLabel: "840 KB",
+              thumbnail: "https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=900&q=80",
+            },
+          ],
+          reactions: [{ emoji: pick("赞", "NICE"), count: 6 }],
+        },
+        {
+          id: "thread-5",
+          sender: "You",
+          text: pick("最后再补一条带 Recall 按钮的自发消息。", "One more self message so the recall action stays visible."),
+          time: "09:30",
+          self: true,
+          read: false,
+          recallable: true,
+          editable: true,
+        },
+      ];
+    }
+
+    function renderThread() {
+      thread.messages = messages();
+      thread.searchQuery = searchInput.value || "";
+      thread.showActions = true;
+      searchInput.placeholder = pick("搜索消息 / 成员 / 附件", "Search messages / members / attachments");
+      copy.textContent = pick(
+        "这个示例页专门展示消息线程能力：搜索高亮、附件、系统事件、引用、点赞和撤回入口。",
+        "This page isolates thread behavior: search highlighting, attachments, system events, quote, like, and recall entry points."
+      );
+    }
+
+    function setEvent(message) {
+      eventLog.textContent = message;
+    }
+
+    searchInput.addEventListener("input", () => {
+      thread.searchQuery = searchInput.value;
+      setEvent(pick(`搜索：${searchInput.value || "全部"}`, `Search: ${searchInput.value || "all"}`));
+    });
+
+    [
+      ["builtin-reply", pick("触发 Reply 动作。", "Triggered reply action.")],
+      ["builtin-quote", pick("触发 Quote 动作。", "Triggered quote action.")],
+      ["builtin-like", pick("触发 Like 动作。", "Triggered like action.")],
+      ["builtin-edit", pick("触发 Edit 动作。", "Triggered edit action.")],
+      ["builtin-recall", pick("触发 Recall 动作。", "Triggered recall action.")],
+      ["builtin-react", pick("点中了一个 reaction。", "Selected a reaction chip.")],
+      ["builtin-member-open", pick("打开了成员详情。", "Opened member details.")],
+      ["builtin-attachment-open", pick("打开了附件预览。", "Opened an attachment preview.")],
+    ].forEach(([eventName, message]) => {
+      thread.addEventListener(eventName, () => setEvent(message));
+    });
+
+    document.addEventListener("builtin-lang-change", renderThread);
+
+    renderThread();
+  </script>
+</body>
+</html>

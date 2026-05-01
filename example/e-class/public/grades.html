@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>我的成绩 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  .container { max-width: 100%; margin: 0 auto; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); }
+  .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .header h1 { margin: 0; font-size: 1.25rem; }
+  .lang-switch { display: flex; gap: 0.25rem; margin-left: auto; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-surface, #fff); color: var(--builtin-color-text, #111827); font: inherit; cursor: pointer; text-decoration: none; font-size: 0.875rem; }
+  .btn-primary { background: var(--builtin-primary, #2563eb); border-color: var(--builtin-primary, #2563eb); color: #fff; }
+  .summary { margin-top: 1rem; display: grid; grid-template-columns: 1fr; gap: 1rem; }
+  @media (min-width: 768px) {
+    .container { max-width: 960px; padding: 1rem; }
+    .summary { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+<link rel="stylesheet" href="/eclass-pages.css?v=20260501-1">
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <builtin-icon name="trophy" size="24"></builtin-icon>
+    <h1 data-i18n="eclass.my_grades">我的成绩</h1>
+    <a id="back-link" href="student.html" class="btn" data-i18n="eclass.back_home">返回首页</a>
+    <div class="lang-switch">
+      <builtin-lang-switcher id="lang-switcher" display="buttons" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
+    </div>
+    <builtin-theme-toggle></builtin-theme-toggle>
+  </div>
+
+  <builtin-data-view id="grades-view" page-size="10"></builtin-data-view>
+
+  <div class="summary" id="summary"></div>
+</div>
+
+<script type="module">
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const $ = id => document.getElementById(id);
+let currentRole = localStorage.getItem('eclass_role') || 'student';
+let ready = false;
+
+const shell = createPageBootstrap({
+  pageTitleKey: currentRole === 'teacher' ? 'eclass.teacher_grade_summary' : 'eclass.my_grades',
+  translationPath: '/translate.json?v=20260429-2',
+  onApplyI18n: async () => {
+    await updateHeading();
+    if (ready) {
+      await loadGrades();
+    }
+  },
+  onReady: async ({ session }) => {
+    currentRole = localStorage.getItem('eclass_role') || session?.user?.role || 'student';
+    ready = true;
+    await loadGrades();
+  },
+});
+
+const { api, t } = shell;
+
+const letterGrade = (pct) => {
+  if(pct>=90) return 'A';
+  if(pct>=80) return 'B';
+  if(pct>=70) return 'C';
+  if(pct>=60) return 'D';
+  return 'F';
+};
+
+async function updateSummary(list) {
+  const container = $('summary');
+  if(!list.length){ container.innerHTML = ''; return; }
+  let totalScore = 0, totalMax = 0;
+  list.forEach(g => { totalScore += g.score; totalMax += g.max; });
+  const avg = totalMax ? Math.round((totalScore / totalMax) * 100) : 0;
+  const [totalScoreLabel, avgLabel, gradeLabel] = await Promise.all([
+    t('eclass.total_score'),
+    t('eclass.average_score'),
+    t('eclass.letter_grade')
+  ]);
+  container.innerHTML = `
+    <builtin-stat-card value="${totalScore} / ${totalMax}" label="${totalScoreLabel}"></builtin-stat-card>
+    <builtin-stat-card value="${avg}%" label="${avgLabel}"></builtin-stat-card>
+    <builtin-stat-card value="${letterGrade(avg)}" label="${gradeLabel}"></builtin-stat-card>
+  `;
+}
+
+async function updateTeacherSummary(list) {
+  const container = $('summary');
+  if (!list.length) {
+    container.innerHTML = '';
+    return;
+  }
+  const totalSubmissions = list.reduce((sum, item) => sum + (item.submission_count || 0), 0);
+  const totalGraded = list.reduce((sum, item) => sum + (item.graded_count || 0), 0);
+  const weightedAverage = totalGraded
+    ? Math.round(list.reduce((sum, item) => sum + ((item.average_grade || 0) * (item.graded_count || 0)), 0) / totalGraded)
+    : 0;
+  const [submissionCountLabel, gradedCountLabel, averageGradeLabel] = await Promise.all([
+    t('eclass.submission_count'),
+    t('eclass.graded_count'),
+    t('eclass.average_grade')
+  ]);
+  container.innerHTML = `
+    <builtin-stat-card value="${totalSubmissions}" label="${submissionCountLabel}"></builtin-stat-card>
+    <builtin-stat-card value="${totalGraded}" label="${gradedCountLabel}"></builtin-stat-card>
+    <builtin-stat-card value="${totalGraded ? `${weightedAverage}%` : '—'}" label="${averageGradeLabel}"></builtin-stat-card>
+  `;
+}
+
+async function applyViewLabels(emptyText) {
+  const view = $('grades-view');
+  const [search, refresh, exportCsv, rows, page, previous, next, loading, noData] = await Promise.all([
+    t('eclass.search'),
+    t('eclass.refresh'),
+    t('eclass.export_csv'),
+    t('eclass.rows'),
+    t('eclass.page_word'),
+    t('eclass.prev_page'),
+    t('eclass.next_page'),
+    t('eclass.loading'),
+    t('eclass.no_data')
+  ]);
+  view.labels = {
+    search,
+    refresh,
+    exportCsv,
+    rows,
+    page,
+    previous,
+    next,
+    loading,
+    noData: emptyText || noData
+  };
+  view.emptyText = emptyText || noData;
+}
+
+async function updateHeading() {
+  const heading = document.querySelector('.header h1');
+  const headingKey = currentRole === 'teacher' ? 'eclass.teacher_grade_summary' : 'eclass.my_grades';
+  if (heading) {
+    heading.setAttribute('data-i18n', headingKey);
+    heading.textContent = await t(headingKey);
+  }
+  document.title = `${await t(headingKey)} - ${await t('eclass.title')}`;
+  $('back-link').href = currentRole === 'teacher' ? 'teacher.html' : 'student.html';
+}
+
+async function loadStudentGrades() {
+  const [subject, score, maxScore, noGrades] = await Promise.all([
+    t('eclass.subject'),
+    t('eclass.score'),
+    t('eclass.max_score'),
+    t('eclass.no_grades')
+  ]);
+  const payload = await api('/student/grades') || { grades: [] };
+  const list = payload.grades || [];
+  const view = $('grades-view');
+  await applyViewLabels(noGrades);
+  view.setData(list, {
+    columns: [
+      { key: 'course', label: subject, sortable: true },
+      { key: 'score', label: score, sortable: true },
+      { key: 'max', label: maxScore, sortable: true }
+    ]
+  });
+  await updateSummary(list);
+}
+
+async function loadTeacherGrades() {
+  const [classroomName, submissionCount, gradedCount, averageGrade, noGradeAnalytics] = await Promise.all([
+    t('eclass.classroom_name'),
+    t('eclass.submission_count'),
+    t('eclass.graded_count'),
+    t('eclass.average_grade'),
+    t('eclass.no_grade_analytics')
+  ]);
+  const classroomPayload = await api('/classroom/list') || { classrooms: [] };
+  const classrooms = classroomPayload.classrooms || [];
+  const analyticsRows = await Promise.all(classrooms.map(async (classroom) => {
+    const analytics = await api(`/teacher/analytics/${encodeURIComponent(classroom.id)}`) || {};
+    return {
+      classroom_name: classroom.name || classroom.id,
+      submission_count: analytics.submission_count || 0,
+      graded_count: analytics.graded_count || 0,
+      average_grade: typeof analytics.average_grade === 'number' ? analytics.average_grade : null,
+      average_grade_text: typeof analytics.average_grade === 'number' ? `${Math.round(analytics.average_grade)}%` : '—',
+    };
+  }));
+  const view = $('grades-view');
+  await applyViewLabels(noGradeAnalytics);
+  view.setData(analyticsRows, {
+    columns: [
+      { key: 'classroom_name', label: classroomName, sortable: true },
+      { key: 'submission_count', label: submissionCount, sortable: true },
+      { key: 'graded_count', label: gradedCount, sortable: true },
+      {
+        key: 'average_grade_text',
+        label: averageGrade,
+        sortable: false,
+      }
+    ]
+  });
+  await updateTeacherSummary(analyticsRows);
+}
+
+async function loadGrades() {
+  if (currentRole === 'teacher') {
+    await loadTeacherGrades();
+    return;
+  }
+  await loadStudentGrades();
+}
+
+await shell.init();
+</script>
+</body>
+</html>

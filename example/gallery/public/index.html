@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Component Library</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js?v=20260429-4"></script>
+  <script type="module" src="/gallery-shell.js?v=20260501-1"></script>
+  <style>
+    :root {
+      --gallery-bg: #f3f4f6;
+      --gallery-surface: #ffffff;
+      --gallery-border: #e5e7eb;
+      --gallery-text: #111827;
+      --gallery-muted: #6b7280;
+    }
+    [data-builtin-theme="dark"] {
+      --gallery-bg: #111827;
+      --gallery-surface: #1f2937;
+      --gallery-border: #374151;
+      --gallery-text: #e5e7eb;
+      --gallery-muted: #9ca3af;
+    }
+    body {
+      margin: 0;
+      background: var(--gallery-bg);
+      color: var(--gallery-text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .gallery-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .gallery-section {
+      background: var(--gallery-surface);
+      border: 1px solid var(--gallery-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .gallery-section-title {
+      font-size: 18px; font-weight: 700; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .gallery-card {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--gallery-border);
+      border-radius: 10px;
+      padding: 16px;
+      background: var(--gallery-surface);
+      box-sizing: border-box;
+    }
+    .gallery-card.gallery-card-wide {
+      grid-column: span 2;
+    }
+    .gallery-card-title {
+      font-size: 13px; font-weight: 650; color: var(--gallery-muted);
+      text-transform: uppercase; letter-spacing: 0.03em;
+      margin-bottom: 12px;
+    }
+    .gallery-controls {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+    }
+    .gallery-controls button {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid var(--gallery-border);
+      background: transparent; color: var(--gallery-text); font-size: 12px; cursor: pointer;
+    }
+    .gallery-controls button.active {
+      background: var(--builtin-primary, #2563eb); color: #fff; border-color: var(--builtin-primary, #2563eb);
+    }
+    .global-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .global-bar .left, .global-bar .right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .template-card {
+      border: 1px solid var(--gallery-border);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow .15s ease, transform .15s ease;
+    }
+    .template-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .template-thumb {
+      height: 140px;
+      background: var(--gallery-bg);
+      display: flex; align-items: center; justify-content: center;
+      border-bottom: 1px solid var(--gallery-border);
+    }
+    .template-info { padding: 12px; }
+    .template-info h4 { margin: 0 0 4px; font-size: 14px; }
+    .template-info p { margin: 0; font-size: 12px; color: var(--gallery-muted); }
+    builtin-tabs::part(panels) { padding: 0; }
+    .fullscreen-modal .box { max-width: none !important; width: 100vw; height: 100vh; border-radius: 0 !important; }
+    .fullscreen-modal .body { padding: 0; }
+    @media (max-width: 720px) {
+      .gallery-container { padding: 16px 12px; overflow-x: hidden; }
+      .global-bar {
+        align-items: stretch;
+      }
+      .global-bar .left,
+      .global-bar .right {
+        width: 100%;
+        min-width: 0;
+      }
+      .global-bar .left {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .global-bar .left h1 {
+        width: 100%;
+        font-size: 22px !important;
+        line-height: 1.15;
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .global-bar .left p,
+      .global-bar .left a {
+        max-width: 100%;
+      }
+      .global-bar .right {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+      .global-bar .right builtin-search-bar {
+        width: 100% !important;
+        min-width: 0;
+      }
+      .gallery-grid { grid-template-columns: 1fr; }
+      .template-grid { grid-template-columns: 1fr 1fr; }
+    }
+      .global-bar .right builtin-user-menu {
+        grid-column: 1 / -1;
+        justify-self: start;
+        max-width: 100%;
+      }
+  </style>
+</head>
+<body>
+  <div class="gallery-container">
+    <builtin-tabs type="underline" active="layout" items='[
+      {"label":"Layout","value":"layout"},{"label":"Navigation","value":"navigation"},{"label":"Data Display","value":"data-display"},
+      {"label":"Forms","value":"forms"},{"label":"Feedback","value":"feedback"},{"label":"Media","value":"media"},
+      {"label":"AI","value":"ai"},{"label":"Advanced","value":"advanced"},{"label":"Commerce","value":"commerce"},
+      {"label":"Social","value":"social"},{"label":"Editors","value":"editors"},{"label":"Cloud","value":"cloud"}
+    ]'>
+      <!-- ========== LAYOUT ========== -->
+      <div data-tab="layout">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="layout" size="20" variant="outlined"></builtin-icon> Layout</div>
+          <div class="gallery-grid">
+            <!-- Card -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-card</div>
+              <div class="gallery-controls" id="card-controls">
+                <button data-variant="default" class="active">default</button>
+                <button data-variant="elevated">elevated</button>
+                <button data-variant="bordered">bordered</button>
+              </div>
+              <builtin-card id="gallery-card" variant="default">
+                <div slot="header">Card Header</div>
+                <p>This is the card body content. Cards support header, media, body and footer slots.</p>
+                <div slot="footer">Card Footer</div>
+              </builtin-card>
+            </div>
+
+            <!-- Tabs -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-tabs</div>
+              <div class="gallery-controls" id="tabs-controls">
+                <button data-type="underline" class="active">underline</button>
+                <button data-type="pills">pills</button>
+                <button data-type="vertical">vertical</button>
+              </div>
+              <builtin-tabs id="gallery-tabs" type="underline" active="tab1">
+                <div data-tab="tab1">Content for Tab 1</div>
+                <div data-tab="tab2">Content for Tab 2</div>
+                <div data-tab="tab3">Content for Tab 3</div>
+              </builtin-tabs>
+            </div>
+
+            <!-- Accordion -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-accordion</div>
+              <div class="gallery-controls" id="accordion-controls">
+                <button data-variant="default" class="active">default</button>
+                <button data-variant="bordered">bordered</button>
+                <button data-variant="separated">separated</button>
+                <button data-size="compact">compact</button>
+                <button data-size="default" class="active">default</button>
+                <button data-size="comfortable">comfortable</button>
+                <button id="accordion-single">single: off</button>
+              </div>
+              <builtin-accordion id="gallery-accordion"
+                items='[
+                  {"title":"What is this platform?","content":"An all-in-one framework for building modern web applications with reusable components."},
+                  {"title":"How do I get started?","content":"Import the shared components and start building. Check the documentation for details."},
+                  {"title":"Is it open source?","content":"Yes, the core framework and all shared components are open source."}
+                ]'>
+              </builtin-accordion>
+            </div>
+
+            <!-- Skeleton -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-skeleton</div>
+              <builtin-skeleton lines="4" shape="avatar" style="margin-bottom:12px;"></builtin-skeleton>
+              <builtin-skeleton lines="2"></builtin-skeleton>
+            </div>
+
+            <!-- Empty State -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-empty-state</div>
+              <builtin-empty-state
+                icon="inbox"
+                heading="No Data"
+                description="There is nothing to display here yet.">
+                <button class="builtin-primary">Create New</button>
+              </builtin-empty-state>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== NAVIGATION ========== -->
+      <div data-tab="navigation">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="compass" size="20" variant="outlined"></builtin-icon> Navigation</div>
+          <div class="gallery-grid">
+            <!-- Breadcrumb -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-breadcrumb</div>
+              <builtin-breadcrumb items='[{"label":"Home","href":"#"},{"label":"Products","href":"#"},{"label":"Electronics","href":"#"},{"label":"Laptops","href":"#"}]'></builtin-breadcrumb>
+            </div>
+
+            <!-- Pagination -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-pagination</div>
+              <builtin-pagination page="3" total-pages="12"></builtin-pagination>
+            </div>
+
+            <!-- Stepper -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-stepper</div>
+              <div class="gallery-controls" id="stepper-controls">
+                <button data-dir="horizontal" class="active">horizontal</button>
+                <button data-dir="vertical">vertical</button>
+                <button id="stepper-prev">prev</button>
+                <button id="stepper-next">next</button>
+              </div>
+              <builtin-stepper id="gallery-stepper" direction="horizontal" current="1"
+                steps='[
+                  {"label":"Cart","description":"Review items"},
+                  {"label":"Shipping","description":"Enter address"},
+                  {"label":"Payment","description":"Choose method"},
+                  {"label":"Confirm","description":"Place order"}
+                ]'>
+              </builtin-stepper>
+            </div>
+
+            <!-- Timeline -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-timeline</div>
+              <builtin-timeline items='[
+                {"title":"Order placed","time":"2024-01-15 09:30","description":"Completed"},
+                {"title":"Processing","time":"2024-01-15 10:00","description":"Completed"},
+                {"title":"Shipped","time":"2024-01-15 14:20","description":"In transit"},
+                {"title":"Delivered","time":"Pending","description":"Waiting"}
+              ]'></builtin-timeline>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-sidebar</div>
+              <div style="font-size:12px;color:var(--gallery-muted);line-height:1.5;">
+                Fixed-position app sidebar. Best previewed inside a real
+                template layout — see
+                <a href="/pages/admin-dashboard.html" style="color:var(--builtin-primary,#2563eb);text-decoration:none;font-weight:600;">Admin Dashboard</a>
+                or <a href="/pages/file-manager.html" style="color:var(--builtin-primary,#2563eb);text-decoration:none;font-weight:600;">File Manager</a>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== DATA DISPLAY ========== -->
+      <div data-tab="data-display">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="bar-chart" size="20" variant="outlined"></builtin-icon> Data Display</div>
+          <div class="gallery-grid">
+            <!-- Badge & Chip -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-badge &amp; builtin-chip</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+                <builtin-badge text="New" variant="primary"></builtin-badge>
+                <builtin-badge text="Hot" variant="danger"></builtin-badge>
+                <builtin-badge text="Beta" variant="warning"></builtin-badge>
+                <builtin-badge text="Stable" variant="success"></builtin-badge>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <builtin-chip text="React" closable></builtin-chip>
+                <builtin-chip text="Vue" closable></builtin-chip>
+                <builtin-chip text="Angular" closable></builtin-chip>
+                <builtin-chip text="Lit" closable></builtin-chip>
+              </div>
+            </div>
+
+            <!-- Tag Cloud -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-tag-cloud</div>
+              <builtin-tag-cloud selectable multiple selected='["lit","theme"]' tags='[
+                {"text":"components","value":"components","weight":32,"color":"#2563eb"},
+                {"text":"lit","value":"lit","weight":24,"color":"#7c3aed"},
+                {"text":"theme","value":"theme","weight":20,"color":"#16a34a"},
+                {"text":"i18n","value":"i18n","weight":12,"color":"#0891b2"},
+                {"text":"dashboard","value":"dashboard","weight":18,"color":"#d97706"},
+                {"text":"forms","value":"forms","weight":10,"color":"#dc2626"},
+                {"text":"media","value":"media","weight":15,"color":"#be123c"}
+              ]'></builtin-tag-cloud>
+            </div>
+
+            <!-- Stat Card -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-stat-card</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <builtin-stat-card label="Revenue" value="$48.2k" change="+12.5%" change-type="positive"></builtin-stat-card>
+                <builtin-stat-card label="Users" value="2,840" change="-3.2%" change-type="negative"></builtin-stat-card>
+                <builtin-stat-card label="Orders" value="1,240" change="+8.1%" change-type="positive"></builtin-stat-card>
+                <builtin-stat-card label="Bounce" value="42%" change="-1.4%" change-type="negative"></builtin-stat-card>
+              </div>
+            </div>
+
+            <!-- Feature Grid -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-feature-grid</div>
+              <builtin-feature-grid features='[
+                {"icon":"thunderbolt","title":"Fast","description":"Optimized for speed."},
+                {"icon":"safety","title":"Secure","description":"Enterprise security."},
+                {"icon":"link","title":"Integrated","description":"Works everywhere."},
+                {"icon":"customer-service","title":"Support","description":"24/7 assistance."}
+              ]'></builtin-feature-grid>
+            </div>
+
+            <!-- Alert -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-alert</div>
+              <div class="gallery-controls" id="alert-controls">
+                <button data-variant="info" class="active">info</button>
+                <button data-variant="success">success</button>
+                <button data-variant="warning">warning</button>
+                <button data-variant="error">error</button>
+              </div>
+              <builtin-alert id="gallery-alert" variant="info" closable>This is an informational alert message.</builtin-alert>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-progress-bar</div>
+              <builtin-progress-bar value="35" max="100" label style="margin-bottom:10px;"></builtin-progress-bar>
+              <builtin-progress-bar value="70" max="100" label style="margin-bottom:10px;"></builtin-progress-bar>
+              <builtin-progress-bar value="100" max="100" label></builtin-progress-bar>
+            </div>
+
+            <!-- Tree View -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-tree-view</div>
+              <builtin-tree-view items='[
+                {"id":"1","label":"Project Files","expanded":true,"children":[
+                  {"id":"1-1","label":"src","children":[
+                    {"id":"1-1-1","label":"components"},
+                    {"id":"1-1-2","label":"utils.js"}
+                  ]},
+                  {"id":"1-2","label":"docs"},
+                  {"id":"1-3","label":"package.json"}
+                ]}
+              ]'></builtin-tree-view>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== FORMS ========== -->
+      <div data-tab="forms">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="form" size="20" variant="outlined"></builtin-icon> Forms</div>
+          <div class="gallery-grid">
+            <!-- Rating -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-rating</div>
+              <div style="display:flex;align-items:center;gap:16px;">
+                <builtin-rating value="3.5"></builtin-rating>
+                <builtin-rating value="4" interactive></builtin-rating>
+              </div>
+            </div>
+
+            <!-- Slider Range -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-slider-range</div>
+              <builtin-slider-range min="0" max="100" value="30" style="margin-bottom:10px;"></builtin-slider-range>
+              <builtin-slider-range min="0" max="1000" value="[200,600]" range></builtin-slider-range>
+            </div>
+
+            <!-- Toggle Group -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-toggle-group</div>
+              <builtin-toggle-group items='[{"label":"Day","value":"day"},{"label":"Week","value":"week"},{"label":"Month","value":"month"},{"label":"Year","value":"year"}]' values='["week"]'></builtin-toggle-group>
+            </div>
+
+            <!-- Color Picker -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-color-picker</div>
+              <builtin-color-picker value="#2563eb"></builtin-color-picker>
+            </div>
+
+            <!-- Date & Time Pickers -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-date-picker &amp; builtin-time-picker</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <builtin-date-picker value="2024-06-15" style="flex:1;min-width:140px;"></builtin-date-picker>
+                <builtin-time-picker value="14:30" style="flex:1;min-width:120px;"></builtin-time-picker>
+              </div>
+            </div>
+
+            <!-- Input Tags -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-input-tags</div>
+              <builtin-input-tags tags='["javascript","typescript","python"]' placeholder="Add tag..."></builtin-input-tags>
+            </div>
+
+            <!-- Input OTP -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-input-otp</div>
+              <builtin-input-otp length="6"></builtin-input-otp>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== FEEDBACK ========== -->
+      <div data-tab="feedback">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="message" size="20" variant="outlined"></builtin-icon> Feedback</div>
+          <div class="gallery-grid">
+            <!-- Toast triggers -->
+            <div class="gallery-card" id="toast-card">
+              <div class="gallery-card-title">builtin-toast</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button data-toast="info" data-message="Info toast message">Info</button>
+                <button data-toast="success" data-message="Success toast message">Success</button>
+                <button data-toast="warning" data-message="Warning toast message">Warning</button>
+                <button data-toast="error" data-message="Error toast message">Error</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <button data-toast="info" data-message="Solid info" data-solid="1">Solid Info</button>
+                <button data-toast="success" data-message="Solid success" data-solid="1">Solid Success</button>
+              </div>
+            </div>
+
+            <!-- Modal trigger -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-modal</div>
+              <div class="gallery-controls" id="modal-controls">
+                <button data-size="small" class="active">small</button>
+                <button data-size="medium">medium</button>
+                <button data-size="large">large</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <button id="modal-no-header">no-header: off</button>
+                <button id="modal-no-footer">no-footer: off</button>
+                <button id="modal-no-anim">no-anim: off</button>
+              </div>
+              <button id="modal-open-btn">Open Modal</button>
+            </div>
+
+            <!-- Confirm trigger -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-confirm</div>
+              <button id="confirm-open-btn">Show Confirm</button>
+              <div id="confirm-result" style="margin-top:8px;font-size:13px;color:var(--gallery-muted);"></div>
+            </div>
+
+            <!-- Drawer triggers -->
+            <div class="gallery-card" id="drawer-card">
+              <div class="gallery-card-title">builtin-drawer</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button data-drawer="left">Left</button>
+                <button data-drawer="right">Right</button>
+                <button data-drawer="top">Top</button>
+                <button data-drawer="bottom">Bottom</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== MEDIA ========== -->
+      <div data-tab="media">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="picture" size="20" variant="outlined"></builtin-icon> Media</div>
+          <div class="gallery-grid">
+            <!-- Image Gallery -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-image-gallery</div>
+              <builtin-image-gallery images='[
+                {"src":"https://picsum.photos/seed/a/400/250","alt":"A"},
+                {"src":"https://picsum.photos/seed/b/400/250","alt":"B"},
+                {"src":"https://picsum.photos/seed/c/400/250","alt":"C"},
+                {"src":"https://picsum.photos/seed/d/400/250","alt":"D"}
+              ]'></builtin-image-gallery>
+            </div>
+
+            <!-- Audio Player -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-audio-player</div>
+              <builtin-audio-player title="Sample Track"></builtin-audio-player>
+            </div>
+
+            <!-- Scroll Snap Carousel -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-scroll-snap-carousel</div>
+              <builtin-scroll-snap-carousel auto-play items='[
+                {"id":"1","image":"https://picsum.photos/seed/s1/600/240","alt":"Slide 1"},
+                {"id":"2","image":"https://picsum.photos/seed/s2/600/240","alt":"Slide 2"},
+                {"id":"3","image":"https://picsum.photos/seed/s3/600/240","alt":"Slide 3"}
+              ]'></builtin-scroll-snap-carousel>
+            </div>
+
+            <!-- Testimonials Carousel -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-testimonials-carousel</div>
+              <builtin-testimonials-carousel auto-play testimonials='[
+                {"quote":"This platform transformed how we build products.","author":"Jane Doe","role":"CTO","rating":5},
+                {"quote":"Incredible developer experience and fast iteration cycles.","author":"John Smith","role":"Lead Dev","rating":4},
+                {"quote":"The component library saved us months of work.","author":"Alice Wang","role":"PM","rating":5}
+              ]'></builtin-testimonials-carousel>
+            </div>
+
+            <!-- Carousel (multi-slide) -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-carousel (multi-slide)</div>
+              <div class="gallery-controls" id="carousel-controls">
+                <button data-visible="1" class="active">1 slide</button>
+                <button data-visible="2">2 slides</button>
+                <button data-visible="3">3 slides</button>
+                <button id="carousel-loop">loop: off</button>
+                <button id="carousel-fade">fade: off</button>
+              </div>
+              <builtin-carousel id="gallery-carousel" visible="1" gap="12" show-dots show-arrows draggable
+                items='[
+                  {"id":"1","image":"https://picsum.photos/seed/c1/320/180","alt":"1"},
+                  {"id":"2","image":"https://picsum.photos/seed/c2/320/180","alt":"2"},
+                  {"id":"3","image":"https://picsum.photos/seed/c3/320/180","alt":"3"},
+                  {"id":"4","image":"https://picsum.photos/seed/c4/320/180","alt":"4"},
+                  {"id":"5","image":"https://picsum.photos/seed/c5/320/180","alt":"5"}
+                ]'>
+              </builtin-carousel>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== AI ========== -->
+      <div data-tab="ai">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="robot" size="20" variant="outlined"></builtin-icon> AI Components</div>
+          <div class="gallery-grid">
+            <!-- AI Prompt Input -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-ai-prompt-input</div>
+              <builtin-ai-prompt-input placeholder="Ask me anything..."></builtin-ai-prompt-input>
+            </div>
+
+            <!-- AI Suggestion Chips -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-ai-suggestion-chips</div>
+              <builtin-ai-suggestion-chips suggestions='["Explain components","Show templates","Dark mode tips"]'></builtin-ai-suggestion-chips>
+            </div>
+
+            <!-- AI Code Block -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-ai-code-block</div>
+              <builtin-ai-code-block language="python" code="def greet(name):\n    return f'Hello, {name}!'\n\nprint(greet('World'))"></builtin-ai-code-block>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== ADVANCED ========== -->
+      <div data-tab="advanced">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="appstore" size="20" variant="outlined"></builtin-icon> Advanced</div>
+          <div class="gallery-grid">
+            <!-- Calendar -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-calendar</div>
+              <builtin-calendar events='[
+                {"start":"2024-06-15","title":"Launch","allDay":true},
+                {"start":"2024-06-20","title":"Review","allDay":true}
+              ]'></builtin-calendar>
+            </div>
+
+            <!-- Kanban -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-kanban-board</div>
+              <builtin-kanban-board id="gallery-kanban"
+                columns='[
+                  {"id":"todo","title":"To Do","cards":[
+                    {"id":"c1","title":"Design mockups","description":"Create initial designs","tags":["design"]},
+                    {"id":"c2","title":"Set up repo","description":"Initialize git and CI","tags":["dev"]}
+                  ]},
+                  {"id":"doing","title":"In Progress","cards":[
+                    {"id":"c3","title":"Build components","description":"Implement shared components","tags":["dev","high"]}
+                  ]},
+                  {"id":"done","title":"Done","cards":[
+                    {"id":"c4","title":"Project setup","description":"Scaffold and config","tags":["dev"]}
+                  ]}
+                ]'>
+              </builtin-kanban-board>
+            </div>
+
+            <!-- Chart Wrapper -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-chart-wrapper</div>
+              <div class="gallery-controls" id="chart-controls">
+                <button data-type="bar" class="active">bar</button>
+                <button data-type="line">line</button>
+                <button data-type="pie">pie</button>
+                <button data-type="doughnut">doughnut</button>
+              </div>
+              <builtin-chart-wrapper id="gallery-chart" type="bar"
+                data='{"labels":["Jan","Feb","Mar","Apr","May","Jun"],"datasets":[{"label":"Sales","data":[12,19,8,15,22,30],"backgroundColor":"rgba(37,99,235,0.6)"}]}'>
+              </builtin-chart-wrapper>
+            </div>
+
+            <!-- QR Code -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-qr-code-display</div>
+              <builtin-qr-code-display value="https://github.com/project-template" label="Scan to visit"></builtin-qr-code-display>
+            </div>
+
+            <!-- Mermaid Diagram -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-mermaid-diagram</div>
+              <builtin-mermaid-diagram definition='
+graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Great!]
+    B -->|No| D[Debug]
+    D --> E[Fix Issues]
+    E --> B
+              '></builtin-mermaid-diagram>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== COMMERCE ========== -->
+      <div data-tab="commerce">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="shopping" size="20" variant="outlined"></builtin-icon> Commerce</div>
+          <div class="gallery-grid">
+            <!-- Pricing Card -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-pricing-card</div>
+              <builtin-pricing-card
+                name="Pro"
+                price="$29"
+                period="/mo"
+                features='["10 projects","Advanced analytics","Priority support"]'
+                cta-label="Choose Pro"
+                featured>
+              </builtin-pricing-card>
+            </div>
+
+            <!-- Pricing Table -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-pricing-table</div>
+              <builtin-pricing-table plans='[
+                {"name":"Free","price":"$0","features":[{"label":"Users","value":"1"},{"label":"Support","value":"Basic"}]},
+                {"name":"Pro","price":"$29","features":[{"label":"Users","value":"10"},{"label":"Support","value":"Priority"},{"label":"Analytics","included":true}],"highlighted":true},
+                {"name":"Enterprise","price":"Custom","features":[{"label":"Users","value":"Unlimited"},{"label":"Support","value":"24/7"},{"label":"SLA","included":true}]}
+              ]'></builtin-pricing-table>
+            </div>
+
+            <!-- Payment Method Card -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-payment-method-card</div>
+              <builtin-payment-method-card type="card" brand="Visa" last4="4242" expiry="12/26" holder="Demo User"></builtin-payment-method-card>
+            </div>
+
+            <!-- Shipping Tracker -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-shipping-tracker</div>
+              <builtin-shipping-tracker steps='[
+                {"label":"Ordered","completed":true},
+                {"label":"Packed","completed":true},
+                {"label":"Shipped","completed":true,"active":true},
+                {"label":"Out for delivery","completed":false},
+                {"label":"Delivered","completed":false}
+              ]'></builtin-shipping-tracker>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-comparison-table</div>
+              <builtin-comparison-table products='[
+                {"name":"Basic","price":"$9","features":{"Storage":"10GB","Users":"1","Support":"Email"}},
+                {"name":"Pro","price":"$29","features":{"Storage":"100GB","Users":"10","Support":"Priority"}},
+                {"name":"Enterprise","price":"Custom","features":{"Storage":"Unlimited","Users":"Unlimited","Support":"24/7"}}
+              ]' features='[
+                {"key":"Storage","label":"Storage"},
+                {"key":"Users","label":"Users"},
+                {"key":"Support","label":"Support"}
+              ]'></builtin-comparison-table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== SOCIAL & CONTENT ========== -->
+      <div data-tab="social">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="message" size="20" variant="outlined"></builtin-icon> Social &amp; Content</div>
+          <div class="gallery-grid">
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-danmaku</div>
+              <div style="position:relative;height:200px;background:#1a1a2e;border-radius:8px;overflow:hidden;">
+                <builtin-danmaku comments='[
+                  {"text":"Hello world!","color":"#fff"},{"text":"Amazing demo","color":"#fbbf24"},{"text":"Nice components","color":"#60a5fa"},
+                  {"text":"Dark mode support","color":"#34d399"},{"text":"Lit based","color":"#f472b6"},{"text":"Responsive","color":"#a78bfa"}
+                ]' speed="80" density="normal" style="height:100%;"></builtin-danmaku>
+              </div>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-word-cloud</div>
+              <builtin-word-cloud
+                style="height:260px;"
+                words='[
+                  ["knowledge", 80], ["learning", 65], ["education", 60],
+                  ["wisdom", 55], ["student", 50], ["school", 45],
+                  ["proficiency", 42], ["development", 40], ["value", 38],
+                  ["comprehension", 35], ["scholarship", 33], ["science", 32],
+                  ["theory", 30], ["practice", 28], ["insight", 27],
+                  ["discipline", 26], ["curriculum", 25], ["academics", 24],
+                  ["enlightenment", 23], ["genius", 22], ["aptitude", 21],
+                  ["grasp", 20], ["lore", 19], ["notion", 18],
+                  ["dogma", 17], ["doctrine", 16], ["tuition", 15]
+                ]'
+                shape="circle"
+                clickable
+              ></builtin-word-cloud>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-social-blog-card</div>
+              <builtin-social-blog-card
+                images='["https://picsum.photos/seed/s1/400/300","https://picsum.photos/seed/s2/400/300"]'
+                avatar="https://i.pravatar.cc/150?u=blogger"
+                author="Travel Diaries"
+                title="Hidden gems in Kyoto you must visit"
+                content="Discover the most beautiful temples and gardens that most tourists miss..."
+                likes="1240"
+                comments="86"
+                bookmarks="320"
+                tags='["travel","kyoto","japan"]'
+                location="Kyoto, Japan"
+              ></builtin-social-blog-card>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-comment-section</div>
+              <builtin-comment-section
+                current-user='{"name":"Demo User","avatar":"https://i.pravatar.cc/150?u=demo"}'
+                comments='[
+                  {"id":"1","author":"Alice","avatar":"https://i.pravatar.cc/150?u=a","content":"Great article! Really enjoyed reading this.","time":"2h ago","likes":12,"liked":false},
+                  {"id":"2","author":"Bob","avatar":"https://i.pravatar.cc/150?u=b","content":"Thanks for sharing, very insightful.","time":"5h ago","likes":5,"liked":true,"replies":[
+                    {"id":"2-1","author":"Alice","avatar":"https://i.pravatar.cc/150?u=a","content":"Agreed!","time":"3h ago","likes":2,"liked":false}
+                  ]}
+                ]'
+              ></builtin-comment-section>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== EDITORS & TOOLS ========== -->
+      <div data-tab="editors">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="tool" size="20" variant="outlined"></builtin-icon> Editors &amp; Tools</div>
+          <div class="gallery-grid">
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-video-editor</div>
+              <builtin-video-editor src="/test-media/sample-video.mp4" audio-src="/test-media/sample-video-audio.wav" duration="5" cuts='[
+                {"start":0.5,"end":2,"label":"Intro"},{"start":2.5,"end":4.5,"label":"Main"}
+              ]'></builtin-video-editor>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-audio-editor</div>
+              <builtin-audio-editor src="/test-media/sample-audio.wav" selection='{"start":0.2,"end":1.2}'></builtin-audio-editor>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-drag-upload-zone</div>
+              <builtin-drag-upload-zone accept="image/*,.pdf" multiple max-size="10485760"></builtin-drag-upload-zone>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-document-previewer</div>
+              <builtin-document-previewer type="txt" filename="readme.txt" content="This is a sample document preview. It supports PDF, TXT, MD, CODE, and DOC formats."></builtin-document-previewer>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== CLOUD & ADMIN ========== -->
+      <div data-tab="cloud">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="cloud" size="20" variant="outlined"></builtin-icon> Cloud &amp; Admin</div>
+          <div class="gallery-grid">
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-file-browser-cloud</div>
+              <builtin-file-browser-cloud items='[
+                {"id":"1","name":"Documents","type":"folder","modified":"2024-06-01"},{"id":"2","name":"Project.zip","type":"file","size":2048000,"modified":"2024-06-10"},
+                {"id":"3","name":"Photos","type":"folder","modified":"2024-06-05"},{"id":"4","name":"report.pdf","type":"file","size":512000,"modified":"2024-06-12","shared":true}
+              ]'></builtin-file-browser-cloud>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-dashboard-tiles</div>
+              <div class="gallery-controls">
+                <button id="tiles-edit">editable: off</button>
+              </div>
+              <builtin-dashboard-tiles id="gallery-tiles" editable columns="3" tiles='[
+                {"id":"t1","title":"Revenue","content":"$48.2k","colSpan":1,"color":"#2563eb"},
+                {"id":"t2","title":"Users","content":"2,840","colSpan":1,"color":"#16a34a"},
+                {"id":"t3","title":"Growth","content":"+12.5%","colSpan":1,"color":"#7c3aed"},
+                {"id":"t4","title":"Overview","content":"All systems operational.","colSpan":3}
+              ]'></builtin-dashboard-tiles>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-draggable-tabs</div>
+              <builtin-draggable-tabs addable items='[
+                {"id":"dash","label":"Dashboard","closable":true},{"id":"reports","label":"Reports","closable":true},
+                {"id":"settings","label":"Settings","closable":false}
+              ]' active="dash">
+                <div data-tab="dash">Dashboard content</div>
+                <div data-tab="reports">Reports content</div>
+                <div data-tab="settings">Settings content</div>
+              </builtin-draggable-tabs>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- (Templates tab removed: see /pages/ for the dedicated template gallery.) -->
+  </div>
+
+  <!-- Feedback elements -->
+  <builtin-modal id="gallery-modal" title="Modal Example" size="small">
+    <p>This is a modal dialog. You can change its size, disable mask click, and more.</p>
+    <div slot="footer">
+      <button data-modal-close>Close</button>
+      <button class="builtin-primary" data-modal-close>OK</button>
+    </div>
+  </builtin-modal>
+
+  <builtin-drawer id="gallery-drawer" placement="right" size="360px">
+    <div slot="title"><strong>Drawer Example</strong></div>
+    <p>Drawers slide in from any edge. This one is on the right.</p>
+    <p style="margin-top:12px;">You can also open from left, top, or bottom.</p>
+  </builtin-drawer>
+
+  <builtin-back-to-top></builtin-back-to-top>
+
+  <script type="module">
+    // Card variant switching
+    document.querySelectorAll('#card-controls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#card-controls button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-card').variant = btn.dataset.variant;
+      });
+    });
+
+    // Tabs type switching
+    document.querySelectorAll('#tabs-controls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#tabs-controls button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-tabs').type = btn.dataset.type;
+      });
+    });
+
+    // Accordion controls
+    let accordionVariant = 'default';
+    let accordionSize = 'default';
+    let accordionSingle = false;
+    document.querySelectorAll('#accordion-controls button[data-variant]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#accordion-controls button[data-variant]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        accordionVariant = btn.dataset.variant;
+        const el = document.getElementById('gallery-accordion');
+        el.variant = accordionVariant;
+      });
+    });
+    document.querySelectorAll('#accordion-controls button[data-size]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#accordion-controls button[data-size]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        accordionSize = btn.dataset.size;
+        document.getElementById('gallery-accordion').size = accordionSize;
+      });
+    });
+    document.getElementById('accordion-single').addEventListener('click', () => {
+      accordionSingle = !accordionSingle;
+      document.getElementById('accordion-single').textContent = 'single: ' + (accordionSingle ? 'on' : 'off');
+      document.getElementById('gallery-accordion').single = accordionSingle;
+    });
+
+    // Stepper controls
+    document.querySelectorAll('#stepper-controls button[data-dir]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#stepper-controls button[data-dir]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-stepper').direction = btn.dataset.dir;
+      });
+    });
+    document.getElementById('stepper-prev').addEventListener('click', () => {
+      const el = document.getElementById('gallery-stepper');
+      el.current = Math.max(0, (el.current || 1) - 1);
+    });
+    document.getElementById('stepper-next').addEventListener('click', () => {
+      const el = document.getElementById('gallery-stepper');
+      el.current = Math.min(3, (el.current || 1) + 1);
+    });
+
+    // Alert variant switching
+    document.querySelectorAll('#alert-controls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#alert-controls button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-alert').variant = btn.dataset.variant;
+      });
+    });
+
+    // Modal size switching
+    document.querySelectorAll('#modal-controls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#modal-controls button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-modal').size = btn.dataset.size;
+      });
+    });
+    let modalNoHeader = false, modalNoFooter = false, modalNoAnim = false;
+    document.getElementById('modal-no-header').addEventListener('click', () => {
+      modalNoHeader = !modalNoHeader;
+      document.getElementById('modal-no-header').textContent = 'no-header: ' + (modalNoHeader ? 'on' : 'off');
+      document.getElementById('gallery-modal').noHeader = modalNoHeader;
+    });
+    document.getElementById('modal-no-footer').addEventListener('click', () => {
+      modalNoFooter = !modalNoFooter;
+      document.getElementById('modal-no-footer').textContent = 'no-footer: ' + (modalNoFooter ? 'on' : 'off');
+      document.getElementById('gallery-modal').noFooter = modalNoFooter;
+    });
+    document.getElementById('modal-no-anim').addEventListener('click', () => {
+      modalNoAnim = !modalNoAnim;
+      document.getElementById('modal-no-anim').textContent = 'no-anim: ' + (modalNoAnim ? 'on' : 'off');
+      document.getElementById('gallery-modal').noAnimation = modalNoAnim;
+    });
+
+    // Tiles editable toggle
+    let tilesEditable = false;
+    document.getElementById('tiles-edit').addEventListener('click', () => {
+      tilesEditable = !tilesEditable;
+      document.getElementById('tiles-edit').textContent = 'editable: ' + (tilesEditable ? 'on' : 'off');
+      document.getElementById('gallery-tiles').editable = tilesEditable;
+    });
+
+    // Carousel controls
+    document.querySelectorAll('#carousel-controls button[data-visible]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#carousel-controls button[data-visible]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-carousel').visible = Number(btn.dataset.visible);
+      });
+    });
+    let carouselLoop = false;
+    document.getElementById('carousel-loop').addEventListener('click', () => {
+      carouselLoop = !carouselLoop;
+      document.getElementById('carousel-loop').textContent = 'loop: ' + (carouselLoop ? 'on' : 'off');
+      document.getElementById('gallery-carousel').loop = carouselLoop;
+    });
+    let carouselFade = false;
+    document.getElementById('carousel-fade').addEventListener('click', () => {
+      carouselFade = !carouselFade;
+      document.getElementById('carousel-fade').textContent = 'fade: ' + (carouselFade ? 'on' : 'off');
+      document.getElementById('gallery-carousel').transition = carouselFade ? 'fade' : 'slide';
+    });
+
+    // Chart type switching
+    document.querySelectorAll('#chart-controls button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#chart-controls button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('gallery-chart').type = btn.dataset.type;
+      });
+    });
+
+    // Toast triggers (delegated)
+    import("/shared/components/toast.js").then(({ BuiltinToast }) => {
+      document.getElementById('toast-card')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-toast]');
+        if (!btn) return;
+        BuiltinToast.show(btn.dataset.message || '', {
+          type: btn.dataset.toast,
+          solid: btn.dataset.solid === '1',
+        });
+      });
+    });
+
+    // Modal open / close
+    document.getElementById('modal-open-btn')?.addEventListener('click', () => {
+      document.getElementById('gallery-modal').openModal();
+    });
+    document.querySelectorAll('#gallery-modal [data-modal-close]').forEach((btn) => {
+      btn.addEventListener('click', () => document.getElementById('gallery-modal').close());
+    });
+
+    // Confirm trigger
+    import("/shared/components/confirm.js").then(({ BuiltinConfirm }) => {
+      document.getElementById('confirm-open-btn')?.addEventListener('click', async () => {
+        const result = document.getElementById('confirm-result');
+        const ok = await BuiltinConfirm.show({
+          title: 'Are you sure?',
+          message: 'This action cannot be undone.',
+          confirmLabel: 'Yes, proceed',
+          cancelLabel: 'Cancel',
+        });
+        result.textContent = ok ? 'Confirmed!' : 'Cancelled.';
+        result.style.color = ok ? 'var(--builtin-primary, #2563eb)' : 'var(--gallery-muted)';
+      });
+    });
+
+    // Drawer triggers (delegated)
+    document.getElementById('drawer-card')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-drawer]');
+      if (!btn) return;
+      const el = document.getElementById('gallery-drawer');
+      el.placement = btn.dataset.drawer;
+      el.openDrawer();
+    });
+
+    // Template preview removed: visit /pages/ for full-page demos.
+
+    // Listen for theme toggle to update CSS variables on :root
+    document.addEventListener('builtin-theme-change', (e) => {
+      const dark = e.detail.dark;
+      document.documentElement.style.setProperty('--gallery-bg', dark ? '#111827' : '#f3f4f6');
+      document.documentElement.style.setProperty('--gallery-surface', dark ? '#1f2937' : '#ffffff');
+      document.documentElement.style.setProperty('--gallery-border', dark ? '#374151' : '#e5e7eb');
+      document.documentElement.style.setProperty('--gallery-text', dark ? '#e5e7eb' : '#111827');
+      document.documentElement.style.setProperty('--gallery-muted', dark ? '#9ca3af' : '#6b7280');
+    });
+  </script>
+</body>
+</html>

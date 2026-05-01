@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-commerce Product Grid</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-ecommerce-product-grid id="product-grid" title="New Arrivals" products='[
+    {"title":"Leather Jacket","price":"$189","oldPrice":"$249","image":"https://picsum.photos/seed/p1/280/280","category":"Clothing","gender":"men","onSale":true,"createdAt":"2026-04-20"},
+    {"title":"Running Shoes","price":"$129","image":"https://picsum.photos/seed/p2/280/280","category":"Shoes","gender":"men","onSale":false,"createdAt":"2026-04-18"},
+    {"title":"Canvas Backpack","price":"$79","oldPrice":"$99","image":"https://picsum.photos/seed/p3/280/280","category":"Accessories","gender":"unisex","onSale":true,"createdAt":"2026-04-16"},
+    {"title":"Smart Watch","price":"$199","image":"https://picsum.photos/seed/p4/280/280","category":"Accessories","gender":"unisex","onSale":false,"createdAt":"2026-04-14"},
+    {"title":"Silk Blouse","price":"$96","image":"https://picsum.photos/seed/p5/280/280","category":"Clothing","gender":"women","onSale":false,"createdAt":"2026-04-22"},
+    {"title":"Court Sneakers","price":"$88","oldPrice":"$120","image":"https://picsum.photos/seed/p6/280/280","category":"Shoes","gender":"women","onSale":true,"createdAt":"2026-04-21"},
+    {"title":"Weekender Tote","price":"$145","image":"https://picsum.photos/seed/p7/280/280","category":"Accessories","gender":"women","onSale":false,"createdAt":"2026-04-15"},
+    {"title":"Oxford Shirt","price":"$64","image":"https://picsum.photos/seed/p8/280/280","category":"Clothing","gender":"men","onSale":false,"createdAt":"2026-04-13"}
+  ]' filters='[
+    {"key":"gender","labelKey":"grid.gender","options":[{"value":"men","labelKey":"grid.men"},{"value":"women","labelKey":"grid.women"},{"value":"unisex","labelKey":"grid.unisex"}]},
+    {"key":"category","labelKey":"grid.category","options":[{"value":"Clothing","labelKey":"grid.clothing"},{"value":"Shoes","labelKey":"grid.shoes"},{"value":"Accessories","labelKey":"grid.accessories"}]},
+    {"key":"price","labelKey":"grid.price","options":[{"value":"under-50","labelKey":"grid.under50"},{"value":"50-100","labelKey":"grid.50to100"},{"value":"100-200","labelKey":"grid.100to200"},{"value":"over-200","labelKey":"grid.over200"}]}
+  ]'>
+    <div slot="navbar"><builtin-navbar id="shop-nav" brand="Shopify" items='[{"label":"All","href":"#all"},{"label":"Men","href":"#men"},{"label":"Women","href":"#women"},{"label":"Sale","href":"#sale"}]'></builtin-navbar></div>
+  </builtin-tpl-ecommerce-product-grid>
+  <script>
+    (function () {
+      const nav = document.getElementById("shop-nav");
+      const grid = document.getElementById("product-grid");
+      const labels = {
+        en: {
+          title: "New Arrivals",
+          nav: ["All", "Men", "Women", "Sale"],
+        },
+        zh: {
+          title: "新品上架",
+          nav: ["全部", "男装", "女装", "折扣"],
+        },
+      };
+      function lang() {
+        const value = window.ProjectGalleryShell?.getGalleryLang?.() || document.documentElement.lang || "en";
+        return String(value).toLowerCase().startsWith("zh") ? "zh" : "en";
+      }
+      function applyText() {
+        const dict = labels[lang()] || labels.en;
+        grid.title = dict.title;
+        nav.items = [
+          { label: dict.nav[0], href: "#all" },
+          { label: dict.nav[1], href: "#men" },
+          { label: dict.nav[2], href: "#women" },
+          { label: dict.nav[3], href: "#sale" },
+        ];
+      }
+      applyText();
+      document.addEventListener("builtin-lang-change", applyText);
+      document.addEventListener("builtin-gallery-lang-change", applyText);
+    })();
+  </script>
+</body>
+</html>

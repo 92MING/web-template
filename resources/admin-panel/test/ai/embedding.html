@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Embedding 向量化</title>
+<link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+<script src="/html-assets/js/ai-test-shared.js"></script>
+<style>
+    body { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f8fafc; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    .spinner-dark { border-color: rgba(99,102,241,0.2); border-top-color: #6366f1; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    textarea:focus, select:focus, input:focus { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .vector-preview { font-family: 'Fira Code', 'Consolas', monospace; font-size: 12px; }
+    .sim-cell { transition: all 0.15s ease; min-width: 56px; min-height: 40px; }
+    .canvas-pca { width: 100%; height: 360px; border-radius: 8px; background: #1e1b4b; }
+    .expand-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+    .expand-content.open { max-height: 600px; overflow-y: auto; }
+    .tab-btn { transition: all 0.15s ease; cursor: pointer; }
+    .tab-btn.active { background: #4f46e5; color: white; }
+    .tab-btn:not(.active):hover { background: #e0e7ff; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .rank-bar { height: 8px; border-radius: 4px; transition: width 0.6s ease-out; background: linear-gradient(90deg, #818cf8, #6366f1); }
+    .chunk-card { border-left: 4px solid #6366f1; transition: all 0.15s ease; }
+    .chunk-card:hover { border-left-color: #4f46e5; box-shadow: 0 2px 8px rgba(99,102,241,0.12); }
+    .diversity-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .cache-stat { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); }
+
+        body { font-family: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", system-ui, -apple-system, sans-serif; background: #edf2f6; color: #142033; }
+        .fade-in { animation: none; }
+    .spinner { border-color: rgba(36,85,122,.18); border-top-color: #24557a; animation-duration: .9s; }
+    .spinner-dark { border-color: rgba(36,85,122,.18); border-top-color: #24557a; }
+        textarea:focus, select:focus, input:focus { box-shadow: 0 0 0 3px rgba(36,85,122,.12); border-color: #24557a; }
+    .sim-cell, .expand-content, .tab-btn, .rank-bar, .chunk-card { transition: none; }
+        .canvas-pca { border-radius: 10px; background: #f5f7fa; border: 1px solid #d7dee8; }
+        .tab-btn.active { background: #24557a; color: #fff; }
+        .tab-btn:not(.active):hover { background: #eef3f7; }
+        .rank-bar { background: #24557a; }
+        .chunk-card { border-left: 3px solid #9aa9b8; }
+        .chunk-card:hover { border-left-color: #24557a; box-shadow: none; background: #f7f9fb; }
+        .cache-stat { background: #f5f7fa; }
+        header { box-shadow: none !important; }
+        .bg-white { background: #fff !important; }
+        .bg-gray-50, .bg-gray-100 { background: #f5f7fa !important; }
+        .bg-indigo-50 { background: #eef3f7 !important; }
+        .bg-purple-50 { background: #f5f7fa !important; }
+        .bg-red-50 { background: #fff5f4 !important; }
+        .border-gray-200, .border-gray-300, .border-sky-200, .border-red-200, .border-indigo-100, .border-indigo-200, .border-purple-200 { border-color: #d7dee8 !important; }
+        .shadow-sm { box-shadow: none !important; }
+        .rounded-xl { border-radius: 10px !important; }
+        .rounded-lg { border-radius: 8px !important; }
+        .text-indigo-600, .text-indigo-700 { color: #24557a !important; }
+        .text-green-600 { color: #1f6b42 !important; }
+        .bg-indigo-600 { background: #24557a !important; }
+        .bg-purple-600 { background: #53667c !important; }
+        .hover\:bg-indigo-700:hover { background: #1f4868 !important; }
+        .hover\:bg-purple-700:hover { background: #44576c !important; }
+        .hover\:bg-gray-200:hover, .hover\:bg-gray-50:hover { background: #eef3f7 !important; }
+        .hover\:bg-red-100:hover { background: #fdeceb !important; }
+
+        /* Fill panel iframe width when embedded, keep centered layout for standalone page. */
+        body[data-proj-embedded="1"] .max-w-6xl.mx-auto {
+            max-width: none !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: 100%;
+        }
+</style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="/admin/test/ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                AI 测试
+            </a>
+            <div class="h-5 w-px bg-gray-300"></div>
+            <h1 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                Embedding 向量化
+            </h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="loadCacheStats()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-300 transition-colors flex items-center gap-1" title="查看缓存状态">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                缓存
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Cache Info Bar (hidden initially) -->
+<div id="cacheBar" class="hidden border-b border-sky-200">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between cache-stat">
+        <div class="flex items-center gap-6 text-sm">
+            <span class="text-sky-700 font-medium">缓存状态</span>
+            <span class="text-gray-600">条目: <strong id="cacheCount" class="text-sky-700">-</strong></span>
+            <span class="text-gray-600">上限: <strong id="cacheMax" class="text-sky-700">-</strong></span>
+            <span class="text-gray-500 text-xs truncate max-w-xs" id="cacheDbPath" title=""></span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="clearCache()" class="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-medium border border-red-200 transition-colors">清空缓存</button>
+            <button onclick="document.getElementById('cacheBar').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="max-w-6xl mx-auto px-6 pt-6">
+    <div class="flex gap-1 bg-gray-100 rounded-xl p-1">
+        <button class="tab-btn active flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold" onclick="switchTab('embed')">向量嵌入</button>
+        <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold" onclick="switchTab('rerank')">相似排序</button>
+        <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold" onclick="switchTab('chunking')">文本分块</button>
+        <button class="tab-btn flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold" onclick="switchTab('diversity')">多样性选择</button>
+    </div>
+</div>
+
+<main class="max-w-6xl mx-auto px-6 py-6">
+
+    <section class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
+        <div class="flex flex-wrap items-end gap-3">
+            <div class="min-w-[200px] flex-1">
+                <label class="block text-xs font-medium text-gray-600 mb-1" for="serviceInstanceSelect">Service Instance</label>
+                <select id="serviceInstanceSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
+                    <option value="default">default</option>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 1: Embedding -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div id="tab-embed" class="tab-panel active space-y-6">
+
+        <!-- Input Area -->
+        <section class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">输入文本 <span class="text-gray-400 font-normal normal-case">(每行一条)</span></h2>
+                <span id="lineCount" class="text-xs text-gray-400 font-mono">0 条文本</span>
+            </div>
+            <textarea id="inputTexts" rows="6" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 resize-vertical transition-shadow placeholder-gray-400 leading-relaxed" placeholder="每行输入一条文本，例如：&#10;猫是一种可爱的动物&#10;狗是人类最好的朋友&#10;量子计算是未来的技术方向"></textarea>
+
+            <div class="mt-3 flex flex-wrap gap-4 text-sm text-gray-600">
+                <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input id="embedUseCache" type="checkbox" checked class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <span>读取缓存</span>
+                </label>
+                <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input id="embedSaveCache" type="checkbox" checked class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <span>写入缓存</span>
+                </label>
+            </div>
+
+            <div class="flex items-center justify-end mt-4">
+                <button id="embedBtn" onclick="embed()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg font-semibold text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    <span id="btnText">生成向量</span>
+                    <span id="btnSpinner" class="spinner hidden"></span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Error Display -->
+        <div id="errorBox" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm fade-in">
+            <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="errorMsg"></span>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <section id="statsSection" class="hidden fade-in">
+            <div class="grid grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-indigo-600" id="statDims">-</p>
+                    <p class="text-xs text-gray-500 mt-1">向量维度</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-indigo-600" id="statTexts">-</p>
+                    <p class="text-xs text-gray-500 mt-1">文本数量</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-indigo-600" id="statTime">-</p>
+                    <p class="text-xs text-gray-500 mt-1">计算时间</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-green-600" id="statCacheHint">-</p>
+                    <p class="text-xs text-gray-500 mt-1">缓存命中</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Display -->
+        <section id="resultsSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">向量结果</h2>
+                <button onclick="copyVectorsJSON()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-300 transition-colors flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                    <span id="copyBtnLabel">复制 JSON</span>
+                </button>
+            </div>
+            <div id="resultsList" class="space-y-3"></div>
+        </section>
+
+        <!-- Similarity Calculator -->
+        <section id="simCalcSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">相似度计算</h2>
+            <div class="flex items-end gap-3 flex-wrap">
+                <div class="flex-1 min-w-[140px]">
+                    <label class="block text-xs text-gray-500 mb-1">文本 A</label>
+                    <select id="simSelectA" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white" onchange="calcPairSim()"></select>
+                </div>
+                <div class="flex-shrink-0 pb-2">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                </div>
+                <div class="flex-1 min-w-[140px]">
+                    <label class="block text-xs text-gray-500 mb-1">文本 B</label>
+                    <select id="simSelectB" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white" onchange="calcPairSim()"></select>
+                </div>
+                <div class="flex-shrink-0 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 min-w-[100px] text-center">
+                    <p class="text-xs text-indigo-500">余弦相似度</p>
+                    <p class="text-xl font-bold text-indigo-700" id="pairSimValue">-</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Similarity Matrix -->
+        <section id="matrixSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">相似度矩阵</h2>
+            <div class="overflow-x-auto">
+                <div id="matrixContainer"></div>
+            </div>
+        </section>
+
+        <!-- PCA Visualization -->
+        <section id="pcaSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">2D 向量投影 (PCA)</h2>
+            <canvas id="pcaCanvas" class="canvas-pca"></canvas>
+        </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 2: Rerank -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div id="tab-rerank" class="tab-panel space-y-6">
+
+        <section class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">基于嵌入的相似排序</h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">查询文本 (Query)</label>
+                    <input id="rerankQuery" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 transition-shadow placeholder-gray-400" placeholder="输入查询文本...">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-medium text-gray-600">候选文本 <span class="text-gray-400 font-normal">(每行一条)</span></label>
+                        <span id="rerankCandCount" class="text-xs text-gray-400 font-mono">0 条</span>
+                    </div>
+                    <textarea id="rerankCandidates" rows="6" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 resize-vertical transition-shadow placeholder-gray-400 leading-relaxed" placeholder="每行一条候选文本..."></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button id="rerankBtn" onclick="doRerank()" class="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white rounded-lg font-semibold text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                        <span id="rerankBtnText">执行排序</span>
+                        <span id="rerankBtnSpinner" class="spinner hidden"></span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Rerank Error -->
+        <div id="rerankErrorBox" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm fade-in">
+            <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="rerankErrorMsg"></span>
+            </div>
+        </div>
+
+        <!-- Rerank Result -->
+        <section id="rerankResultSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">排序结果</h2>
+                <span id="rerankElapsed" class="text-xs text-gray-400 font-mono"></span>
+            </div>
+            <div id="rerankResultList" class="space-y-3"></div>
+        </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 3: Chunking -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div id="tab-chunking" class="tab-panel space-y-6">
+
+        <section class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">文本分块嵌入</h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">长文本内容</label>
+                    <textarea id="chunkContent" rows="8" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 resize-vertical transition-shadow placeholder-gray-400 leading-relaxed" placeholder="粘贴或输入要分块的长文本..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">最大块长 (估算词数)</label>
+                        <input id="chunkMaxWordCount" type="number" value="512" min="16" max="8192" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800">
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input id="chunkUseCache" type="checkbox" checked class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span>读取缓存</span>
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input id="chunkSaveCache" type="checkbox" checked class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                        <span>写入缓存</span>
+                    </label>
+                </div>
+                <div class="flex justify-end">
+                    <button id="chunkBtn" onclick="doChunking()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-semibold text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z"/></svg>
+                        <span id="chunkBtnText">分块并嵌入</span>
+                        <span id="chunkBtnSpinner" class="spinner hidden"></span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chunking Error -->
+        <div id="chunkErrorBox" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm fade-in">
+            <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="chunkErrorMsg"></span>
+            </div>
+        </div>
+
+        <!-- Chunking Stats -->
+        <section id="chunkStatsSection" class="hidden fade-in">
+            <div class="grid grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-emerald-600" id="chunkStatTotal">-</p>
+                    <p class="text-xs text-gray-500 mt-1">分块数</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-emerald-600" id="chunkStatAvg">-</p>
+                    <p class="text-xs text-gray-500 mt-1">平均字符</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-emerald-600" id="chunkStatDims">-</p>
+                    <p class="text-xs text-gray-500 mt-1">向量维度</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+                    <p class="text-2xl font-bold text-emerald-600" id="chunkStatTime">-</p>
+                    <p class="text-xs text-gray-500 mt-1">计算时间</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chunking Results -->
+        <section id="chunkResultSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">分块结果</h2>
+            <div id="chunkResultList" class="space-y-3"></div>
+        </section>
+
+        <!-- Chunk Similarity Matrix -->
+        <section id="chunkMatrixSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">分块间相似度矩阵</h2>
+            <div class="overflow-x-auto">
+                <div id="chunkMatrixContainer"></div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 4: Diversity Rerank -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div id="tab-diversity" class="tab-panel space-y-6">
+
+        <section class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">多样性选择</h2>
+
+            <div class="space-y-4">
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-medium text-gray-600">候选文本 <span class="text-gray-400 font-normal">(每行一条)</span></label>
+                        <span id="divCandCount" class="text-xs text-gray-400 font-mono">0 条</span>
+                    </div>
+                    <textarea id="divCandidates" rows="8" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 resize-vertical transition-shadow placeholder-gray-400 leading-relaxed" placeholder="每行一条候选文本..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">选取数量 (top_k)</label>
+                        <input id="divTopK" type="number" value="" min="1" max="999" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800" placeholder="留空 = 全部重排">
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button id="divBtn" onclick="doDiversity()" class="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-lg font-semibold text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                        <span id="divBtnText">多样性选择</span>
+                        <span id="divBtnSpinner" class="spinner hidden"></span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Diversity Error -->
+        <div id="divErrorBox" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm fade-in">
+            <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="divErrorMsg"></span>
+            </div>
+        </div>
+
+        <!-- Diversity Results -->
+        <section id="divResultSection" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-5 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">多样性排序结果</h2>
+                <span id="divElapsed" class="text-xs text-gray-400 font-mono"></span>
+            </div>
+            <div id="divResultList" class="space-y-3"></div>
+        </section>
+
+    </div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Global state
+// ═══════════════════════════════════════════════════════════════════════════
+let texts = [], vectors = [];
+let chunkResults = [];
+const serviceInstanceSelect = document.getElementById('serviceInstanceSelect');
+
+AITestShared.loadServiceInstances('embedding', serviceInstanceSelect);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab management
+// ═══════════════════════════════════════════════════════════════════════════
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        const tabs = ['embed', 'rerank', 'chunking', 'diversity'];
+        btn.classList.toggle('active', tabs[i] === name);
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById(`tab-${name}`);
+    if (panel) panel.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cache management
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadCacheStats() {
+    try {
+        const res = await fetch('/ai/embedding/cache-stats');
+        const data = await res.json();
+        document.getElementById('cacheCount').textContent = data.count ?? '-';
+        document.getElementById('cacheMax').textContent = data.max_entries ?? '-';
+        const pathEl = document.getElementById('cacheDbPath');
+        pathEl.textContent = data.db_path || '';
+        pathEl.title = data.db_path || '';
+        document.getElementById('cacheBar').classList.remove('hidden');
+    } catch (e) {
+        alert('获取缓存状态失败: ' + e.message);
+    }
+}
+
+async function clearCache() {
+    if (!confirm('确定要清空所有嵌入缓存吗？')) return;
+    try {
+        const res = await fetch('/ai/embedding/cache-clear', { method: 'POST' });
+        const data = await res.json();
+        alert(`已删除 ${data.deleted} 条缓存`);
+        loadCacheStats();
+    } catch (e) {
+        alert('清空缓存失败: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 1: Embedding
+// ═══════════════════════════════════════════════════════════════════════════
+const inputTexts = document.getElementById('inputTexts');
+const lineCount = document.getElementById('lineCount');
+
+inputTexts.addEventListener('input', () => {
+    const lines = inputTexts.value.split('\n').filter(l => l.trim());
+    lineCount.textContent = `${lines.length} 条文本`;
+});
+
+const QUICK_TESTS = {
+    similarity: ['猫是一种可爱的动物', '小猫咪非常讨人喜欢', '狗是人类最好的朋友', '量子计算是前沿科技', '今天天气真不错'],
+    multilang: ['人工智能改变了世界', 'Artificial intelligence changed the world', '人工知能が世界を変えた', '인공지능이 세상을 바꿨다', 'La inteligencia artificial cambió el mundo'],
+    categories: ['苹果是一种常见的水果', '香蕉富含钾元素', 'Python是流行的编程语言', 'JavaScript用于网页开发', '地球绕太阳公转一周需要一年'],
+    trad_simp: ['機器學習是人工智慧的一個分支', '机器学习是人工智能的一个分支', '計算機視覺讓機器看見世界', '计算机视觉让机器看见世界', '深度學習改變了自然語言處理', '深度学习改变了自然语言处理'],
+};
+
+function setQuickTest(type) {
+    inputTexts.value = QUICK_TESTS[type].join('\n');
+    lineCount.textContent = `${QUICK_TESTS[type].length} 条文本`;
+    inputTexts.focus();
+}
+
+function showError(msg) {
+    document.getElementById('errorMsg').textContent = msg;
+    document.getElementById('errorBox').classList.remove('hidden');
+    setTimeout(() => document.getElementById('errorBox').classList.add('hidden'), 8000);
+}
+function hideError() { document.getElementById('errorBox').classList.add('hidden'); }
+
+async function embed() {
+    const raw = inputTexts.value.trim();
+    if (!raw) { showError('请输入至少一条文本'); return; }
+    texts = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!texts.length) { showError('请输入至少一条文本'); return; }
+    const useCache = document.getElementById('embedUseCache').checked;
+    const saveCache = document.getElementById('embedSaveCache').checked;
+
+    hideError();
+    const btn = document.getElementById('embedBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+    btn.disabled = true; btnText.textContent = '生成中...'; btnSpinner.classList.remove('hidden');
+    const startTime = performance.now();
+
+    try {
+        const payload = texts.length === 1
+            ? { text: texts[0], use_cache: useCache, save_cache: saveCache, service_key: serviceInstanceSelect.value || 'default' }
+            : { texts, use_cache: useCache, save_cache: saveCache, service_key: serviceInstanceSelect.value || 'default' };
+        const res = await fetch('/ai/embedding', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => null);
+            throw new Error(errData?.detail || errData?.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (Array.isArray(data.vector)) {
+            vectors = [data.vector];
+        } else if (Array.isArray(data.vectors)) {
+            vectors = data.vectors;
+        } else {
+            throw new Error('响应中缺少 vector 或 vectors 字段');
+        }
+
+        const clientElapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+        const serverElapsed = data.elapsed_ms ? `${data.elapsed_ms}ms` : '-';
+
+        document.getElementById('statDims').textContent = vectors[0]?.length || '-';
+        document.getElementById('statTexts').textContent = texts.length;
+        document.getElementById('statTime').textContent = serverElapsed;
+        document.getElementById('statCacheHint').textContent = `${clientElapsed}s`;
+        document.getElementById('statsSection').classList.remove('hidden');
+
+        renderResults(); renderSimCalc();
+        if (texts.length >= 2) renderMatrix();
+        if (texts.length >= 3) renderPCA();
+    } catch (err) {
+        showError(`生成失败: ${err.message}`);
+    } finally {
+        btn.disabled = false; btnText.textContent = '生成向量'; btnSpinner.classList.add('hidden');
+    }
+}
+
+function renderResults() {
+    const section = document.getElementById('resultsSection');
+    const list = document.getElementById('resultsList');
+    section.classList.remove('hidden');
+    list.innerHTML = texts.map((text, i) => {
+        const vec = vectors[i];
+        const preview = vec.slice(0, 8).map(v => v.toFixed(4)).join(', ');
+        const full = vec.map(v => v.toFixed(6)).join(', ');
+        return `
+        <div class="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="flex-shrink-0 w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">${i + 1}</span>
+                        <p class="text-sm text-gray-800 truncate">${escapeHtml(text)}</p>
+                    </div>
+                    <p class="text-xs text-gray-400 ml-8">${vec.length} 维</p>
+                </div>
+                <button onclick="toggleExpand(${i})" class="flex-shrink-0 text-xs text-indigo-500 hover:text-indigo-700 font-medium mt-1" id="expandBtn${i}">展开</button>
+            </div>
+            <div class="ml-8 mt-2"><code class="vector-preview text-gray-500">[${preview}, ...]</code></div>
+            <div class="expand-content ml-8 mt-2" id="expandContent${i}">
+                <pre class="vector-preview text-gray-500 bg-gray-50 rounded p-3 text-xs overflow-x-auto whitespace-pre-wrap break-all">[${full}]</pre>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleExpand(i) {
+    const c = document.getElementById(`expandContent${i}`);
+    const b = document.getElementById(`expandBtn${i}`);
+    const isOpen = c.classList.contains('open');
+    c.classList.toggle('open'); b.textContent = isOpen ? '展开' : '收起';
+}
+
+function renderSimCalc() {
+    if (texts.length < 2) { document.getElementById('simCalcSection').classList.add('hidden'); return; }
+    document.getElementById('simCalcSection').classList.remove('hidden');
+    const opts = texts.map((t, i) => `<option value="${i}">${i + 1}. ${escapeHtml(t.slice(0, 30))}${t.length > 30 ? '...' : ''}</option>`).join('');
+    document.getElementById('simSelectA').innerHTML = opts;
+    document.getElementById('simSelectB').innerHTML = opts;
+    if (texts.length > 1) document.getElementById('simSelectB').selectedIndex = 1;
+    calcPairSim();
+}
+
+function calcPairSim() {
+    const a = parseInt(document.getElementById('simSelectA').value);
+    const b = parseInt(document.getElementById('simSelectB').value);
+    if (isNaN(a) || isNaN(b) || !vectors[a] || !vectors[b]) return;
+    document.getElementById('pairSimValue').textContent = cosineSimilarity(vectors[a], vectors[b]).toFixed(4);
+}
+
+function renderMatrix() {
+    document.getElementById('matrixSection').classList.remove('hidden');
+    _renderMatrixInto('matrixContainer', texts, vectors);
+}
+
+function _renderMatrixInto(containerId, labels, vecs) {
+    const container = document.getElementById(containerId);
+    const n = labels.length;
+    const simMatrix = Array.from({length: n}, (_, i) => Array.from({length: n}, (_, j) => cosineSimilarity(vecs[i], vecs[j])));
+
+    let html = '<table class="border-collapse mx-auto"><tr><td class="p-1"></td>';
+    for (let j = 0; j < n; j++) html += `<td class="p-1 text-center"><span class="text-xs font-bold text-gray-600 block w-14 truncate" title="${escapeHtml(labels[j])}">${j + 1}</span></td>`;
+    html += '</tr>';
+    for (let i = 0; i < n; i++) {
+        html += `<tr><td class="p-1 text-right pr-2"><span class="text-xs font-bold text-gray-600" title="${escapeHtml(labels[i])}">${i + 1}</span></td>`;
+        for (let j = 0; j < n; j++) {
+            const val = simMatrix[i][j];
+            const color = simColor(val);
+            const tc = val > 0.7 ? '#fff' : val < 0.3 ? '#fff' : '#1e1b4b';
+            html += `<td class="p-1"><div class="sim-cell rounded flex items-center justify-center text-xs font-mono font-medium" style="background:${color};color:${tc}" title="${escapeHtml(labels[i])} ↔ ${escapeHtml(labels[j])}">${val.toFixed(2)}</div></td>`;
+        }
+        html += '</tr>';
+    }
+    html += '</table>';
+    html += '<div class="flex items-center justify-center gap-4 mt-3 text-xs text-gray-500 flex-wrap">';
+    for (let i = 0; i < n; i++) html += `<span><strong class="text-indigo-700">${i + 1}</strong> = ${escapeHtml(labels[i].slice(0, 20))}${labels[i].length > 20 ? '...' : ''}</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function simColor(val) {
+    const c = Math.max(0, Math.min(1, val));
+    if (c >= 0.5) { const t = (c - 0.5) * 2; return `rgb(${Math.round(234-t*194)},${Math.round(179+t*50)},${Math.round(8+t*60)})`; }
+    else { const t = c * 2; return `rgb(${Math.round(220+t*14)},${Math.round(38+t*141)},${Math.round(38-t*30)})`; }
+}
+
+function renderPCA() {
+    if (vectors.length < 3) { document.getElementById('pcaSection').classList.add('hidden'); return; }
+    document.getElementById('pcaSection').classList.remove('hidden');
+    _drawPCA('pcaCanvas', texts, vectors);
+}
+
+function _drawPCA(canvasId, labels, vecs) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr; canvas.height = canvas.clientHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const W = canvas.clientWidth, H = canvas.clientHeight, PAD = 50;
+    const n = vecs.length, d = vecs[0].length;
+    const mean = new Array(d).fill(0);
+    for (const v of vecs) for (let i = 0; i < d; i++) mean[i] += v[i] / n;
+    const centered = vecs.map(v => v.map((val, i) => val - mean[i]));
+    const projected = simplePCA2D(centered);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of projected) { if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0]; if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1]; }
+    const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+    ctx.fillStyle = '#1e1b4b'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(99,102,241,0.15)'; ctx.lineWidth = 1;
+    for (let gx = PAD; gx <= W - PAD; gx += (W - 2 * PAD) / 4) { ctx.beginPath(); ctx.moveTo(gx, PAD); ctx.lineTo(gx, H - PAD); ctx.stroke(); }
+    for (let gy = PAD; gy <= H - PAD; gy += (H - 2 * PAD) / 4) { ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W - PAD, gy); ctx.stroke(); }
+    ctx.fillStyle = '#6366f1'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('PC1', W / 2, H - 12);
+    ctx.save(); ctx.translate(14, H / 2); ctx.rotate(-Math.PI / 2); ctx.fillText('PC2', 0, 0); ctx.restore();
+    const COLORS = ['#818cf8', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#a78bfa', '#22d3ee', '#f87171', '#a3e635', '#e879f9'];
+    for (let i = 0; i < projected.length; i++) {
+        const x = PAD + ((projected[i][0] - minX) / rangeX) * (W - 2 * PAD);
+        const y = PAD + ((projected[i][1] - minY) / rangeY) * (H - 2 * PAD);
+        const color = COLORS[i % COLORS.length];
+        ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fillStyle = color + '33'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#e0e7ff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(`${i + 1}. ${labels[i].slice(0, 15)}${labels[i].length > 15 ? '...' : ''}`, x + 14, y + 4);
+    }
+}
+
+function simplePCA2D(centered) {
+    const n = centered.length, d = centered[0].length;
+    function powerIteration(mat, deflateVec) {
+        let v = new Array(d); for (let i = 0; i < d; i++) v[i] = Math.random() - 0.5;
+        let cmat = mat;
+        if (deflateVec) { cmat = mat.map(row => { const proj = dot(row, deflateVec); return row.map((val, i) => val - proj * deflateVec[i]); }); }
+        for (let iter = 0; iter < 100; iter++) {
+            const Xv = cmat.map(row => dot(row, v));
+            const w = new Array(d).fill(0);
+            for (let i = 0; i < n; i++) for (let j = 0; j < d; j++) w[j] += cmat[i][j] * Xv[i];
+            const norm = Math.sqrt(w.reduce((s, x) => s + x * x, 0)) || 1;
+            v = w.map(x => x / norm);
+        }
+        return v;
+    }
+    const pc1 = powerIteration(centered, null);
+    const pc2 = powerIteration(centered, pc1);
+    return centered.map(row => [dot(row, pc1), dot(row, pc2)]);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 2: Rerank
+// ═══════════════════════════════════════════════════════════════════════════
+const rerankCandEl = document.getElementById('rerankCandidates');
+rerankCandEl.addEventListener('input', () => {
+    document.getElementById('rerankCandCount').textContent = `${rerankCandEl.value.split('\n').filter(l => l.trim()).length} 条`;
+});
+
+const RERANK_QUICK = {
+    qa: {
+        query: '如何提高程序性能？',
+        candidates: ['使用缓存减少重复计算', '优化算法复杂度', '今天天气不错', '使用多线程并行处理', '猫和狗是常见的宠物', '减少不必要的 IO 操作', '数据库索引可以加速查询']
+    },
+    semantic: {
+        query: '机器学习入门',
+        candidates: ['深度学习基础教程', '烹饪技巧分享', 'Python 机器学习实战', '自然语言处理概述', '健身房锻炼方案', '神经网络原理讲解', '旅游攻略推荐', '统计学基础知识']
+    }
+};
+
+function setRerankQuick(type) {
+    const q = RERANK_QUICK[type];
+    document.getElementById('rerankQuery').value = q.query;
+    rerankCandEl.value = q.candidates.join('\n');
+    document.getElementById('rerankCandCount').textContent = `${q.candidates.length} 条`;
+}
+
+async function doRerank() {
+    const query = document.getElementById('rerankQuery').value.trim();
+    const candsRaw = rerankCandEl.value.trim();
+    if (!query) { showRerankError('请输入查询文本'); return; }
+    if (!candsRaw) { showRerankError('请输入候选文本'); return; }
+    const candidates = candsRaw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!candidates.length) { showRerankError('请输入至少一条候选文本'); return; }
+
+    hideRerankError();
+    setLoading('rerank', true);
+
+    try {
+        const res = await fetch('/ai/embedding/rerank', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, candidates, service_key: serviceInstanceSelect.value || 'default' })
+        });
+        if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.detail || `HTTP ${res.status}`); }
+        const data = await res.json();
+
+        document.getElementById('rerankElapsed').textContent = data.elapsed_ms ? `${data.elapsed_ms}ms` : '';
+        const maxScore = Math.max(...data.items.map(it => Math.abs(it.score)), 0.001);
+        const list = document.getElementById('rerankResultList');
+        list.innerHTML = data.items.map((it, rank) => {
+            const pct = Math.max(0, (it.score / maxScore) * 100);
+            const scoreColor = it.score > 0.8 ? 'text-green-600' : it.score > 0.5 ? 'text-yellow-600' : 'text-red-500';
+            return `
+            <div class="border border-gray-100 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="flex-shrink-0 w-7 h-7 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-bold">#${rank + 1}</span>
+                    <p class="text-sm text-gray-800 flex-1">${escapeHtml(it.candidate)}</p>
+                    <span class="${scoreColor} font-mono font-bold text-sm">${it.score.toFixed(4)}</span>
+                </div>
+                <div class="ml-10">
+                    <div class="w-full bg-gray-100 rounded-full overflow-hidden h-2">
+                        <div class="rank-bar" style="width: ${pct}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">原始位置: ${it.index + 1}</p>
+                </div>
+            </div>`;
+        }).join('');
+        document.getElementById('rerankResultSection').classList.remove('hidden');
+    } catch (err) {
+        showRerankError(`排序失败: ${err.message}`);
+    } finally {
+        setLoading('rerank', false);
+    }
+}
+
+function showRerankError(msg) {
+    document.getElementById('rerankErrorMsg').textContent = msg;
+    document.getElementById('rerankErrorBox').classList.remove('hidden');
+    setTimeout(() => document.getElementById('rerankErrorBox').classList.add('hidden'), 8000);
+}
+function hideRerankError() { document.getElementById('rerankErrorBox').classList.add('hidden'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 3: Chunking
+// ═══════════════════════════════════════════════════════════════════════════
+const CHUNK_QUICK = {
+    article: `人工智能（Artificial Intelligence，简称AI）是计算机科学的一个分支，致力于研究和开发能够模拟人类智能的系统。
+
+机器学习是AI的核心技术之一。它让计算机能够从数据中学习模式，而不需要显式编程。常见的机器学习方法包括监督学习、无监督学习和强化学习。
+
+深度学习是机器学习的一个子领域，使用多层神经网络来处理复杂数据。深度学习在图像识别、自然语言处理、语音识别等领域取得了突破性成果。
+
+自然语言处理（NLP）是AI与语言学交叉的领域。它研究如何让计算机理解、生成和翻译人类语言。GPT、BERT等大型语言模型是NLP的重大突破。
+
+计算机视觉让机器能够理解和分析图像与视频。应用包括人脸识别、自动驾驶、医学影像分析等。卷积神经网络（CNN）是这个领域的基础架构。
+
+AI的伦理问题也日益受到关注。包括算法偏见、隐私保护、就业影响等方面。负责任的AI开发需要兼顾技术进步与社会影响。`,
+    faq: `Q: 什么是向量嵌入？
+A: 向量嵌入是将文本、图像等非结构化数据转换为固定维度数值向量的技术。相似的内容在向量空间中距离较近。
+
+Q: 为什么要做文本分块？
+A: 大型文档如果直接嵌入，会丢失局部语义信息。分块后每个块包含集中的主题，更有利于精确检索和匹配。
+
+Q: 块大小如何选择？
+A: 通常 256-1024 字符是一个好的范围。较小的块保留更精细的语义，较大的块包含更多上下文。需要根据具体应用场景和模型能力来调整。
+
+Q: 什么是 RAG？
+A: RAG（Retrieval-Augmented Generation）是一种将检索与生成相结合的方法。先通过向量检索找到相关文档片段，再将这些片段作为上下文提供给语言模型生成回答。
+
+Q: 嵌入缓存有什么好处？
+A: 嵌入缓存避免对相同文本重复调用嵌入API，节省计算资源和时间，特别是在文档更新频率低而查询频率高的场景下效果显著。`
+};
+
+function setChunkQuick(type) {
+    document.getElementById('chunkContent').value = CHUNK_QUICK[type];
+}
+
+async function doChunking() {
+    const content = document.getElementById('chunkContent').value.trim();
+    if (!content) { showChunkError('请输入文本内容'); return; }
+    const maxWordCount = parseInt(document.getElementById('chunkMaxWordCount').value) || 512;
+    const useCache = document.getElementById('chunkUseCache').checked;
+    const saveCache = document.getElementById('chunkSaveCache').checked;
+
+    hideChunkError();
+    setLoading('chunk', true);
+
+    try {
+        const res = await fetch('/ai/embedding/chunking', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, max_word_count: maxWordCount, use_cache: useCache, save_cache: saveCache, service_key: serviceInstanceSelect.value || 'default' })
+        });
+        if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.detail || `HTTP ${res.status}`); }
+        const data = await res.json();
+        chunkResults = data.chunks || [];
+        const elapsed = data.elapsed_ms;
+
+        // Stats
+        const avgLen = chunkResults.length ? Math.round(chunkResults.reduce((s, c) => s + c.text.length, 0) / chunkResults.length) : 0;
+        document.getElementById('chunkStatTotal').textContent = chunkResults.length;
+        document.getElementById('chunkStatAvg').textContent = avgLen;
+        document.getElementById('chunkStatDims').textContent = chunkResults[0]?.vector?.length || '-';
+        document.getElementById('chunkStatTime').textContent = elapsed ? `${elapsed}ms` : '-';
+        document.getElementById('chunkStatsSection').classList.remove('hidden');
+
+        // Render chunks
+        const list = document.getElementById('chunkResultList');
+        list.innerHTML = chunkResults.map((ch, i) => {
+            const vecPreview = ch.vector?.slice(0, 5).map(v => v.toFixed(3)).join(', ') || '';
+            return `
+            <div class="chunk-card bg-gray-50 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="flex-shrink-0 w-7 h-7 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-xs font-bold">${i + 1}</span>
+                        <span class="text-xs text-gray-400">${ch.text.length} 字符</span>
+                        <span class="text-xs text-gray-400">· offset ${ch.offset}</span>
+                    </div>
+                    <span class="text-xs text-gray-400 font-mono">${ch.vector?.length || 0}d</span>
+                </div>
+                <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap ml-9">${escapeHtml(ch.text.length > 300 ? ch.text.slice(0, 300) + '...' : ch.text)}</p>
+                <div class="ml-9 mt-2"><code class="vector-preview text-gray-400 text-xs">[${vecPreview}, ...]</code></div>
+            </div>`;
+        }).join('');
+        document.getElementById('chunkResultSection').classList.remove('hidden');
+
+        // Chunk similarity matrix
+        if (chunkResults.length >= 2 && chunkResults.length <= 20) {
+            const labels = chunkResults.map((c, i) => `块${i+1}: ${c.text.slice(0, 15)}...`);
+            const vecs = chunkResults.map(c => c.vector);
+            _renderMatrixInto('chunkMatrixContainer', labels, vecs);
+            document.getElementById('chunkMatrixSection').classList.remove('hidden');
+        } else {
+            document.getElementById('chunkMatrixSection').classList.add('hidden');
+        }
+    } catch (err) {
+        showChunkError(`分块失败: ${err.message}`);
+    } finally {
+        setLoading('chunk', false);
+    }
+}
+
+function showChunkError(msg) {
+    document.getElementById('chunkErrorMsg').textContent = msg;
+    document.getElementById('chunkErrorBox').classList.remove('hidden');
+    setTimeout(() => document.getElementById('chunkErrorBox').classList.add('hidden'), 8000);
+}
+function hideChunkError() { document.getElementById('chunkErrorBox').classList.add('hidden'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 4: Diversity Rerank
+// ═══════════════════════════════════════════════════════════════════════════
+const divCandEl = document.getElementById('divCandidates');
+divCandEl.addEventListener('input', () => {
+    document.getElementById('divCandCount').textContent = `${divCandEl.value.split('\n').filter(l => l.trim()).length} 条`;
+});
+
+const DIVERSITY_QUICK = {
+    mixed: [
+        '猫是一种可爱的宠物', '小猫咪毛茸茸的很讨喜', '深度学习改变了AI',
+        '神经网络是机器学习的基础', '今天的天气很好', '阳光明媚空气清新',
+        '量子计算可能改变密码学', '苹果是一种营养丰富的水果', '香蕉含有丰富的钾'
+    ],
+    similar: [
+        '机器学习是人工智能的一个重要分支',
+        '深度学习是机器学习中最热门的方向',
+        'AI技术正在快速发展',
+        '人工智能改变了很多行业',
+        '神经网络模型越来越复杂',
+        '计算机视觉是AI的重要应用领域',
+        '自然语言处理让机器理解人类语言',
+        '强化学习用于训练智能体'
+    ]
+};
+
+function setDiversityQuick(type) {
+    divCandEl.value = DIVERSITY_QUICK[type].join('\n');
+    document.getElementById('divCandCount').textContent = `${DIVERSITY_QUICK[type].length} 条`;
+}
+
+async function doDiversity() {
+    const candsRaw = divCandEl.value.trim();
+    if (!candsRaw) { showDivError('请输入候选文本'); return; }
+    const candidates = candsRaw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (candidates.length < 2) { showDivError('请输入至少 2 条候选文本'); return; }
+    const topKVal = document.getElementById('divTopK').value.trim();
+    const top_k = topKVal ? parseInt(topKVal) : null;
+
+    hideDivError();
+    setLoading('div', true);
+
+    try {
+        const body = { candidates };
+        if (top_k) body.top_k = top_k;
+        body.service_key = serviceInstanceSelect.value || 'default';
+        const res = await fetch('/ai/embedding/diversity', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.detail || `HTTP ${res.status}`); }
+        const data = await res.json();
+
+        document.getElementById('divElapsed').textContent = data.elapsed_ms ? `${data.elapsed_ms}ms` : '';
+        const maxDist = Math.max(...data.items.map(it => it.min_distance), 0.001);
+        const list = document.getElementById('divResultList');
+        list.innerHTML = data.items.map((it, order) => {
+            const distPct = order === 0 ? 100 : Math.max(0, (it.min_distance / maxDist) * 100);
+            const badgeColor = order === 0 ? 'bg-amber-100 text-amber-700' : it.min_distance > 0.5 ? 'bg-green-100 text-green-700' : it.min_distance > 0.2 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+            return `
+            <div class="border border-gray-100 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="flex-shrink-0 w-7 h-7 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">${order + 1}</span>
+                    <p class="text-sm text-gray-800 flex-1">${escapeHtml(it.candidate)}</p>
+                    <span class="diversity-badge ${badgeColor}">${order === 0 ? '<i class="proj-icon proj-icon-flag"></i> 起点' : `<i class="proj-icon proj-icon-arrows-lr"></i> ${it.min_distance.toFixed(3)}`}</span>
+                </div>
+                <div class="ml-10">
+                    <div class="w-full bg-gray-100 rounded-full overflow-hidden h-2">
+                        <div class="rank-bar" style="width: ${distPct}%; background: #8a611d;"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">原始位置: ${it.index + 1}</p>
+                </div>
+            </div>`;
+        }).join('');
+        document.getElementById('divResultSection').classList.remove('hidden');
+    } catch (err) {
+        showDivError(`多样性选择失败: ${err.message}`);
+    } finally {
+        setLoading('div', false);
+    }
+}
+
+function showDivError(msg) {
+    document.getElementById('divErrorMsg').textContent = msg;
+    document.getElementById('divErrorBox').classList.remove('hidden');
+    setTimeout(() => document.getElementById('divErrorBox').classList.add('hidden'), 8000);
+}
+function hideDivError() { document.getElementById('divErrorBox').classList.add('hidden'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Shared utilities
+// ═══════════════════════════════════════════════════════════════════════════
+function setLoading(prefix, loading) {
+    const btn = document.getElementById(`${prefix}Btn`);
+    const text = document.getElementById(`${prefix}BtnText`);
+    const spinner = document.getElementById(`${prefix}BtnSpinner`);
+    if (btn) btn.disabled = loading;
+    if (text) text.textContent = loading ? '处理中...' : text.dataset.orig || text.textContent;
+    if (!loading && text) text.dataset.orig = '';
+    if (loading && text) { text.dataset.orig = text.textContent.replace('处理中...', ''); }
+    if (spinner) spinner.classList.toggle('hidden', !loading);
+}
+
+function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+
+function cosineSimilarity(a, b) {
+    let dotP = 0, normA = 0, normB = 0;
+    for (let i = 0; i < a.length; i++) { dotP += a[i] * b[i]; normA += a[i] * a[i]; normB += b[i] * b[i]; }
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+    return denom === 0 ? 0 : dotP / denom;
+}
+
+function copyVectorsJSON() {
+    const data = {}; texts.forEach((t, i) => { data[t] = vectors[i]; });
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+        const label = document.getElementById('copyBtnLabel');
+        label.textContent = '已复制!'; setTimeout(() => { label.textContent = '复制 JSON'; }, 2000);
+    }).catch(() => showError('复制失败'));
+}
+
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+</script>
+</body>
+</html>

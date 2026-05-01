@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/shop.svg" type="image/svg+xml">
+<title>商家后台 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f9fafb); color: var(--builtin-color-text, #111827); }
+  .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .logout-btn {
+    padding: 6px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px);
+    background: var(--builtin-button-bg, #ffffff); color: var(--builtin-color-text, #111827); cursor: pointer; font: inherit; min-height: 34px;
+  }
+  .logout-btn:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  .sidebar-nav { display: grid; gap: 4px; }
+  .sidebar-nav a {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--builtin-radius, 6px);
+    color: var(--builtin-color-text, #111827); text-decoration: none; font-size: 14px;
+  }
+  .sidebar-nav a:hover { background: var(--builtin-row-hover-bg, #f9fafb); }
+  .workspace-eyebrow {
+    display: block;
+    color: var(--builtin-primary, #2563eb);
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+  .workspace-title {
+    display: block;
+    margin: 0 0 16px;
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: .95;
+    letter-spacing: -.05em;
+    color: var(--builtin-color-text, #111827);
+    font-weight: 800;
+  }
+  .workspace-lead {
+    display: block;
+    margin: 0;
+    color: var(--builtin-color-muted, #6b7280);
+    font-size: 16px;
+    line-height: 1.7;
+  }
+  .workspace-profile-name {
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -.04em;
+    color: var(--builtin-color-text, #111827);
+  }
+  .workspace-profile-role {
+    display: block;
+    color: var(--builtin-color-muted, #6b7280);
+    font-size: 14px;
+    margin-top: 6px;
+  }
+  .workspace-tile-title { font-size: 20px; font-weight: 800; letter-spacing: -.04em; color: var(--builtin-color-text, #111827); }
+  .workspace-tile-desc { margin: 8px 0 0; color: var(--builtin-color-muted, #6b7280); line-height: 1.55; font-family: system-ui, sans-serif; font-size: 13px; }
+  .workspace-tile {
+    min-height: 160px;
+    padding: 20px;
+    border: 1px solid var(--builtin-border, #d1d5db);
+    border-radius: var(--builtin-radius-lg, 8px);
+    background: var(--builtin-surface, #ffffff);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    transition: transform .18s ease, border-color .18s ease;
+    box-sizing: border-box;
+  }
+  .workspace-tile:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--builtin-primary, #2563eb), transparent 35%);
+  }
+</style>
+</head>
+<body>
+<builtin-tpl-dashboard-workspace id="dashboard" labels='{"sidebar.title":"e-Shop"}'>
+  <div slot="header" class="header-actions">
+    <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn" display="buttons"></builtin-lang-switcher>
+    <builtin-theme-toggle></builtin-theme-toggle>
+    <a href="index.html" class="logout-btn" data-i18n="eshop.back_to_home">返回首页</a>
+    <button id="btn-logout" class="logout-btn" data-i18n="eshop.logout">退出</button>
+  </div>
+  <div slot="sidebar" class="sidebar-nav">
+    <a href="merchant.html"><builtin-icon name="dashboard" size="16"></builtin-icon> <span data-i18n="eshop.merchant_console">商家后台</span></a>
+    <a href="merchant-products.html"><builtin-icon name="shopping" size="16"></builtin-icon> <span data-i18n="eshop.merchant_products">商品管理</span></a>
+    <a href="merchant-orders.html"><builtin-icon name="file-text" size="16"></builtin-icon> <span data-i18n="eshop.merchant_orders">订单管理</span></a>
+    <a href="merchant-coupons.html"><builtin-icon name="tag" size="16"></builtin-icon> <span data-i18n="eshop.merchant_coupons">优惠券管理</span></a>
+    <a href="index.html"><builtin-icon name="home" size="16"></builtin-icon> <span data-i18n="eshop.back_to_home">返回首页</span></a>
+  </div>
+  <div slot="hero">
+    <div class="workspace-eyebrow" data-i18n="eshop.merchant_console">Merchant Console</div>
+    <div class="workspace-title" data-i18n="eshop.merchant_headline">管理你的店铺。</div>
+    <div class="workspace-lead" data-i18n="eshop.merchant_lead">商品、订单、优惠券和数据统计分布在独立页面。</div>
+  </div>
+  <div slot="profile">
+    <div class="workspace-profile-name" id="profile-name">Merchant</div>
+    <div class="workspace-profile-role" data-i18n="eshop.merchant">商家端</div>
+  </div>
+  <div slot="stats" class="workspace-stats-grid">
+    <builtin-stat-card id="stat-products" value="-" label="商品" icon="shopping" data-i18n-label="eshop.product_count"></builtin-stat-card>
+    <builtin-stat-card id="stat-orders" value="-" label="订单" icon="file-text" data-i18n-label="eshop.order_count"></builtin-stat-card>
+    <builtin-stat-card id="stat-revenue" value="-" label="收入" icon="bar-chart" data-i18n-label="eshop.revenue"></builtin-stat-card>
+  </div>
+  <nav slot="tiles" class="workspace-tile-grid" aria-label="Merchant pages">
+    <a class="workspace-tile" href="merchant-products.html">
+      <builtin-icon name="shopping" size="28" color="#2563eb"></builtin-icon>
+      <div><div class="workspace-tile-title" data-i18n="eshop.merchant_products">商品管理</div><p class="workspace-tile-desc" data-i18n="eshop.merchant_products_desc">添加、编辑和管理商品库存。</p></div>
+    </a>
+    <a class="workspace-tile" href="merchant-orders.html">
+      <builtin-icon name="file-text" size="28" color="#2563eb"></builtin-icon>
+      <div><div class="workspace-tile-title" data-i18n="eshop.merchant_orders">订单管理</div><p class="workspace-tile-desc" data-i18n="eshop.merchant_orders_desc">查看和处理所有顾客订单。</p></div>
+    </a>
+    <a class="workspace-tile" href="merchant-coupons.html">
+      <builtin-icon name="tag" size="28" color="#2563eb"></builtin-icon>
+      <div><div class="workspace-tile-title" data-i18n="eshop.merchant_coupons">优惠券管理</div><p class="workspace-tile-desc" data-i18n="eshop.merchant_coupons_desc">创建和发放店铺优惠券。</p></div>
+    </a>
+    <a class="workspace-tile" href="index.html">
+      <builtin-icon name="home" size="28" color="#2563eb"></builtin-icon>
+      <div><div class="workspace-tile-title" data-i18n="eshop.back_to_home">返回首页</div><p class="workspace-tile-desc" data-i18n="eshop.merchant_back_home_desc">回到顾客端商城首页。</p></div>
+    </a>
+  </nav>
+</builtin-tpl-dashboard-workspace>
+
+<script type="module">
+import { initEshop, api, applyI18n, logout, getRole } from './eshop-utils.js?v=20260501-1';
+
+await initEshop();
+
+// Role guard: redirect non-merchant to index
+const role = getRole();
+if (role !== 'merchant' && role !== 'admin') {
+  location.replace('index.html');
+}
+
+document.getElementById('btn-logout').addEventListener('click', logout);
+
+const $ = id => document.getElementById(id);
+
+// Load stats
+(async () => {
+  const [productsRes, ordersRes] = await Promise.all([
+    api('/shop/products'),
+    api('/shop/merchant/orders'),
+  ]);
+  const products = (productsRes && productsRes.products) || [];
+  const orders = (ordersRes && ordersRes.orders) || [];
+  const revenue = orders.reduce((sum, o) => sum + (o.final_total || 0), 0);
+  $('stat-products').value = products.length;
+  $('stat-orders').value = orders.length;
+  $('stat-revenue').value = '¥' + revenue;
+
+  // Update profile name from /auth?action=me
+  try {
+    const me = await api('/shop/auth?action=me');
+    if (me && me.ok && me.user) {
+      $('profile-name').textContent = me.user.name || me.user.user_id || 'Merchant';
+    }
+  } catch (_e) {}
+
+  await applyI18n();
+})();
+</script>
+</body>
+</html>

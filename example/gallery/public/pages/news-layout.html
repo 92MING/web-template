@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Layout</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-magazine-news>
+    <div slot="navbar"><builtin-navbar brand="NewsWire" items='[{"label":"World","href":"#"},{"label":"Business","href":"#"},{"label":"Tech","href":"#"}]'></builtin-navbar></div>
+    <h1 slot="headline">Global Markets Rally as Inflation Cools</h1>
+  </builtin-tpl-magazine-news>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>签到管理 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
+  .checkin-item { display: grid; gap: 0.4rem; padding: 1rem; border-bottom: 1px solid var(--line); }
+  .checkin-item:last-child { border-bottom: none; }
+  .checkin-id { font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700; }
+  .checkin-meta { font-size: 0.8rem; color: var(--muted); display: flex; gap: 1rem; flex-wrap: wrap; }
+  .checkin-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
+  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge-open { background: #dcfce7; color: #166534; }
+  .badge-closed { background: #f1f5f9; color: #475569; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; }
+  .stat-box { text-align: center; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; }
+  .stat-num { font-size: 2rem; font-weight: 800; color: var(--accent); }
+  .stat-label { font-size: 0.8rem; color: var(--muted); }
+  .name-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0.5rem; }
+  .name-chip { padding: 3px 10px; border-radius: 999px; background: #f1f5f9; font-size: 13px; }
+  .name-chip.checked { background: #dcfce7; color: #166534; }
+  .name-chip.unchecked { background: #fee2e2; color: #991b1b; }
+</style>
+<link rel="stylesheet" href="/eclass-tools.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="card">
+    <builtin-schema-form id="checkin-form" submit-label="发起签到" layout="vertical"></builtin-schema-form>
+  </section>
+  <section class="card list-wrap">
+    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">签到记录</h2>
+    <div id="list-state"></div>
+    <div id="checkin-list"></div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">签到管理上下文</strong></div>
+    <builtin-metadata-list id="checkin-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { BuiltinToast } from '/shared/components.js?v=20260429-2';
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    back: '返回老师端',
+    eyebrow: '老师端签到',
+    title: '签到管理',
+    documentTitle: '签到管理 - 数字教室',
+    lead: '发起签到活动，查看签到统计，管理课堂出勤。',
+    list_title: '签到记录',
+    class_id: '教室 ID',
+    expires: '签到时长（分钟）',
+    submit: '发起签到',
+    ok_create: '签到已发起',
+    fill: '请填写教室 ID',
+    contextTitle: '签到管理上下文',
+    loadingTitle: '正在加载签到记录',
+    loadingDescription: '正在获取当前教室的签到活动列表。',
+    emptyTitle: '还没有签到活动',
+    emptyDescription: '发起第一条签到后，这里会出现签到记录。',
+    errorTitle: '加载失败',
+    errorDescription: '请稍后重试，或返回老师端重新进入。',
+    classLabel: '当前教室',
+    totalLabel: '签到活动数',
+    openLabel: '进行中',
+    viewStats: '查看统计',
+    statusOpen: '进行中',
+    statusClosed: '已结束',
+    statsTitle: '签到统计',
+    totalStudents: '应到',
+    checked: '实到',
+    unchecked: '未到',
+    checkedList: '已签到',
+    uncheckedList: '未签到',
+    close: '关闭',
+  },
+  en: {
+    back: 'Back to Teacher',
+    eyebrow: 'Teacher Check-in',
+    title: 'Check-in Management',
+    documentTitle: 'Check-in Management - Digital Classroom',
+    lead: 'Launch check-in sessions, view attendance stats, and manage classroom attendance.',
+    list_title: 'Check-in History',
+    class_id: 'Classroom ID',
+    expires: 'Duration (minutes)',
+    submit: 'Launch Check-in',
+    ok_create: 'Check-in launched',
+    fill: 'Classroom ID is required',
+    contextTitle: 'Check-in Context',
+    loadingTitle: 'Loading check-ins',
+    loadingDescription: 'Fetching check-in activities for the selected classroom.',
+    emptyTitle: 'No check-ins yet',
+    emptyDescription: 'Check-in activities will appear here after you launch the first one.',
+    errorTitle: 'Failed to load',
+    errorDescription: 'Try again in a moment or return to the teacher workspace.',
+    classLabel: 'Classroom',
+    totalLabel: 'Activities',
+    openLabel: 'Open',
+    viewStats: 'View Stats',
+    statusOpen: 'Open',
+    statusClosed: 'Closed',
+    statsTitle: 'Statistics',
+    totalStudents: 'Expected',
+    checked: 'Checked in',
+    unchecked: 'Missing',
+    checkedList: 'Checked in',
+    uncheckedList: 'Missing',
+    close: 'Close',
+  }
+};
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.check_in',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'teacher',
+  getInvalidRoleRedirect: () => 'student.html',
+  onApplyI18n: async ({ lang: nextLang }) => {
+    lang = nextLang;
+    applyShellCopy();
+    updateForm();
+  },
+});
+
+const { $, api } = shell;
+const form = $('checkin-form');
+let lang = localStorage.getItem('eclass_lang') || 'zh-cn';
+
+function d() {
+  return copy[lang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  document.title = labels.documentTitle;
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'teacher.html';
+  appShell.backLabel = labels.back;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'teacher.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+}
+
+function renderListState(mode) {
+  const labels = d();
+  const host = $('list-state');
+  if (mode === 'idle') { host.innerHTML = ''; return; }
+  if (mode === 'loading') {
+    host.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    host.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="teacher.html"></builtin-empty-state>`;
+    return;
+  }
+  host.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext(list) {
+  const classId = (form.getValue()?.class_id) || 'c1';
+  const openCount = list.filter((a) => a.status === 'open').length;
+  $('checkin-context').items = [
+    { icon: 'book', label: d().classLabel, value: classId },
+    { icon: 'unordered-list', label: d().totalLabel, value: String(list.length) },
+    { icon: 'calendar', label: d().openLabel, value: String(openCount) },
+  ];
+}
+
+function updateForm() {
+  const labels = d();
+  form.schema = [
+    { name: 'class_id', label: labels.class_id, type: 'text', required: true, default: form.getValue()?.class_id || 'c1' },
+    { name: 'expires', label: labels.expires, type: 'number', required: true, default: 15 },
+  ];
+  form.submitLabel = labels.submit;
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts * 1000);
+  return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+}
+
+function renderList(list) {
+  const labels = d();
+  const host = $('checkin-list');
+  if (!list.length) {
+    host.innerHTML = '';
+    renderListState('empty');
+    return;
+  }
+  renderListState('idle');
+  host.innerHTML = list.map((a) => `
+    <div class="checkin-item" data-id="${a.check_in_id}">
+      <div class="checkin-id">#${a.check_in_id}</div>
+      <div class="checkin-meta">
+        <span>${formatTime(a.created_at)}</span>
+        <span class="badge ${a.status === 'open' ? 'badge-open' : 'badge-closed'}">${a.status === 'open' ? labels.statusOpen : labels.statusClosed}</span>
+        <span>${a.expires_at ? '截止 ' + formatTime(a.expires_at) : ''}</span>
+      </div>
+      <div class="checkin-actions">
+        <button class="ghost-btn btn-stats" data-id="${a.check_in_id}" type="button"><builtin-icon name="bar-chart" size="14"></builtin-icon> ${labels.viewStats}</button>
+      </div>
+    </div>
+  `).join('');
+
+  host.querySelectorAll('.btn-stats').forEach((btn) => {
+    btn.addEventListener('click', () => loadStats(btn.dataset.id));
+  });
+}
+
+async function loadStats(checkInId) {
+  const labels = d();
+  const classId = (form.getValue()?.class_id) || 'c1';
+  const data = await api(`/teacher/check-in/${checkInId}?class_id=${classId}`);
+  if (!data || !data.ok) {
+    BuiltinToast.show(data?.error || 'Failed', { type: 'error' });
+    return;
+  }
+  const s = data.stats;
+  const modal = document.createElement('builtin-modal');
+  modal.innerHTML = `
+    <div slot="header"><strong>${labels.statsTitle} #${checkInId}</strong></div>
+    <div style="padding:1rem;">
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-num">${s.total}</div><div class="stat-label">${labels.totalStudents}</div></div>
+        <div class="stat-box"><div class="stat-num">${s.checked}</div><div class="stat-label">${labels.checked}</div></div>
+        <div class="stat-box"><div class="stat-num">${s.unchecked}</div><div class="stat-label">${labels.unchecked}</div></div>
+      </div>
+      <div style="margin-top:1rem;">
+        <strong>${labels.checkedList}</strong>
+        <div class="name-list">${s.checked_list.map((u) => `<span class="name-chip checked">${u.name}</span>`).join('') || '<span style="color:var(--muted)">-</span>'}</div>
+      </div>
+      <div style="margin-top:1rem;">
+        <strong>${labels.uncheckedList}</strong>
+        <div class="name-list">${s.unchecked_list.map((u) => `<span class="name-chip unchecked">${u.name}</span>`).join('') || '<span style="color:var(--muted)">-</span>'}</div>
+      </div>
+    </div>
+    <div slot="footer" style="display:flex;justify-content:flex-end;padding:0.5rem 1rem;">
+      <button class="ghost-btn" id="modal-close" type="button">${labels.close}</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.open = true;
+  modal.querySelector('#modal-close').addEventListener('click', () => { modal.open = false; modal.remove(); });
+}
+
+form.addEventListener('builtin-submit', async (event) => {
+  const labels = d();
+  const { class_id, expires } = event.detail.value;
+  if (!class_id) {
+    BuiltinToast.show(labels.fill, { type: 'warning' });
+    return;
+  }
+  const payload = await api('/teacher/check-in', {
+    method: 'POST',
+    body: JSON.stringify({ class_id, expires_minutes: parseInt(expires || 15, 10) }),
+  });
+  if (!payload) {
+    BuiltinToast.show('Failed', { type: 'error' });
+    return;
+  }
+  BuiltinToast.show(payload.ok ? labels.ok_create : (payload.error || 'Failed'), { type: payload.ok ? 'success' : 'error' });
+  if (payload.ok) {
+    form.reset();
+    updateForm();
+    loadList();
+  }
+});
+
+async function loadList() {
+  renderListState('loading');
+  const classId = (form.getValue()?.class_id) || 'c1';
+  const data = await api(`/teacher/check-in?class_id=${classId}`);
+  if (!data) {
+    renderList([]);
+    updateContext([]);
+    renderListState('error');
+    return;
+  }
+  const list = data.activities || [];
+  updateContext(list);
+  renderList(list);
+}
+
+await shell.init();
+updateForm();
+applyShellCopy();
+loadList();
+</script>
+</body>
+</html>

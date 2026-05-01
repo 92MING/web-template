@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LLM 重排序测试</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <link rel="stylesheet" href="/html-assets/css/ai-test-shared.css"/>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="ai-page">
+
+<div class="ai-shell">
+  <div class="ai-header">
+    <div class="ai-header-main">
+      <a href="/admin/test/ai" class="ai-back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        <span>返回 AI 测试中心</span>
+      </a>
+      <h1>LLM 重排序</h1>
+      <p>基于 LLM 语义相关性对候选文本打分排序，适合验证检索召回后的二次筛选效果。</p>
+    </div>
+    <div class="ai-pills">
+      <span class="ai-pill">POST /ai/rerank</span>
+      <span class="ai-pill"><strong>0–10 打分</strong></span>
+    </div>
+  </div>
+
+  <section class="ai-card">
+    <div class="ai-card-title"><h2>快速样例</h2></div>
+    <div class="ai-toolbar">
+      <button class="ai-button ai-button-secondary" onclick="fillSample('qa')" type="button">问答检索</button>
+      <button class="ai-button ai-button-secondary" onclick="fillSample('doc')" type="button">文档搜索</button>
+      <button class="ai-button ai-button-secondary" onclick="fillSample('math')" type="button">数学题目</button>
+    </div>
+  </section>
+
+  <div class="ai-stack" style="margin-top:16px;">
+    <section class="ai-card">
+      <div class="ai-card-title"><h2>查询</h2></div>
+      <div class="ai-field">
+        <label for="query-input">Query</label>
+        <input id="query-input" type="text" class="ai-input" placeholder="输入查询文本…"/>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2>候选文本</h2>
+        <button class="ai-button ai-button-secondary" onclick="addCandidate()" type="button">添加</button>
+      </div>
+      <div id="candidates-list" class="ai-list-grid"></div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title"><h2>高级选项</h2></div>
+      <div class="ai-grid-2">
+        <div class="ai-field">
+          <label for="custom-prompt">自定义 Prompt</label>
+          <input id="custom-prompt" type="text" class="ai-input" placeholder="Score each candidate 0-10 for relevance…"/>
+        </div>
+        <div class="ai-field">
+          <label>执行开关</label>
+          <label class="ai-check"><input id="stream-toggle" type="checkbox" checked/><span>流式 stream=true</span></label>
+        </div>
+      </div>
+      <div class="ai-toolbar" style="margin-top:12px;">
+        <button id="rerank-btn" onclick="doRerank()" class="ai-button ai-button-primary" type="button">开始重排序</button>
+        <span id="rerank-spinner" class="ai-spinner ai-spinner-dark" style="display:none;color:var(--ai-primary);"></span>
+        <button onclick="clearResults()" class="ai-button ai-button-secondary" type="button">清空结果</button>
+      </div>
+    </section>
+
+    <div id="error-box" class="ai-error-box"></div>
+
+    <section id="result-section" class="ai-card" style="display:none;">
+      <div class="ai-card-title">
+        <h2>排序结果</h2>
+        <span id="meta-bar" class="ai-badge ai-badge-muted"></span>
+      </div>
+      <div id="result-list" class="ai-list-grid"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Samples ───────────────────────────────────────────────────────────────────
+const SAMPLES = {
+  qa: {
+    query: '光合作用是如何进行的？',
+    candidates: [
+      '光合作用是植物利用光能将二氧化碳和水转化为有机物和氧气的过程，主要发生在叶绿体中。',
+      '鱼类通过鳃呼吸，从水中提取溶解的氧气。',
+      '叶绿体中的叶绿素吸收太阳光，将光能转化为化学能，驱动卡尔文循环合成葡萄糖。',
+      '呼吸作用是生物体将有机物分解并释放能量的过程。',
+      '植物的气孔允许二氧化碳进入叶片，是光合作用的重要结构。',
+      '动物通过进食获取能量，无法进行光合作用。',
+    ],
+  },
+  doc: {
+    query: 'machine learning model evaluation metrics',
+    candidates: [
+      'Accuracy, precision, recall, and F1-score are common classification metrics used to evaluate machine learning models.',
+      'Deep learning requires large amounts of labeled training data and powerful GPUs to train effectively.',
+      'Cross-validation helps assess model generalization by splitting data into training and validation folds.',
+      'ROC-AUC curve measures the trade-off between true positive rate and false positive rate across thresholds.',
+      'Data preprocessing steps include normalization, handling missing values, and feature engineering.',
+      'Confusion matrix provides a detailed breakdown of prediction results for each class.',
+    ],
+  },
+  math: {
+    query: '求解二次方程 x² - 5x + 6 = 0',
+    candidates: [
+      '因式分解法：(x-2)(x-3)=0，所以 x=2 或 x=3。',
+      '微积分中，导数表示函数的瞬时变化率。',
+      '求根公式：x = (5 ± √(25-24)) / 2 = (5 ± 1) / 2，得 x=3 或 x=2。',
+      '完全平方法：x² - 5x + 6 = (x - 5/2)² - 1/4 = 0，解得 x = 5/2 ± 1/2。',
+      '线性方程 2x + 3 = 7 的解为 x = 2。',
+      '二次方程的判别式 Δ = b² - 4ac，当 Δ > 0 时有两个不同实数根。',
+    ],
+  },
+};
+
+function fillSample(key) {
+  const s = SAMPLES[key];
+  if (!s) return;
+  document.getElementById('query-input').value = s.query;
+  buildCandidateList(s.candidates);
+}
+
+// ── Candidate management ──────────────────────────────────────────────────────
+let candidateCount = 0;
+
+function buildCandidateList(texts = []) {
+  const list = document.getElementById('candidates-list');
+  list.innerHTML = '';
+  candidateCount = 0;
+  texts.forEach(t => addCandidate(t));
+  if (texts.length === 0) {
+    addCandidate('');
+    addCandidate('');
+    addCandidate('');
+  }
+}
+
+function addCandidate(text = '') {
+  const idx = ++candidateCount;
+  const id = `cand-${idx}`;
+  const row = document.createElement('div');
+  row.className = 'ai-candidate-row';
+  row.dataset.id = id;
+  row.innerHTML = `
+    <span class="ai-candidate-index">${String(idx).padStart(2, '0')}</span>
+    <textarea id="${id}" class="ai-textarea" rows="3" placeholder="候选文本 ${idx}…">${escHtml(text)}</textarea>
+    <button class="ai-button ai-button-danger" style="align-self:center;" onclick="removeCandidate('${id}')" type="button">删除</button>
+  `;
+  document.getElementById('candidates-list').appendChild(row);
+  return id;
+}
+
+function removeCandidate(id) {
+  const row = document.querySelector(`[data-id="${id}"]`);
+  if (row) row.remove();
+  renumberCandidates();
+}
+
+function renumberCandidates() {
+  const rows = document.querySelectorAll('#candidates-list .ai-candidate-row');
+  rows.forEach((row, i) => {
+    const num = row.querySelector('.ai-candidate-index');
+    if (num) num.textContent = String(i + 1).padStart(2, '0');
+  });
+}
+
+function getCandidates() {
+  return Array.from(document.querySelectorAll('#candidates-list .ai-candidate-row textarea'))
+    .map(ta => ta.value.trim())
+    .filter(Boolean);
+}
+
+// ── Rerank ────────────────────────────────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById('rerank-btn').disabled = on;
+  document.getElementById('rerank-spinner').style.display = on ? 'inline-block' : 'none';
+}
+
+async function doRerank() {
+  const query = document.getElementById('query-input').value.trim();
+  const candidates = getCandidates();
+  if (!query) { showError('请输入查询文本。'); return; }
+  if (candidates.length === 0) { showError('请至少添加一个候选文本。'); return; }
+
+  hideError();
+  setLoading(true);
+  document.getElementById('result-section').style.display = 'none';
+
+  const body = {
+    query,
+    candidates,
+    stream: document.getElementById('stream-toggle').checked,
+  };
+  const prompt = document.getElementById('custom-prompt').value.trim();
+  if (prompt) body.prompt = prompt;
+
+  try {
+    const t0 = performance.now();
+    const resp = await fetch('/ai/rerank', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    renderResults(data, candidates.length, elapsed);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function scoreColor(score) {
+  if (score >= 8) return '#22c55e';
+  if (score >= 5) return '#f59e0b';
+  return '#ef4444';
+}
+
+function renderResults(data, total, elapsed) {
+  const items = data.items || [];
+  const usage = data.token_usage;
+  const serverMs = data.elapsed_ms;
+
+  // Meta bar
+  let meta = `${items.length} 项已排序，共 ${total} 个候选 · ${elapsed}s`;
+  if (serverMs) meta += ` (服务端: ${serverMs}ms)`;
+  if (usage) {
+    const inp = usage.input_tokens || usage.prompt_tokens || 0;
+    const out = usage.output_tokens || usage.completion_tokens || 0;
+    if (inp || out) meta += ` · ${inp}+${out} tokens`;
+  }
+  document.getElementById('meta-bar').textContent = meta;
+
+  // Items
+  const list = document.getElementById('result-list');
+  list.innerHTML = '';
+  items.forEach((item, rankIdx) => {
+    const score = typeof item.score === 'number' ? item.score : parseFloat(item.score) || 0;
+    const pct = Math.round((score / 10) * 100);
+    const rank = rankIdx + 1;
+    const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-other';
+    const color = scoreColor(score);
+    const candidateText = typeof item.candidate === 'string' ? item.candidate : JSON.stringify(item.candidate);
+
+    const div = document.createElement('div');
+    div.className = 'ai-rank-item';
+    div.innerHTML = `
+      <span class="ai-rank-badge ${rank === 1 ? 'is-top' : ''}">${rank}</span>
+      <div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <p style="margin:0;color:var(--ai-text);font-size:13px;line-height:1.7;">${escHtml(candidateText)}</p>
+          <div style="flex-shrink:0;text-align:right;">
+              <span class="text-base font-bold" style="color:${color}">${score.toFixed(1)}</span>
+              <span class="text-xs text-slate-400">/10</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <div class="ai-progress-track" style="flex:1;">
+            <div class="ai-progress-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+          <span style="font-size:12px;color:var(--ai-text-muted);white-space:nowrap;">#${item.index ?? '?'} 原序</span>
+        </div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+
+  document.getElementById('result-section').style.display = '';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function clearResults() {
+  document.getElementById('result-section').style.display = 'none';
+  document.getElementById('error-box').classList.remove('visible');
+  document.getElementById('error-box').textContent = '';
+}
+
+function showError(msg) {
+  const box = document.getElementById('error-box');
+  box.textContent = '错误: ' + msg;
+  box.classList.add('visible');
+}
+
+function hideError() {
+  document.getElementById('error-box').classList.remove('visible');
+  document.getElementById('error-box').textContent = '';
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildCandidateList([]);
+</script>
+</body>
+</html>

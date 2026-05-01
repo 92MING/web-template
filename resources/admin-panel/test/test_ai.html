@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI 测试</title>
+  <link rel="stylesheet" href="/html-assets/css/core-design-tokens.css"/>
+  <link rel="stylesheet" href="/html-assets/css/ai-test-shared.css"/>
+  <script src="/html-assets/js/page-controls.js"></script>
+  <style>
+    body.ai-page {
+      background:
+        radial-gradient(circle at top left, rgba(36, 85, 122, 0.14), transparent 26%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ai-bg) 90%, #ffffff 10%), var(--ai-bg));
+    }
+
+    .ai-app-shell {
+      --ai-sidebar-width: 196px;
+      grid-template-columns: var(--ai-sidebar-width) minmax(0, 1fr);
+      gap: 6px;
+      padding: 4px;
+    }
+
+    .ai-sidebar-shell,
+    .ai-hero-panel,
+    .ai-frame-shell {
+      background: color-mix(in srgb, var(--ai-surface) 94%, #ffffff 6%);
+      backdrop-filter: blur(18px);
+    }
+
+    .ai-sidebar-shell {
+      display: flex;
+      flex-direction: column;
+      border-radius: 14px;
+      border: 1px solid color-mix(in srgb, var(--ai-border) 86%, transparent 14%);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, .07);
+      min-width: 0;
+      overflow: hidden;
+      /* Tighter horizontal padding (was 14px from shared); align with render test sidebar (8px 6px). */
+      padding: 6px 4px;
+      gap: 4px;
+    }
+
+    .ai-sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      padding: 2px 4px;
+    }
+
+    .ai-sidebar-label {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--ai-text-muted);
+    }
+
+    .ai-sidebar-toggle {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--ai-border) 82%, transparent 18%);
+      background: color-mix(in srgb, var(--ai-surface) 88%, transparent 12%);
+      color: var(--ai-text-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background .16s ease, color .16s ease;
+    }
+
+    .ai-sidebar-toggle:hover {
+      background: color-mix(in srgb, var(--ai-surface) 72%, var(--ai-border) 28%);
+      color: var(--ai-text);
+    }
+
+    .ai-sidebar-toggle svg {
+      width: 14px;
+      height: 14px;
+      transition: transform .18s ease;
+    }
+
+    #nav-groups {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 0 2px 2px;
+    }
+
+    .ai-hero-panel,
+    .ai-frame-shell {
+      border-radius: 16px;
+      box-shadow: 0 14px 32px rgba(15, 23, 42, .05);
+    }
+
+    .ai-workbench-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .ai-workbench-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .ai-nav-item {
+      border-radius: 8px;
+      padding: 4px 7px;
+      gap: 1px;
+    }
+
+    .ai-nav-group,
+    .ai-nav-list {
+      gap: 2px;
+    }
+
+    .ai-nav-group + .ai-nav-group {
+      margin-top: 6px;
+    }
+
+    .ai-nav-group-title {
+      padding: 2px 4px;
+    }
+
+    .ai-nav-item-head {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      flex-wrap: nowrap;
+      min-width: 0;
+    }
+
+    .ai-nav-item-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .ai-nav-item-meta {
+      font-size: 9.5px;
+      opacity: .85;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    .ai-nav-item-brief {
+      font-size: 10px;
+      line-height: 1.2;
+      color: var(--ai-text-soft);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ai-nav-item.is-active .ai-nav-item-brief {
+      color: var(--ai-text);
+    }
+
+    .ai-sidebar-copy {
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    body.ai-sidebar-collapsed .ai-app-shell {
+      --ai-sidebar-width: 44px;
+    }
+
+    body.ai-sidebar-collapsed #nav-groups,
+    body.ai-sidebar-collapsed .ai-sidebar-label {
+      display: none;
+    }
+
+    body.ai-sidebar-collapsed .ai-sidebar-shell {
+      align-items: center;
+    }
+
+    body.ai-sidebar-collapsed .ai-sidebar-header {
+      width: 100%;
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    body.ai-sidebar-collapsed .ai-sidebar-toggle svg {
+      transform: rotate(180deg);
+    }
+
+    .ai-selected-title {
+      margin-top: 0;
+      font-size: 22px;
+      line-height: 1.08;
+    }
+
+    .ai-selected-meta {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    .ai-selected-fact-value {
+      word-break: break-word;
+    }
+
+    .ai-workbench-note {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--ai-text-muted);
+    }
+
+    .ai-frame-shell {
+      padding: 6px;
+    }
+
+    .ai-frame {
+      min-height: 74vh;
+    }
+
+    html.dark body.ai-page {
+      background:
+        radial-gradient(circle at top left, rgba(124, 162, 196, 0.14), transparent 26%),
+        linear-gradient(180deg, color-mix(in srgb, var(--ai-bg) 88%, #020617 12%), var(--ai-bg));
+    }
+
+    html.dark .ai-sidebar-shell,
+    html.dark .ai-hero-panel,
+    html.dark .ai-frame-shell {
+      box-shadow: none;
+    }
+
+    @media (max-width: 960px) {
+      .ai-app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .ai-frame {
+        min-height: 68vh;
+      }
+    }
+  </style>
+</head>
+<body class="ai-page">
+  <div class="ai-app-shell">
+    <aside class="ai-card ai-sidebar-shell">
+      <div class="ai-sidebar-header">
+        <div class="ai-sidebar-label">AI 测试</div>
+        <button id="ai-sidebar-toggle" class="ai-sidebar-toggle" type="button" title="折叠侧栏" aria-label="折叠侧栏" aria-expanded="true">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.78 4.22a.75.75 0 010 1.06L8.06 10l4.72 4.72a.75.75 0 11-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clip-rule="evenodd" /></svg>
+        </button>
+      </div>
+      <div id="nav-groups" class="ai-stack"></div>
+    </aside>
+
+    <section class="ai-content-shell">
+      <section class="ai-frame-shell ai-workbench-panel">
+        <iframe id="test-frame" class="ai-frame" src="/admin/test/ai/chat" title="AI 测试页面"></iframe>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    'use strict';
+
+    const PAGE_GROUPS = [
+      {
+        title: 'Completion',
+        items: [
+          { key: 'chat', title: '对话', route: '/admin/test/ai/chat', endpoint: '/ai/complete*', brief: '多轮对话、历史与工具链调试', desc: '保留会话输入、输出和历史记录，适合直接排查 chat 流程。', focus: '多轮与流式调试' },
+          { key: 'translate', title: '翻译', route: '/admin/test/ai/translate', endpoint: '/ai/translate', brief: '单次与逐行翻译对照', desc: '直接进入真实测试页，保留请求参数、结果、历史与检查面板。', focus: '单接口调试' },
+          { key: 'detect_language', title: '语言检测', route: '/admin/test/ai/detect_language', endpoint: '/ai/detect-language', brief: '单条或分段批量识别语言', desc: '适合快速核对语言码识别结果与最近记录。', focus: '快速识别验证' },
+          { key: 'summarize', title: '摘要生成', route: '/admin/test/ai/summarize', endpoint: '/ai/summarize', brief: '长文本压缩与摘要输出', desc: '用于查看摘要提示词、结果和返回结构。', focus: '长文本摘要' },
+          { key: 'ocr', title: 'OCR 识别', route: '/admin/test/ai/ocr', endpoint: '/ai/ocr', brief: '图片文字识别与返回检查', desc: '用于上传样例图并比对 OCR 输出内容。', focus: '图文识别' },
+        ],
+      },
+      {
+        title: 'Speech Recognition',
+        items: [
+          { key: 'asr', title: 'ASR 语音识别', route: '/admin/test/ai/asr', endpoint: '/ai/asr', brief: '语音输入到文本结果', desc: '用于检查音频识别质量和接口响应内容。', focus: '音频转写' },
+          { key: 's2t', title: 'S2T 语音转文字', route: '/admin/test/ai/s2t', endpoint: '/ai/s2t', brief: '更偏简洁的语音转写页', desc: '用于验证基础语音转文字能力与参数选择。', focus: '基础转写' },
+        ],
+      },
+      {
+        title: 'Speech Generation',
+        items: [
+          { key: 't2s', title: 'T2S 文字转语音', route: '/admin/test/ai/t2s', endpoint: '/ai/t2s*', brief: '文本合成语音输出', desc: '用于试听 TTS 结果并检查返回元数据。', focus: '语音合成' },
+        ],
+      },
+      {
+        title: 'Vector / Rank',
+        items: [
+          { key: 'embedding', title: '向量嵌入', route: '/admin/test/ai/embedding', endpoint: '/ai/embedding*', brief: '文本向量生成与形状检查', desc: '用于查看 embedding 调用参数、维度与返回结构。', focus: '向量生成' },
+          { key: 'rerank', title: '重排序', route: '/admin/test/ai/rerank', endpoint: '/ai/rerank', brief: '候选项打分和重排', desc: '用于验证 rerank 分数、顺序和候选内容。', focus: '排序质量' },
+        ],
+      },
+    ];
+
+    const PAGE_CATALOG = Object.fromEntries(
+      PAGE_GROUPS.flatMap((group) => group.items.map((item) => [item.key, { ...item, group: group.title }]))
+    );
+
+    const DEFAULT_PAGE = 'chat';
+    const AI_TEST_SIDEBAR_KEY = 'proj-ai-test-sidebar-collapsed';
+    const validPages = new Set(Object.keys(PAGE_CATALOG));
+    const navRoot = document.getElementById('nav-groups');
+    const frame = document.getElementById('test-frame');
+    const sidebarToggle = document.getElementById('ai-sidebar-toggle');
+    let navItems = [];
+
+    function applySidebarCollapsed(collapsed) {
+      const next = !!collapsed;
+      document.body.classList.toggle('ai-sidebar-collapsed', next);
+      if (sidebarToggle) {
+        sidebarToggle.setAttribute('aria-expanded', String(!next));
+        sidebarToggle.setAttribute('aria-label', next ? '展开侧栏' : '折叠侧栏');
+        sidebarToggle.setAttribute('title', next ? '展开侧栏' : '折叠侧栏');
+      }
+      try {
+        localStorage.setItem(AI_TEST_SIDEBAR_KEY, next ? '1' : '0');
+      } catch {}
+    }
+
+    function toggleSidebarCollapsed() {
+      applySidebarCollapsed(!document.body.classList.contains('ai-sidebar-collapsed'));
+    }
+
+    function renderNav() {
+      navRoot.innerHTML = PAGE_GROUPS.map((group) => `
+        <section class="ai-nav-group">
+          <div class="ai-nav-group-title">${group.title}</div>
+          <div class="ai-nav-list">
+            ${group.items.map((item) => `
+              <button class="ai-nav-item" type="button" data-page="${item.key}">
+                <div class="ai-nav-item-head">
+                  <div class="ai-nav-item-title">${item.title}</div>
+                  <div class="ai-nav-item-meta">${item.endpoint}</div>
+                </div>
+                <div class="ai-nav-item-brief">${item.brief}</div>
+              </button>
+            `).join('')}
+          </div>
+        </section>
+      `).join('');
+      navItems = Array.from(document.querySelectorAll('.ai-nav-item[data-page]'));
+      navItems.forEach((item) => item.addEventListener('click', () => activatePage(item.dataset.page)));
+    }
+
+    function getSyncPayload() {
+      const dark = !!(window.PageControls && typeof window.PageControls.getDark === 'function' ? window.PageControls.getDark() : document.documentElement.classList.contains('dark'));
+      const lang = window.PageControls && typeof window.PageControls.getLang === 'function' ? window.PageControls.getLang() : (document.documentElement.dataset.projLang || 'zh-cn');
+      return { dark, lang };
+    }
+
+    function syncWorkbenchFrame() {
+      if (!frame || !frame.contentWindow) return;
+      const payload = getSyncPayload();
+      try {
+        frame.contentWindow.postMessage({ type: 'proj-sync', dark: payload.dark, lang: payload.lang }, '*');
+      } catch {}
+    }
+
+    function resolvePage() {
+      const hash = (window.location.hash || '').replace(/^#/, '').trim();
+      return validPages.has(hash) ? hash : DEFAULT_PAGE;
+    }
+
+    function activatePage(pageKey) {
+      const key = validPages.has(pageKey) ? pageKey : DEFAULT_PAGE;
+      const page = PAGE_CATALOG[key];
+      navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.page === key));
+      frame.src = page.route;
+      if (window.location.hash !== '#' + key) {
+        history.replaceState(null, '', '#' + key);
+      }
+      document.title = `AI 测试 · ${page.title}`;
+    }
+
+    renderNav();
+  sidebarToggle?.addEventListener('click', toggleSidebarCollapsed);
+  applySidebarCollapsed(localStorage.getItem(AI_TEST_SIDEBAR_KEY) === '1');
+
+    frame.addEventListener('load', syncWorkbenchFrame);
+    window.addEventListener('proj-theme-change', syncWorkbenchFrame);
+    window.addEventListener('proj-language-change', syncWorkbenchFrame);
+    window.addEventListener('message', (event) => {
+      const data = event && event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'proj-sync' || data.type === 'proj-set-dark' || data.type === 'proj-set-lang') {
+        syncWorkbenchFrame();
+      }
+    });
+    window.addEventListener('hashchange', () => activatePage(resolvePage()));
+
+    activatePage(resolvePage());
+    syncWorkbenchFrame();
+  </script>
+</body>
+</html>

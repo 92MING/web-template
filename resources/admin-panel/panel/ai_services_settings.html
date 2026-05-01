@@ -1,0 +1,2640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 服务实例</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <link rel="stylesheet" href="/html-assets/css/ai-services-panel.css" />
+  <script src="/html-assets/js/page-controls.js"></script>
+  <style>
+    .ai-services-settings-page .panel-page {
+      padding: 4px;
+    }
+
+    .ai-services-settings-page .panel-page-shell {
+      gap: 5px;
+    }
+
+    .ai-services-settings-page .panel-hero {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .ai-services-settings-page .panel-hero-main {
+      flex: 0 0 clamp(156px, 15vw, 210px);
+      min-width: 0;
+    }
+
+    .ai-services-settings-page .panel-hero-actions {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      align-self: center;
+      margin-left: auto;
+    }
+
+    .ai-services-hero-summary {
+      flex: 1 1 auto;
+      min-width: 0;
+      align-self: center;
+    }
+
+    .ai-services-settings-page .panel-hero .ai-services-summary-grid {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+    }
+
+    .ai-services-settings-page .panel-hero .panel-action-row {
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+
+    .ai-services-settings-page .panel-hero .panel-btn {
+      flex: 0 0 auto;
+    }
+
+    .ai-services-settings-page .panel-kicker {
+      font-size: 9px;
+      letter-spacing: .14em;
+    }
+
+    .ai-services-settings-page .panel-title {
+      margin-top: 3px;
+      font-size: 15px;
+      line-height: 1.05;
+    }
+
+    .ai-services-settings-page .panel-pill,
+    .ai-services-settings-page .panel-btn,
+    .ai-services-settings-page .status-box {
+      font-size: 10px;
+    }
+
+    .ai-services-settings-page .panel-btn {
+      min-height: 28px;
+      padding: 0 9px;
+    }
+
+    .ai-services-settings-page .status-box {
+      padding: 6px 8px;
+      border-radius: var(--proj-radius-lg);
+      line-height: 1.35;
+    }
+
+    .ai-services-settings-page .panel-card {
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .ai-services-settings-page .panel-card-header,
+    .ai-services-settings-page .panel-card-body {
+      padding-left: 11px;
+      padding-right: 11px;
+    }
+
+    .ai-services-settings-page .panel-card-header {
+      padding-top: 8px;
+      padding-bottom: 7px;
+    }
+
+    .ai-services-settings-page .panel-card-title {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .ai-services-settings-page .panel-card-kicker,
+    .ai-services-settings-page .ai-editor-field span,
+    .ai-services-settings-page .ai-binding-note,
+    .ai-services-settings-page .ai-inline-note {
+      font-size: 10px;
+    }
+
+    .ai-services-settings-page .panel-card-body {
+      padding-top: 8px;
+      padding-bottom: 9px;
+    }
+
+    .ai-services-settings-page .ai-services-summary-grid {
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+      gap: 5px;
+    }
+
+    .ai-services-settings-page .ai-services-summary-card {
+      min-height: 72px;
+      padding: 8px 10px;
+      border-radius: 8px;
+    }
+
+    .ai-services-settings-page .panel-hero .ai-services-summary-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      padding: 3px 8px;
+      min-width: 0;
+      white-space: nowrap;
+      border-radius: 999px;
+    }
+
+    .ai-services-settings-page .panel-hero .ai-services-summary-label,
+    .ai-services-settings-page .panel-hero .ai-services-summary-value {
+      margin-top: 0;
+      line-height: 1;
+    }
+
+    .ai-services-settings-page .panel-hero .ai-services-summary-label {
+      font-size: 8px;
+      letter-spacing: .1em;
+    }
+
+    .ai-services-settings-page .panel-hero .ai-services-summary-value {
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .ai-services-settings-page .ai-services-summary-label {
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+
+    .ai-services-settings-page .ai-services-summary-value {
+      margin-top: 4px;
+      font-size: 17px;
+      line-height: 1.05;
+    }
+
+    .ai-services-settings-page .ai-services-summary-note {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    .ai-instance-shell {
+      --ai-kind-pane-width: 216px;
+      --ai-kind-pane-size: var(--ai-kind-pane-width);
+      --ai-detail-pane-width: 320px;
+      --ai-detail-pane-size: 0px;
+      display: grid;
+      grid-template-columns: var(--ai-kind-pane-size) 12px minmax(0, 1fr) 12px var(--ai-detail-pane-size);
+      min-height: 430px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      overflow: hidden;
+      background: color-mix(in srgb, var(--proj-page-surface, var(--proj-surface-elevated)) 96%, transparent);
+    }
+
+    .ai-kind-pane,
+    .ai-instance-detail-pane {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-width: 0;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+      transition: opacity .16s ease, border-color .16s ease;
+    }
+
+    .ai-kind-pane {
+      border-right: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-instance-shell.kind-nav-collapsed .ai-kind-pane {
+      opacity: 0;
+      pointer-events: none;
+      border-right-color: transparent;
+    }
+
+    .ai-instance-shell.kind-nav-collapsed .ai-kind-pane > * {
+      visibility: hidden;
+    }
+
+    .ai-kind-pane-head {
+      display: grid;
+      gap: 4px;
+      padding: 8px 8px 7px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-kind-pane-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--proj-page-text);
+      line-height: 1.2;
+    }
+
+    .ai-kind-list {
+      display: grid;
+      gap: 3px;
+      padding: 6px;
+      overflow: auto;
+      align-content: start;
+    }
+
+    .ai-kind-item {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      padding: 6px 7px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .ai-kind-item:hover {
+      background: color-mix(in srgb, var(--proj-page-surface) 78%, transparent);
+      border-color: var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-kind-item.is-active {
+      background: rgba(37, 99, 235, 0.08);
+      border-color: rgba(37, 99, 235, 0.24);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+    }
+
+    .ai-kind-item-title {
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--proj-page-text);
+    }
+
+    .ai-kind-item-meta {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--proj-page-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ai-kind-item-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .ai-kind-item-count {
+      display: inline-flex;
+      align-items: center;
+      min-height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 95%, transparent);
+      color: var(--proj-page-muted);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .06em;
+    }
+
+    .ai-kind-splitter,
+    .ai-detail-splitter {
+      position: relative;
+      cursor: col-resize;
+      background: transparent;
+      user-select: none;
+    }
+
+    .ai-kind-splitter::before,
+    .ai-detail-splitter::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 50%;
+      width: 1px;
+      transform: translateX(-50%);
+      background: var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-kind-splitter:hover::before,
+    .ai-kind-splitter.dragging::before,
+    .ai-detail-splitter:hover::before,
+    .ai-detail-splitter.dragging::before {
+      width: 2px;
+      background: var(--proj-accent, #2563eb);
+    }
+
+    .ai-kind-splitter-toggle,
+    .ai-detail-splitter-toggle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 15px;
+      height: 30px;
+      border-radius: 5px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: var(--proj-page-surface, var(--proj-surface-elevated));
+      color: var(--proj-page-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      cursor: pointer;
+      font-size: 10px;
+      line-height: 1;
+      z-index: 1;
+    }
+
+    .ai-kind-splitter-toggle:hover,
+    .ai-detail-splitter-toggle:hover {
+      color: var(--proj-page-text);
+      border-color: rgba(37, 99, 235, 0.24);
+    }
+
+    .ai-instance-detail-pane {
+      border-left: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-instance-shell.detail-pane-collapsed .ai-instance-detail-pane {
+      opacity: 0;
+      pointer-events: none;
+      border-left-color: transparent;
+    }
+
+    .ai-instance-shell.detail-pane-collapsed .ai-instance-detail-pane > * {
+      visibility: hidden;
+    }
+
+    .ai-detail-pane-head {
+      display: grid;
+      gap: 4px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-detail-pane-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.2;
+      color: var(--proj-page-text);
+    }
+
+    .ai-detail-pane-body {
+      overflow: auto;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .ai-detail-empty {
+      padding: 12px;
+      border: 1px dashed var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      color: var(--proj-page-muted);
+      font-size: 11px;
+      line-height: 1.55;
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+    }
+
+    .ai-detail-section {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--proj-page-surface) 95%, transparent);
+    }
+
+    .ai-detail-section-title {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.2;
+      font-weight: 850;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-detail-kv-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .ai-detail-kv-item {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .ai-detail-kv-item span {
+      font-size: 10px;
+      line-height: 1.2;
+      color: var(--proj-page-muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .ai-detail-kv-item strong {
+      min-width: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--proj-page-text);
+      word-break: break-word;
+    }
+
+    .ai-detail-list {
+      margin: 0;
+      padding-left: 16px;
+      display: grid;
+      gap: 4px;
+      color: var(--proj-page-text);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .ai-detail-code {
+      margin: 0;
+      padding: 9px 10px;
+      border-radius: 9px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 90%, transparent);
+      color: var(--proj-page-text);
+      font-size: 10px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: auto;
+      max-height: 220px;
+    }
+
+    .ai-instance-main {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .ai-instance-main-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      flex-wrap: wrap;
+    }
+
+    .ai-instance-main-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--proj-page-text);
+    }
+
+    .ai-instance-main-note {
+      display: none;
+    }
+
+    .ai-instance-main-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+
+    .ai-instance-tabbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+      flex-wrap: wrap;
+    }
+
+    .ai-instance-tabs {
+      display: inline-flex;
+      gap: 4px;
+      padding: 2px;
+      border-radius: 10px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+    }
+
+    .ai-instance-tab {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--proj-page-muted);
+      min-height: 25px;
+      padding: 0 9px;
+      border-radius: 8px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .10em;
+      text-transform: uppercase;
+    }
+
+    .ai-instance-tab:hover {
+      color: var(--proj-page-text);
+    }
+
+    .ai-instance-tab.is-active {
+      background: rgba(37, 99, 235, 0.10);
+      border-color: rgba(37, 99, 235, 0.22);
+      color: #1d4ed8;
+    }
+
+    .ai-instance-tab-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ai-instance-pane-wrap {
+      position: relative;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .ai-instance-pane {
+      position: absolute;
+      inset: 0;
+      overflow: auto;
+      padding: 6px 8px 8px;
+      display: none;
+    }
+
+    .ai-instance-pane.is-active {
+      display: block;
+    }
+
+    .ai-instance-grid {
+      display: grid;
+      gap: 5px;
+      align-content: start;
+    }
+
+    .ai-service-config-card,
+    .ai-editor-form,
+    .ai-editor-empty {
+      gap: 7px;
+      padding: 7px 9px;
+      border-radius: 8px;
+    }
+
+    .ai-service-config-card,
+    .ai-client-instance-card {
+      cursor: pointer;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+
+    .ai-service-config-card.is-selected,
+    .ai-client-instance-card.is-selected {
+      border-color: rgba(37, 99, 235, 0.3);
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      background: color-mix(in srgb, rgba(37, 99, 235, 0.08) 45%, var(--proj-page-surface) 55%);
+    }
+
+    .ai-editor-title,
+    .ai-service-title {
+      font-size: 13px;
+    }
+
+    .ai-service-key,
+    .ai-runtime-chip,
+    .ai-client-library-chip,
+    .ai-service-status-pill {
+      min-height: 22px;
+      padding: 0 8px;
+      font-size: 10px;
+    }
+
+    .ai-editor-inline-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .ai-editor-field {
+      gap: 5px;
+    }
+
+    .ai-editor-field input,
+    .ai-editor-field select,
+    .ai-editor-field textarea,
+    .ai-service-add-row select {
+      min-height: 30px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+    }
+
+    .ai-editor-field textarea {
+      min-height: 94px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .ai-client-instance-card .ai-editor-field textarea {
+      min-height: 112px;
+    }
+
+    .ai-service-instance-placeholder {
+      border-style: dashed;
+    }
+
+    .ai-service-assign-row {
+      display: grid;
+      gap: 6px;
+    }
+
+    .ai-service-add-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ai-service-binding-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .ai-service-binding-row {
+      padding: 7px 8px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+    }
+
+    .ai-service-binding-row strong {
+      font-size: 12px;
+      line-height: 1.2;
+      color: var(--proj-page-text);
+    }
+
+    .ai-service-binding-head {
+      align-items: center;
+    }
+
+    .ai-client-library-stats {
+      margin-top: 0;
+    }
+
+    .ai-client-library-snapshot {
+      margin-top: 0;
+      padding: 9px 10px;
+      font-size: 10px;
+      line-height: 1.5;
+      max-height: 180px;
+      overflow: auto;
+    }
+
+    .ai-client-usage-note {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.45;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-runtime-panel-body {
+      display: grid;
+      gap: 6px;
+      padding-top: 7px;
+      padding-bottom: 7px;
+    }
+
+    .ai-runtime-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .ai-runtime-grid .panel-card-header {
+      padding-top: 7px;
+      padding-bottom: 6px;
+    }
+
+    .ai-runtime-grid .panel-card-body {
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+
+    .ai-runtime-grid .panel-card-title {
+      font-size: 11px;
+    }
+
+    .ai-runtime-grid .panel-card-kicker {
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+
+    .ai-runtime-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .ai-runtime-head-meta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .ai-runtime-chip-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .ai-runtime-chip {
+      min-height: 20px;
+      padding: 0 7px;
+      font-size: 9px;
+    }
+
+    .ai-config-key-grid,
+    .ai-reload-worker-list {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+    }
+
+    .ai-config-key-card {
+      display: grid;
+      gap: 3px;
+      min-height: 0;
+      padding: 9px 10px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--proj-page-surface) 95%, transparent);
+    }
+
+    .ai-config-key-card strong {
+      font-size: 10px;
+      line-height: 1.2;
+      font-weight: 850;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-config-key-card span {
+      font-size: 14px;
+      line-height: 1.15;
+      font-weight: 800;
+      color: var(--proj-page-text);
+    }
+
+    .ai-config-key-card p {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--proj-page-muted);
+      overflow-wrap: anywhere;
+    }
+
+    .ai-runtime-panel-body .ai-services-empty,
+    .ai-reload-worker-list .ai-services-empty {
+      min-height: 74px;
+      padding: 16px 14px;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .ai-instance-card-summary {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .ai-instance-card-main {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+
+    .ai-instance-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+    }
+
+    .ai-instance-card-actions .panel-btn {
+      flex: 0 0 auto;
+    }
+
+    .ai-instance-chip-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .ai-instance-muted-line {
+      color: var(--proj-page-muted);
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .ai-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(2, 6, 23, .46);
+      z-index: 80;
+    }
+
+    .ai-modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .ai-instance-modal {
+      width: min(860px, 100%);
+      max-height: min(720px, calc(100vh - 48px));
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: var(--proj-page-surface, var(--proj-surface-elevated));
+      box-shadow: 0 22px 70px rgba(2, 6, 23, .28);
+      overflow: hidden;
+    }
+
+    .ai-instance-modal-head,
+    .ai-instance-modal-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .ai-instance-modal-foot {
+      border-top: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-bottom: none;
+      justify-content: flex-end;
+    }
+
+    .ai-instance-modal-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+      color: var(--proj-page-text);
+      line-height: 1.2;
+    }
+
+    .ai-instance-modal-body {
+      overflow: auto;
+      padding: 10px 11px;
+      display: grid;
+      gap: 8px;
+    }
+
+    @media (max-width: 1120px) {
+      .ai-editor-inline-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .ai-detail-kv-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .ai-services-settings-page .panel-hero {
+        display: grid;
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .ai-services-settings-page .panel-hero .ai-services-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .ai-services-settings-page .panel-hero-main,
+      .ai-services-hero-summary,
+      .ai-services-settings-page .panel-hero-actions {
+        flex: none;
+      }
+
+      .ai-services-settings-page .panel-hero-actions {
+        justify-content: flex-start;
+        margin-left: 0;
+      }
+
+      .ai-services-settings-page .panel-hero .panel-action-row {
+        flex-wrap: wrap;
+      }
+
+      .ai-instance-shell {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .ai-runtime-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .ai-kind-pane {
+        border-right: none;
+        display: none;
+      }
+
+      .ai-kind-splitter,
+      .ai-detail-splitter,
+      .ai-instance-detail-pane {
+        display: none;
+      }
+
+      .ai-instance-main {
+        min-height: 520px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .ai-editor-inline-grid,
+      .ai-service-add-row {
+        grid-template-columns: 1fr;
+      }
+
+      .ai-instance-tabs,
+      .ai-instance-tab-actions,
+      .ai-instance-main-meta {
+        width: 100%;
+        justify-content: stretch;
+      }
+
+      .ai-instance-tab,
+      .ai-instance-tab-actions .panel-btn {
+        flex: 1 1 auto;
+      }
+
+      .ai-services-settings-page .panel-hero .ai-services-summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .ai-services-settings-page .panel-hero .ai-services-summary-card {
+        display: flex;
+        border-radius: 8px;
+      }
+    }
+  </style>
+</head>
+<body class="panel-page-body ai-services-settings-page">
+  <main class="panel-page">
+    <div class="panel-page-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker">AI Services Instances</div>
+          <h1 class="panel-title">AI 服务实例</h1>
+        </div>
+        <section id="settings-summary" class="ai-services-summary-grid ai-services-hero-summary">
+          <article class="ai-services-summary-card">
+            <div class="ai-services-summary-label">Config Source</div>
+            <div class="ai-services-summary-value">载入中…</div>
+          </article>
+        </section>
+        <div class="panel-hero-actions ai-services-hero-stack">
+          <div class="panel-action-row">
+            <button id="settings-edit-btn" type="button" class="panel-btn panel-btn-primary">编辑</button>
+            <button id="settings-cancel-btn" type="button" class="panel-btn" hidden>退出编辑</button>
+            <button id="settings-apply-btn" type="button" class="panel-btn panel-btn-primary" hidden>保存并应用</button>
+            <button id="settings-refresh-btn" type="button" class="panel-btn">刷新状态</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="settings-status-box" class="status-box" data-kind="info">正在载入 AI 服务状态…</section>
+
+      <div id="instance-shell" class="ai-instance-shell">
+        <aside id="service-kind-pane" class="ai-kind-pane">
+          <div class="ai-kind-pane-head">
+            <div class="panel-card-kicker">Service Kind</div>
+            <h3 class="ai-kind-pane-title">切换服务类型</h3>
+          </div>
+          <div id="service-kind-list" class="ai-kind-list">
+            <div class="ai-services-empty is-compact">正在整理 service kind…</div>
+          </div>
+        </aside>
+
+        <div id="service-kind-splitter" class="ai-kind-splitter" role="separator" aria-orientation="vertical">
+          <button id="toggle-service-kind-pane-btn" class="ai-kind-splitter-toggle" type="button" aria-label="折叠 service kind 侧栏">‹</button>
+        </div>
+
+        <div class="ai-instance-main">
+          <div class="ai-instance-main-head">
+            <div>
+              <div class="panel-card-kicker">Current Kind</div>
+              <h3 id="instance-kind-title" class="ai-instance-main-title">completion</h3>
+              <div id="instance-kind-note" class="ai-instance-main-note"></div>
+            </div>
+            <div id="instance-kind-meta" class="ai-instance-main-meta"></div>
+          </div>
+
+          <div class="ai-instance-tabbar">
+            <div class="ai-instance-tabs">
+              <button type="button" class="ai-instance-tab is-active" data-instance-tab="services">服务实例</button>
+              <button type="button" class="ai-instance-tab" data-instance-tab="clients">客户端实例</button>
+            </div>
+            <div class="ai-instance-tab-actions">
+              <button id="add-service-btn" type="button" class="panel-btn panel-btn-primary">新增 Service 实例</button>
+              <button id="add-client-btn" type="button" class="panel-btn" hidden>新增 Client 实例</button>
+            </div>
+          </div>
+
+          <div class="ai-instance-pane-wrap">
+            <section class="ai-instance-pane is-active" data-instance-pane="services">
+              <div id="service-board" class="ai-instance-grid">
+                <div class="ai-services-empty is-compact">正在载入 service 实例…</div>
+              </div>
+            </section>
+            <section class="ai-instance-pane" data-instance-pane="clients">
+              <div id="client-library" class="ai-instance-grid">
+                <div class="ai-services-empty is-compact">正在载入 client 实例…</div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="detail-pane-splitter" class="ai-detail-splitter" role="separator" aria-orientation="vertical">
+          <button id="toggle-detail-pane-btn" class="ai-detail-splitter-toggle" type="button" aria-label="展开详情侧栏">‹</button>
+        </div>
+
+        <aside id="instance-detail-pane" class="ai-instance-detail-pane">
+          <div class="ai-detail-pane-head">
+            <div class="panel-card-kicker">Details</div>
+            <h3 id="instance-detail-title" class="ai-detail-pane-title">实例详情</h3>
+          </div>
+          <div id="instance-detail-body" class="ai-detail-pane-body">
+            <div class="ai-detail-empty">点击左侧 service/client 实例后，会在这里展示详细配置和运行态信息。</div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="ai-runtime-grid">
+        <section class="panel-card">
+          <div class="panel-card-header">
+            <div class="ai-runtime-section-head">
+              <div>
+                <div class="panel-card-kicker">Runtime Snapshot</div>
+                <h2 class="panel-card-title">当前运行态</h2>
+              </div>
+              <div id="runtime-snapshot-meta" class="ai-runtime-head-meta"></div>
+            </div>
+          </div>
+          <div id="runtime-snapshot" class="panel-card-body ai-runtime-panel-body">
+            <div class="ai-services-empty is-compact">正在整理当前 AI 服务实例状态…</div>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <div class="panel-card-header">
+            <div>
+              <div class="panel-card-kicker">Reload Workers</div>
+              <h2 class="panel-card-title">最近一次重载结果</h2>
+            </div>
+          </div>
+          <div class="panel-card-body">
+            <div id="reload-workers" class="ai-reload-worker-list">
+              <div class="ai-services-empty is-compact">等待配置下发…</div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <div id="instance-modal-backdrop" class="ai-modal-backdrop" aria-hidden="true">
+    <section class="ai-instance-modal" role="dialog" aria-modal="true" aria-labelledby="instance-modal-title">
+      <header class="ai-instance-modal-head">
+        <h2 id="instance-modal-title" class="ai-instance-modal-title">编辑实例</h2>
+        <button id="instance-modal-close-btn" type="button" class="panel-btn" aria-label="关闭">关闭</button>
+      </header>
+      <div id="instance-modal-body" class="ai-instance-modal-body"></div>
+      <footer class="ai-instance-modal-foot">
+        <button id="instance-modal-cancel-btn" type="button" class="panel-btn">取消</button>
+        <button id="instance-modal-save-btn" type="button" class="panel-btn panel-btn-primary">保存</button>
+      </footer>
+    </section>
+  </div>
+
+  <script id="__AI_SERVICES_CONFIG__" type="application/json">{}</script>
+
+  <script>
+    'use strict';
+
+    function formatTimestamp(ts) {
+      if (!ts || ts <= 0) return '—';
+      return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false });
+    }
+
+    const DEFAULT_SERVICE_KINDS = ['completion', 'embedding', 's2t', 't2s'];
+    const STRATEGY_OPTIONS = [
+      { value: 0, label: 'LOAD_BALANCE' },
+      { value: 1, label: 'ON_RATELIMIT' },
+      { value: 2, label: 'ON_ERROR' },
+    ];
+    const UI_STORAGE_KEYS = {
+      activeServiceKind: 'proj-ai-services-active-kind',
+      activeInstanceTab: 'proj-ai-services-instance-tab',
+      kindNavCollapsed: 'proj-ai-services-kind-pane-collapsed',
+      kindNavWidth: 'proj-ai-services-kind-pane-width',
+      detailPaneCollapsed: 'proj-ai-services-detail-pane-collapsed',
+      detailPaneWidth: 'proj-ai-services-detail-pane-width',
+    };
+
+    function readStoredText(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value == null ? fallback : value;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function readStoredNumber(key, fallback) {
+      const raw = readStoredText(key, '');
+      const value = Number(raw);
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    }
+
+    function writeStoredValue(key, value) {
+      try {
+        localStorage.setItem(key, String(value));
+      } catch {
+        void 0;
+      }
+    }
+
+    const state = {
+      loading: false,
+      applying: false,
+      dirty: false,
+      editing: false,
+      pendingRuntimeClientUpdates: {},
+      config: null,
+      clientTypes: [],
+      serviceKinds: DEFAULT_SERVICE_KINDS.slice(),
+      workers: [],
+      reloadState: [],
+      runtimeServices: [],
+      configSource: 'defaults',
+      configLoaded: false,
+      configVersion: 0,
+      activeServiceKind: readStoredText(UI_STORAGE_KEYS.activeServiceKind, DEFAULT_SERVICE_KINDS[0]),
+      activeInstanceTab: readStoredText(UI_STORAGE_KEYS.activeInstanceTab, 'services') === 'clients' ? 'clients' : 'services',
+      kindNavCollapsed: readStoredText(UI_STORAGE_KEYS.kindNavCollapsed, '0') === '1',
+      kindNavWidth: readStoredNumber(UI_STORAGE_KEYS.kindNavWidth, 216),
+      detailCollapsed: readStoredText(UI_STORAGE_KEYS.detailPaneCollapsed, '1') !== '0',
+      detailWidth: readStoredNumber(UI_STORAGE_KEYS.detailPaneWidth, 320),
+      selectedDetail: null,
+    };
+
+    const modalState = {
+      open: false,
+      entity: null,
+      mode: 'edit',
+      serviceKind: null,
+      originalKey: null,
+      draftKey: '',
+      draftConfig: null,
+      isDefault: false,
+    };
+
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function escHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatIso(text) {
+      if (!text) return '—';
+      const date = new Date(text);
+      if (Number.isNaN(date.getTime())) return String(text);
+      return date.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    function present(value, fallback = '—') {
+      return value == null || value === '' ? fallback : String(value);
+    }
+
+    function strategyLabel(level) {
+      const found = STRATEGY_OPTIONS.find(option => Number(option.value) === Number(level));
+      return found ? found.label : String(level ?? 0);
+    }
+
+    function formatJsonSnapshot(value) {
+      return JSON.stringify(value || {}, null, 2);
+    }
+
+    function parseJsonInput(text, label) {
+      try {
+        return JSON.parse(text || '{}');
+      } catch (error) {
+        throw new Error(`${label} JSON 解析失败: ${error.message || error}`);
+      }
+    }
+
+    function setStatus(kind, text) {
+      const status = document.getElementById('settings-status-box');
+      status.dataset.kind = kind;
+      status.textContent = text;
+    }
+
+    function activeServiceKind() {
+      const fallback = state.serviceKinds[0] || DEFAULT_SERVICE_KINDS[0];
+      if (!state.serviceKinds.includes(state.activeServiceKind)) {
+        state.activeServiceKind = fallback;
+      }
+      return state.activeServiceKind;
+    }
+
+    function markDirty(flag = true) {
+      state.dirty = !!flag;
+      if (state.dirty) state.editing = true;
+      updateEditControls();
+    }
+
+    function hasPendingRuntimeClientUpdates() {
+      return Object.keys(state.pendingRuntimeClientUpdates || {}).length > 0;
+    }
+
+    function updateEditControls() {
+      const editBtn = document.getElementById('settings-edit-btn');
+      const cancelBtn = document.getElementById('settings-cancel-btn');
+      const applyBtn = document.getElementById('settings-apply-btn');
+      if (editBtn) editBtn.hidden = state.editing || state.applying;
+      if (cancelBtn) {
+        cancelBtn.hidden = !state.editing && !state.applying;
+        cancelBtn.disabled = state.loading || state.applying;
+      }
+      if (applyBtn) {
+        applyBtn.hidden = !state.editing && !state.applying;
+        applyBtn.disabled = state.loading || state.applying || !state.dirty;
+      }
+    }
+
+    function updateConfigBadge() {
+      updateEditControls();
+    }
+
+    function ensureConfigShape(input, serviceKinds) {
+      const cfg = clone(input || {});
+      const kinds = Array.isArray(serviceKinds) && serviceKinds.length
+        ? serviceKinds
+        : (state.serviceKinds.length ? state.serviceKinds : DEFAULT_SERVICE_KINDS);
+      for (const serviceKind of kinds) {
+        const bucket = cfg[serviceKind];
+        if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) {
+          cfg[serviceKind] = { clients: {}, default: null, extras: {} };
+          continue;
+        }
+        if (!bucket.clients || typeof bucket.clients !== 'object' || Array.isArray(bucket.clients)) {
+          bucket.clients = {};
+        }
+        if (!('default' in bucket)) bucket.default = null;
+        if (!bucket.extras || typeof bucket.extras !== 'object' || Array.isArray(bucket.extras)) {
+          bucket.extras = {};
+        }
+      }
+      return cfg;
+    }
+
+    function getServiceBucket(serviceKind) {
+      if (!state.config || typeof state.config !== 'object') {
+        state.config = ensureConfigShape({}, state.serviceKinds);
+      }
+      if (!state.config[serviceKind] || typeof state.config[serviceKind] !== 'object' || Array.isArray(state.config[serviceKind])) {
+        state.config[serviceKind] = { clients: {}, default: null, extras: {} };
+      }
+      const bucket = state.config[serviceKind];
+      if (!bucket.clients || typeof bucket.clients !== 'object' || Array.isArray(bucket.clients)) {
+        bucket.clients = {};
+      }
+      if (!('default' in bucket)) bucket.default = null;
+      if (!bucket.extras || typeof bucket.extras !== 'object' || Array.isArray(bucket.extras)) {
+        bucket.extras = {};
+      }
+      return bucket;
+    }
+
+    function createEmptyClient() {
+      return {
+        type: state.clientTypes[0] || 'openai-completion',
+        key: '',
+        max_concurrent: null,
+        priority: 0,
+        strategy_lvl: 0,
+        kwargs: {},
+      };
+    }
+
+    function createEmptyService() {
+      return {
+        clients: [],
+        fail_cooldown: 10,
+        recovery_interval: null,
+        kwargs: {},
+      };
+    }
+
+    function createClientBinding(clientKey) {
+      return {
+        client: clientKey,
+        priority: null,
+        strategy_lvl: null,
+      };
+    }
+
+    function clientKeys(serviceKind = activeServiceKind()) {
+      return Object.keys(getServiceBucket(serviceKind).clients || {}).sort((left, right) => left.localeCompare(right, 'zh-CN'));
+    }
+
+    function runtimeServiceKind(row) {
+      const direct = String(row?.service_kind || '').trim().toLowerCase();
+      if (direct) return direct;
+      const serviceType = String(row?.service_type || '').trim();
+      return {
+        CompletionService: 'completion',
+        EmbeddingService: 'embedding',
+        S2TService: 's2t',
+        T2SService: 't2s',
+      }[serviceType] || '';
+    }
+
+    function runtimeServicesForKind(serviceKind) {
+      return (Array.isArray(state.runtimeServices) ? state.runtimeServices : [])
+        .filter(row => runtimeServiceKind(row) === serviceKind);
+    }
+
+    function runtimeClientDraftId(serviceKind, serviceType, serviceKey, clientKey) {
+      return JSON.stringify([serviceKind || '', serviceType || '', serviceKey || 'default', clientKey || '']);
+    }
+
+    function getPendingRuntimeClientUpdate(serviceKind, serviceType, serviceKey, clientKey) {
+      return state.pendingRuntimeClientUpdates[runtimeClientDraftId(serviceKind, serviceType, serviceKey, clientKey)] || null;
+    }
+
+    function setPendingRuntimeClientUpdate(serviceKind, serviceType, serviceKey, clientKey, draft) {
+      state.pendingRuntimeClientUpdates[runtimeClientDraftId(serviceKind, serviceType, serviceKey, clientKey)] = {
+        serviceKind: serviceKind || '',
+        serviceType: serviceType || '',
+        serviceKey: serviceKey || 'default',
+        clientKey: clientKey || '',
+        max_concurrent: draft.max_concurrent,
+        priority: draft.priority,
+        strategy_lvl: draft.strategy_lvl,
+      };
+    }
+
+    function mergeRuntimeClientDraft(client, serviceKind, serviceType, serviceKey, clientKey) {
+      const pending = getPendingRuntimeClientUpdate(serviceKind, serviceType, serviceKey, clientKey);
+      if (!pending) return client;
+      const merged = clone(client || {});
+      merged.max_concurrent = pending.max_concurrent;
+      merged.priority = pending.priority;
+      merged.strategy_lvl = pending.strategy_lvl;
+      return merged;
+    }
+
+    function runtimeClientKey(client) {
+      return String(client?.config_key || client?.key || '').trim();
+    }
+
+    function runtimeClientsForKind(serviceKind) {
+      const rows = new Map();
+      for (const service of runtimeServicesForKind(serviceKind)) {
+        for (const client of service.clients || []) {
+          const key = runtimeClientKey(client);
+          if (key && !rows.has(key)) {
+            rows.set(key, mergeRuntimeClientDraft(client, serviceKind, service.service_type || '', service.key || 'default', key));
+          }
+        }
+      }
+      return rows;
+    }
+
+    function runtimeClientServiceRef(serviceKind, clientKey) {
+      const target = String(clientKey || '').trim();
+      for (const service of runtimeServicesForKind(serviceKind)) {
+        for (const client of service.clients || []) {
+          if (runtimeClientKey(client) === target) {
+            return {
+              serviceType: service.service_type || '',
+              serviceKey: service.key || 'default',
+              client: mergeRuntimeClientDraft(client, serviceKind, service.service_type || '', service.key || 'default', target),
+            };
+          }
+        }
+      }
+      return null;
+    }
+
+    function totalClientCount() {
+      const keys = new Set();
+      for (const serviceKind of state.serviceKinds) {
+        for (const key of clientKeys(serviceKind)) keys.add(`${serviceKind}:${key}`);
+        for (const key of runtimeClientsForKind(serviceKind).keys()) keys.add(`${serviceKind}:${key}`);
+      }
+      return keys.size;
+    }
+
+    function totalServiceCount() {
+      let total = 0;
+      for (const serviceKind of state.serviceKinds) {
+        const bucket = state.config?.[serviceKind] || { default: null, extras: {} };
+        const runtimeKeys = new Set(runtimeServicesForKind(serviceKind).map(row => String(row.key || '').trim()).filter(Boolean));
+        if (bucket.default) total += 1;
+        total += Object.keys(bucket.extras || {}).length;
+        if (!bucket.default && runtimeKeys.has('default')) total += 1;
+        for (const key of runtimeKeys) {
+          if (key !== 'default' && !bucket.extras?.[key]) total += 1;
+        }
+      }
+      return total;
+    }
+
+    function ensureServiceConfig(serviceKind, serviceKey) {
+      const bucket = getServiceBucket(serviceKind);
+      if (serviceKey === 'default') {
+        if (!bucket.default) bucket.default = createEmptyService();
+        return bucket.default;
+      }
+      if (!bucket.extras[serviceKey]) bucket.extras[serviceKey] = createEmptyService();
+      return bucket.extras[serviceKey];
+    }
+
+    function removeClientEverywhere(clientKey, targetServiceKind = activeServiceKind()) {
+      for (const serviceKind of [targetServiceKind]) {
+        const bucket = getServiceBucket(serviceKind);
+        const entries = [];
+        if (bucket.default) entries.push(bucket.default);
+        entries.push(...Object.values(bucket.extras || {}));
+        for (const service of entries) {
+          service.clients = (service.clients || []).filter(binding => {
+            if (typeof binding === 'string') return binding !== clientKey;
+            if (!binding || typeof binding !== 'object') return true;
+            return binding.client !== clientKey;
+          });
+        }
+      }
+    }
+
+    function removeServiceInstance(serviceKind, serviceKey) {
+      if (serviceKey === 'default') return false;
+      const bucket = getServiceBucket(serviceKind);
+      if (bucket.extras && Object.prototype.hasOwnProperty.call(bucket.extras, serviceKey)) {
+        delete bucket.extras[serviceKey];
+      }
+      return true;
+    }
+
+    function clientRowsForKind(serviceKind) {
+      const usage = serviceUsage(serviceKind).usage;
+      const runtimeClients = runtimeClientsForKind(serviceKind);
+      const bucketClients = getServiceBucket(serviceKind).clients || {};
+      const rows = new Map();
+      for (const key of clientKeys(serviceKind)) rows.set(key, { key, config: bucketClients[key] || {}, runtime: runtimeClients.get(key) || null, internal: false, usageCount: usage.get(key) || 0 });
+      for (const [key, runtime] of runtimeClients.entries()) {
+        if (!rows.has(key)) rows.set(key, { key, config: null, runtime, internal: !!runtime.internal, usageCount: usage.get(key) || 0 });
+      }
+      return Array.from(rows.values()).sort((left, right) => {
+        if (left.usageCount !== right.usageCount) return right.usageCount - left.usageCount;
+        return left.key.localeCompare(right.key, 'zh-CN');
+      });
+    }
+
+    function openDetailPane(entity, serviceKind, key) {
+      state.selectedDetail = { entity, serviceKind, key };
+      state.detailCollapsed = false;
+      renderAll();
+    }
+
+    function clearDetailSelection() {
+      state.selectedDetail = null;
+      state.detailCollapsed = true;
+    }
+
+    function currentServiceDetailEntry() {
+      const detail = state.selectedDetail;
+      if (!detail || detail.entity !== 'service') return null;
+      const entry = serviceEntries(detail.serviceKind).find(row => (row.isDefault ? 'default' : row.key) === detail.key);
+      return entry ? { serviceKind: detail.serviceKind, entry } : null;
+    }
+
+    function currentClientDetailRow() {
+      const detail = state.selectedDetail;
+      if (!detail || detail.entity !== 'client') return null;
+      const row = clientRowsForKind(detail.serviceKind).find(item => item.key === detail.key);
+      return row ? { serviceKind: detail.serviceKind, row } : null;
+    }
+
+    function detailSourceLabel(configPart, runtimePart) {
+      if (configPart && runtimePart) return '配置 + 运行时';
+      if (configPart) return '仅配置';
+      if (runtimePart) return '运行时默认';
+      return '—';
+    }
+
+    function detailJsonBlock(value, emptyText = '无') {
+      const data = value && typeof value === 'object' ? value : null;
+      if (!data || !Object.keys(data).length) return `<div class="ai-detail-empty">${escHtml(emptyText)}</div>`;
+      return `<pre class="ai-detail-code">${escHtml(formatJsonSnapshot(data))}</pre>`;
+    }
+
+    function renderServiceDetailPane(serviceKind, entry) {
+      const serviceConfig = entry.config;
+      const runtime = entry.runtime;
+      const instanceName = entry.isDefault ? 'default' : entry.key;
+      const configuredBindings = (serviceConfig?.clients || []).map(normalizeBinding).filter(binding => binding.client);
+      const runtimeBindings = (runtime?.clients || []).map(client => ({ client: runtimeClientKey(client), internal: !!client.internal })).filter(binding => binding.client);
+      const bindings = configuredBindings.length ? configuredBindings : runtimeBindings;
+      const bindingItems = bindings.length
+        ? `<ul class="ai-detail-list">${bindings.map(binding => `<li>${escHtml(binding.client)}${binding.internal ? ' · 内部 client' : ''}</li>`).join('')}</ul>`
+        : '<div class="ai-detail-empty">当前没有绑定 client。</div>';
+      document.getElementById('instance-detail-title').textContent = instanceName;
+      document.getElementById('instance-detail-body').innerHTML = `
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">概览</div>
+          <div class="ai-detail-kv-grid">
+            <div class="ai-detail-kv-item"><span>Kind</span><strong>${escHtml(serviceKind)}</strong></div>
+            <div class="ai-detail-kv-item"><span>Source</span><strong>${escHtml(detailSourceLabel(serviceConfig, runtime))}</strong></div>
+            <div class="ai-detail-kv-item"><span>Clients</span><strong>${bindings.length}</strong></div>
+            <div class="ai-detail-kv-item"><span>Runtime Key</span><strong>${escHtml(present(runtime?.key || instanceName))}</strong></div>
+            <div class="ai-detail-kv-item"><span>Cooldown</span><strong>${escHtml(serviceConfig?.fail_cooldown ?? runtime?.fail_cooldown ?? 10)}</strong></div>
+            <div class="ai-detail-kv-item"><span>Recovery</span><strong>${escHtml(present(serviceConfig?.recovery_interval ?? runtime?.recovery_interval))}</strong></div>
+          </div>
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">绑定客户端</div>
+          ${bindingItems}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Service Kwargs</div>
+          ${detailJsonBlock(serviceConfig?.kwargs || {}, '当前没有额外 kwargs。')}
+        </section>
+      `;
+    }
+
+    function renderClientDetailPane(serviceKind, row) {
+      const client = row.config || row.runtime || {};
+      const kwargs = row.config?.kwargs || row.runtime?.init_snapshot?.kwargs || {};
+      document.getElementById('instance-detail-title').textContent = row.key;
+      document.getElementById('instance-detail-body').innerHTML = `
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">概览</div>
+          <div class="ai-detail-kv-grid">
+            <div class="ai-detail-kv-item"><span>Kind</span><strong>${escHtml(serviceKind)}</strong></div>
+            <div class="ai-detail-kv-item"><span>Type</span><strong>${escHtml(client.type || '未指定类型')}</strong></div>
+            <div class="ai-detail-kv-item"><span>Source</span><strong>${escHtml(row.internal ? '内部运行时' : detailSourceLabel(row.config, row.runtime))}</strong></div>
+            <div class="ai-detail-kv-item"><span>Mounted</span><strong>${row.usageCount}</strong></div>
+            <div class="ai-detail-kv-item"><span>Max Concurrent</span><strong>${escHtml(client.max_concurrent == null ? '∞' : client.max_concurrent)}</strong></div>
+            <div class="ai-detail-kv-item"><span>Priority</span><strong>${escHtml(client.priority ?? 0)}</strong></div>
+            <div class="ai-detail-kv-item"><span>Strategy</span><strong>${escHtml(strategyLabel(client.strategy_lvl ?? 0))}</strong></div>
+            <div class="ai-detail-kv-item"><span>Internal</span><strong>${row.internal ? '是' : '否'}</strong></div>
+          </div>
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Client Kwargs</div>
+          ${detailJsonBlock(kwargs, '当前没有额外 kwargs。')}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Init Snapshot</div>
+          ${detailJsonBlock(row.runtime?.init_snapshot || {}, '当前没有 runtime snapshot。')}
+        </section>
+      `;
+    }
+
+    function renderDetailPane() {
+      const title = document.getElementById('instance-detail-title');
+      const body = document.getElementById('instance-detail-body');
+      const serviceDetail = currentServiceDetailEntry();
+      const clientDetail = currentClientDetailRow();
+      if (serviceDetail) {
+        renderServiceDetailPane(serviceDetail.serviceKind, serviceDetail.entry);
+        return;
+      }
+      if (clientDetail) {
+        renderClientDetailPane(clientDetail.serviceKind, clientDetail.row);
+        return;
+      }
+      state.selectedDetail = null;
+      title.textContent = '实例详情';
+      body.innerHTML = '<div class="ai-detail-empty">点击左侧 service/client 实例后，会在这里展示详细配置和运行态信息。</div>';
+    }
+
+    async function confirmServiceDelete(serviceKind, serviceKey) {
+      const text = `确认删除 ${serviceKind} · ${serviceKey} 吗？删除后，原本指向该实例的服务可能 fallback 到 default service 实例。`;
+      const ui = window.ProjUtils || null;
+      if (ui && typeof ui.confirmDialog === 'function') {
+        return await ui.confirmDialog({ title: '删除 Service 实例', text, okText: '删除', tone: 'danger' });
+      }
+      return window.confirm(text);
+    }
+
+    async function confirmDiscardEditing() {
+      const text = '退出编辑模式会丢弃当前所有未保存的 service/client 修改。是否继续？';
+      const ui = window.ProjUtils || null;
+      if (ui && typeof ui.confirmDialog === 'function') {
+        return await ui.confirmDialog({ title: '退出编辑模式', text, okText: '丢弃修改', tone: 'danger' });
+      }
+      return window.confirm(text);
+    }
+
+    function renameClientEverywhere(oldKey, newKey, serviceKind = activeServiceKind()) {
+      {
+        const bucket = getServiceBucket(serviceKind);
+        const entries = [];
+        if (bucket.default) entries.push(bucket.default);
+        entries.push(...Object.values(bucket.extras || {}));
+        for (const service of entries) {
+          service.clients = (service.clients || []).map(binding => {
+            const normalized = normalizeBinding(binding);
+            if (normalized.client === oldKey) normalized.client = newKey;
+            return normalized;
+          });
+        }
+      }
+    }
+
+    function normalizeBinding(binding) {
+      if (typeof binding === 'string') return createClientBinding(binding);
+      if (!binding || typeof binding !== 'object') return createClientBinding('');
+      const next = clone(binding);
+      if (typeof next.client !== 'string') next.client = '';
+      return next;
+    }
+
+    function serviceEntries(serviceKind) {
+      const bucket = getServiceBucket(serviceKind);
+      const runtimeByKey = new Map(runtimeServicesForKind(serviceKind).map(row => [String(row.key || '').trim(), row]));
+      const rows = [{ key: 'default', isDefault: true, config: bucket.default, runtime: runtimeByKey.get('default') || null }];
+      for (const extraKey of Object.keys(bucket.extras || {}).sort((left, right) => left.localeCompare(right, 'zh-CN'))) {
+        rows.push({ key: extraKey, isDefault: false, config: bucket.extras[extraKey], runtime: runtimeByKey.get(extraKey) || null });
+      }
+      for (const [runtimeKey, runtime] of runtimeByKey.entries()) {
+        if (!runtimeKey || runtimeKey === 'default' || bucket.extras?.[runtimeKey]) continue;
+        rows.push({ key: runtimeKey, isDefault: false, config: null, runtime });
+      }
+      return rows;
+    }
+
+    function serviceUsage(serviceKind) {
+      const usage = new Map();
+      let serviceCount = 0;
+      let bindingCount = 0;
+      for (const entry of serviceEntries(serviceKind)) {
+        if (!entry.config && !entry.runtime) continue;
+        serviceCount += 1;
+        const seenClientKeys = new Set();
+        for (const rawBinding of entry.config?.clients || []) {
+          const binding = normalizeBinding(rawBinding);
+          if (!binding.client || seenClientKeys.has(binding.client)) continue;
+          seenClientKeys.add(binding.client);
+          bindingCount += 1;
+          usage.set(binding.client, (usage.get(binding.client) || 0) + 1);
+        }
+        for (const client of entry.runtime?.clients || []) {
+          const key = runtimeClientKey(client);
+          if (!key || seenClientKeys.has(key)) continue;
+          seenClientKeys.add(key);
+          bindingCount += 1;
+          usage.set(key, (usage.get(key) || 0) + 1);
+        }
+      }
+      return { usage, serviceCount, bindingCount };
+    }
+
+    function addServiceInstanceForActiveKind() {
+      if (!state.editing) return;
+      const serviceKind = activeServiceKind();
+      const bucket = getServiceBucket(serviceKind);
+      if (!bucket.default) {
+        openServiceModal({ serviceKind, key: 'default', config: createEmptyService(), mode: 'new', isDefault: true });
+      } else {
+        openServiceModal({ serviceKind, key: nextServiceKey(bucket), config: createEmptyService(), mode: 'new', isDefault: false });
+      }
+    }
+
+    function nextServiceKey(bucket) {
+      let nextIndex = 1;
+      while (bucket.extras[`service-${nextIndex}`]) nextIndex += 1;
+      return `service-${nextIndex}`;
+    }
+
+    function nextClientKey() {
+      let nextIndex = 1;
+      while (state.config?.clients?.[`client-${nextIndex}`]) nextIndex += 1;
+      return `client-${nextIndex}`;
+    }
+
+    function openModalShell() {
+      const backdrop = document.getElementById('instance-modal-backdrop');
+      backdrop.classList.add('is-open');
+      backdrop.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeInstanceModal() {
+      const backdrop = document.getElementById('instance-modal-backdrop');
+      backdrop.classList.remove('is-open');
+      backdrop.setAttribute('aria-hidden', 'true');
+      Object.assign(modalState, {
+        open: false,
+        entity: null,
+        mode: 'edit',
+        serviceKind: null,
+        originalKey: null,
+        draftKey: '',
+        draftConfig: null,
+        isDefault: false,
+      });
+    }
+
+    function openServiceModal({ serviceKind, key, config, mode, isDefault }) {
+      Object.assign(modalState, {
+        open: true,
+        entity: 'service',
+        mode,
+        serviceKind,
+        originalKey: key,
+        draftKey: key,
+        draftConfig: clone(config || createEmptyService()),
+        isDefault: !!isDefault,
+      });
+      renderInstanceModal();
+      openModalShell();
+    }
+
+    function openClientModal({ key, config, mode }) {
+      const draft = clone(config || createEmptyClient());
+      draft.key = key;
+      Object.assign(modalState, {
+        open: true,
+        entity: 'client',
+        mode,
+        serviceKind: activeServiceKind(),
+        originalKey: key,
+        draftKey: key,
+        draftConfig: draft,
+        isDefault: false,
+      });
+      renderInstanceModal();
+      openModalShell();
+    }
+
+    function openRuntimeClientModal({ key, config, serviceType, serviceKey }) {
+      const draft = clone(config || {});
+      draft.key = key;
+      Object.assign(modalState, {
+        open: true,
+        entity: 'runtime-client',
+        mode: 'edit',
+        serviceKind: activeServiceKind(),
+        serviceType: serviceType || '',
+        serviceKey: serviceKey || 'default',
+        originalKey: key,
+        draftKey: key,
+        draftConfig: draft,
+        isDefault: false,
+      });
+      renderInstanceModal();
+      openModalShell();
+    }
+
+    function serviceModalBindingRow(binding, index) {
+      const normalized = normalizeBinding(binding);
+      const options = clientKeys(modalState.serviceKind).map(key => `<option value="${escHtml(key)}" ${normalized.client === key ? 'selected' : ''}>${escHtml(key)}</option>`).join('');
+      return `
+        <div class="ai-service-binding-row" data-modal-binding-index="${index}">
+          <div class="ai-service-binding-head">
+            <strong>${escHtml(normalized.client || '未绑定 client')}</strong>
+            <button type="button" class="panel-btn ai-modal-remove-binding-btn" data-modal-binding-index="${index}">解除</button>
+          </div>
+          <div class="ai-editor-inline-grid">
+            <label class="ai-editor-field"><span>Client</span><select class="ai-modal-binding-client"><option value="">选择 client…</option>${options}</select></label>
+            <label class="ai-editor-field"><span>Priority</span><input class="ai-modal-binding-priority" type="number" step="0.1" value="${normalized.priority == null ? '' : escHtml(normalized.priority)}" /></label>
+            <label class="ai-editor-field"><span>Strategy</span><select class="ai-modal-binding-strategy"><option value="">沿用 client</option>${STRATEGY_OPTIONS.map(option => `<option value="${option.value}" ${Number(normalized.strategy_lvl) === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}</select></label>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderServiceModalBody() {
+      const service = modalState.draftConfig || createEmptyService();
+      const bindings = (service.clients || []).map(normalizeBinding);
+      return `
+        <div class="ai-editor-inline-grid">
+          <label class="ai-editor-field"><span>Instance Key</span><input id="modal-service-key" type="text" value="${escHtml(modalState.draftKey)}" ${modalState.isDefault ? 'disabled' : ''} /></label>
+          <label class="ai-editor-field"><span>Fail Cooldown</span><input id="modal-service-fail-cooldown" type="number" min="1" step="1" value="${escHtml(service.fail_cooldown ?? 10)}" /></label>
+          <label class="ai-editor-field"><span>Recovery Interval</span><input id="modal-service-recovery-interval" type="number" min="1" step="1" value="${service.recovery_interval == null ? '' : escHtml(service.recovery_interval)}" /></label>
+        </div>
+        <label class="ai-editor-field"><span>Service Kwargs JSON</span><textarea id="modal-service-kwargs" rows="6">${escHtml(JSON.stringify(service.kwargs || {}, null, 2))}</textarea></label>
+        <div class="ai-service-binding-list">
+          ${bindings.length ? bindings.map(serviceModalBindingRow).join('') : '<div class="ai-services-empty is-compact">当前 service 没有挂载 client。</div>'}
+        </div>
+        <button id="modal-add-binding-btn" type="button" class="panel-btn">分配 Client</button>
+      `;
+    }
+
+    function renderClientModalBody() {
+      const client = modalState.draftConfig || createEmptyClient();
+      return `
+        <div class="ai-editor-inline-grid">
+          <label class="ai-editor-field"><span>Client Key</span><input id="modal-client-key" type="text" value="${escHtml(modalState.draftKey)}" /></label>
+          <label class="ai-editor-field"><span>Type</span><select id="modal-client-type">${state.clientTypes.map(type => `<option value="${escHtml(type)}" ${type === client.type ? 'selected' : ''}>${escHtml(type)}</option>`).join('')}</select></label>
+          <label class="ai-editor-field"><span>Max Concurrent</span><input id="modal-client-max-concurrent" type="number" min="1" step="1" value="${client.max_concurrent == null ? '' : escHtml(client.max_concurrent)}" /></label>
+          <label class="ai-editor-field"><span>Priority</span><input id="modal-client-priority" type="number" step="0.1" value="${escHtml(client.priority ?? 0)}" /></label>
+        </div>
+        <div class="ai-editor-inline-grid">
+          <label class="ai-editor-field"><span>Strategy</span><select id="modal-client-strategy">${STRATEGY_OPTIONS.map(option => `<option value="${option.value}" ${Number(client.strategy_lvl ?? 0) === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}</select></label>
+        </div>
+        <label class="ai-editor-field"><span>Client Kwargs JSON</span><textarea id="modal-client-kwargs" rows="8">${escHtml(JSON.stringify(client.kwargs || {}, null, 2))}</textarea></label>
+      `;
+    }
+
+    function renderRuntimeClientModalBody() {
+      const client = modalState.draftConfig || {};
+      return `
+        <div class="ai-editor-inline-grid">
+          <label class="ai-editor-field"><span>Client Key</span><input type="text" value="${escHtml(modalState.draftKey)}" disabled /></label>
+          <label class="ai-editor-field"><span>Type</span><input type="text" value="${escHtml(client.type || '未指定类型')}" disabled /></label>
+          <label class="ai-editor-field"><span>Max Concurrent</span><input id="modal-runtime-client-max-concurrent" type="number" min="1" step="1" value="${client.max_concurrent == null ? '' : escHtml(client.max_concurrent)}" /></label>
+          <label class="ai-editor-field"><span>Priority</span><input id="modal-runtime-client-priority" type="number" step="0.1" value="${client.priority == null ? '' : escHtml(client.priority)}" /></label>
+        </div>
+        <div class="ai-editor-inline-grid">
+          <label class="ai-editor-field"><span>Strategy</span><select id="modal-runtime-client-strategy"><option value="">沿用 client</option>${STRATEGY_OPTIONS.map(option => `<option value="${option.value}" ${Number(client.strategy_lvl) === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}</select></label>
+        </div>
+        <div class="ai-inline-note">这里调整当前 service 实例内该 client 的调度值；留空则沿用 client 默认值。</div>
+      `;
+    }
+
+    function readServiceDraftFromModal() {
+      const rawRecovery = String(document.getElementById('modal-service-recovery-interval')?.value || '').trim();
+      const bindings = Array.from(document.querySelectorAll('[data-modal-binding-index]')).map(row => {
+        const strategyRaw = String(row.querySelector('.ai-modal-binding-strategy')?.value || '').trim();
+        return {
+          client: String(row.querySelector('.ai-modal-binding-client')?.value || '').trim(),
+          priority: String(row.querySelector('.ai-modal-binding-priority')?.value || '').trim() ? Number(row.querySelector('.ai-modal-binding-priority').value) : null,
+          strategy_lvl: strategyRaw ? Number(strategyRaw) : null,
+        };
+      }).filter(binding => binding.client);
+      return {
+        clients: bindings,
+        fail_cooldown: Number(document.getElementById('modal-service-fail-cooldown')?.value || 10),
+        recovery_interval: rawRecovery ? Number(rawRecovery) : null,
+        kwargs: parseJsonInput(document.getElementById('modal-service-kwargs')?.value || '{}', 'service kwargs'),
+      };
+    }
+
+    function readClientDraftFromModal() {
+      const rawMaxConcurrent = String(document.getElementById('modal-client-max-concurrent')?.value || '').trim();
+      return {
+        key: String(document.getElementById('modal-client-key')?.value || '').trim(),
+        type: String(document.getElementById('modal-client-type')?.value || '').trim(),
+        max_concurrent: rawMaxConcurrent ? Number(rawMaxConcurrent) : null,
+        priority: Number(document.getElementById('modal-client-priority')?.value || 0),
+        strategy_lvl: Number(document.getElementById('modal-client-strategy')?.value || 0),
+        kwargs: parseJsonInput(document.getElementById('modal-client-kwargs')?.value || '{}', 'client kwargs'),
+      };
+    }
+
+    function renderInstanceModal() {
+      const title = modalState.entity === 'service'
+        ? `${modalState.mode === 'new' ? '新增' : '编辑'} Service 实例 · ${modalState.serviceKind}`
+        : modalState.entity === 'runtime-client'
+          ? `编辑内部 Client · ${modalState.serviceKind}`
+        : `${modalState.mode === 'new' ? '新增' : '编辑'} Client 实例`;
+      document.getElementById('instance-modal-title').textContent = title;
+      document.getElementById('instance-modal-body').innerHTML = modalState.entity === 'service'
+        ? renderServiceModalBody()
+        : modalState.entity === 'runtime-client'
+          ? renderRuntimeClientModalBody()
+          : renderClientModalBody();
+      document.getElementById('instance-modal-save-btn').textContent = '暂存';
+      document.getElementById('modal-add-binding-btn')?.addEventListener('click', () => {
+        try {
+          modalState.draftConfig = readServiceDraftFromModal();
+          modalState.draftConfig.clients.push(createClientBinding(clientKeys(modalState.serviceKind)[0] || ''));
+          renderInstanceModal();
+        } catch (error) {
+          setStatus('error', error.message || String(error));
+        }
+      });
+      document.querySelectorAll('.ai-modal-remove-binding-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          modalState.draftConfig = readServiceDraftFromModal();
+          modalState.draftConfig.clients.splice(Number(button.dataset.modalBindingIndex || -1), 1);
+          renderInstanceModal();
+        });
+      });
+    }
+
+    function saveServiceModal() {
+      const serviceKind = modalState.serviceKind;
+      const bucket = getServiceBucket(serviceKind);
+      const nextKey = modalState.isDefault ? 'default' : String(document.getElementById('modal-service-key')?.value || '').trim();
+      if (!nextKey) throw new Error('Service key 不能为空。');
+      if (!modalState.isDefault && nextKey === 'default') throw new Error('额外 service 不能使用 default 作为 key。');
+      if (!modalState.isDefault && nextKey !== modalState.originalKey && bucket.extras[nextKey]) {
+        throw new Error(`Service key ${nextKey} 已存在。`);
+      }
+      const draft = readServiceDraftFromModal();
+      if (modalState.isDefault) {
+        bucket.default = draft;
+      } else {
+        if (modalState.mode === 'edit' && modalState.originalKey && modalState.originalKey !== nextKey) {
+          delete bucket.extras[modalState.originalKey];
+        }
+        bucket.extras[nextKey] = draft;
+      }
+    }
+
+    function saveClientModal() {
+      const draft = readClientDraftFromModal();
+      const nextKey = draft.key;
+      const bucket = getServiceBucket(modalState.serviceKind);
+      if (!nextKey) throw new Error('Client key 不能为空。');
+      if (nextKey !== modalState.originalKey && bucket.clients[nextKey]) {
+        throw new Error(`Client key ${nextKey} 已存在。`);
+      }
+      if (modalState.mode === 'edit' && modalState.originalKey && modalState.originalKey !== nextKey) {
+        delete bucket.clients[modalState.originalKey];
+        renameClientEverywhere(modalState.originalKey, nextKey, modalState.serviceKind);
+      }
+      bucket.clients[nextKey] = draft;
+    }
+
+    function saveRuntimeClientModal() {
+      const rawMaxConcurrent = String(document.getElementById('modal-runtime-client-max-concurrent')?.value || '').trim();
+      const maxConcurrent = rawMaxConcurrent ? Number(rawMaxConcurrent) : null;
+      const rawPriority = String(document.getElementById('modal-runtime-client-priority')?.value || '').trim();
+      const rawStrategy = String(document.getElementById('modal-runtime-client-strategy')?.value || '').trim();
+      const priority = rawPriority ? Number(rawPriority) : null;
+      const strategyLvl = rawStrategy ? Number(rawStrategy) : null;
+      if (maxConcurrent != null && (!Number.isFinite(maxConcurrent) || maxConcurrent < 1)) {
+        throw new Error('Max Concurrent 必须为空或大于 0。');
+      }
+      if (priority != null && !Number.isFinite(priority)) {
+        throw new Error('Priority 必须为空或有效数字。');
+      }
+      const serviceType = modalState.serviceType || '';
+      const serviceKey = modalState.serviceKey || 'default';
+      if (!serviceType) throw new Error('找不到该 client 所属的运行时 service。');
+      setPendingRuntimeClientUpdate(modalState.serviceKind, serviceType, serviceKey, modalState.originalKey, {
+        max_concurrent: maxConcurrent == null ? null : Math.floor(maxConcurrent),
+        priority,
+        strategy_lvl: strategyLvl,
+      });
+    }
+
+    async function saveInstanceModal() {
+      try {
+        if (modalState.entity === 'service') saveServiceModal();
+        if (modalState.entity === 'client') saveClientModal();
+        if (modalState.entity === 'runtime-client') saveRuntimeClientModal();
+        markDirty(true);
+        updateConfigBadge();
+        closeInstanceModal();
+        renderAll();
+        setStatus('info', '改动已暂存，点击右上角“保存并应用”后才会真正生效。');
+      } catch (error) {
+        setStatus('error', error.message || String(error));
+      }
+    }
+
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function fetchAdminJson(path, options = {}) {
+      const response = await fetch(path, { credentials: 'same-origin', ...options });
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      const data = contentType.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : await response.text().catch(() => '');
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        if (typeof data === 'string') {
+          throw new Error(data || `HTTP ${response.status}`);
+        }
+        const detail = data && data.detail ? data.detail : data;
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2));
+      }
+      if (typeof data === 'string') {
+        throw new Error('接口未返回 JSON。');
+      }
+      return data;
+    }
+
+    async function applyPendingRuntimeClientUpdates() {
+      const pendingEntries = Object.entries(state.pendingRuntimeClientUpdates || {});
+      const failures = [];
+      for (const [draftId, draft] of pendingEntries) {
+        try {
+          await fetchAdminJson(`/admin/api/ai-services/runtime-service-client/${encodeURIComponent(draft.serviceType)}/${encodeURIComponent(draft.serviceKey)}/${encodeURIComponent(draft.clientKey)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              max_concurrent: draft.max_concurrent,
+              priority: draft.priority,
+              strategy_lvl: draft.strategy_lvl,
+            }),
+          });
+        } catch (error) {
+          failures.push(`${draft.clientKey}: ${error.message || error}`);
+          continue;
+        }
+        delete state.pendingRuntimeClientUpdates[draftId];
+      }
+      if (failures.length) {
+        throw new Error(`配置已保存，但以下内部 client 修改提交失败：\n${failures.join('\n')}`);
+      }
+    }
+
+    async function exitEditingMode() {
+      if (state.loading || state.applying) return;
+      if (state.dirty) {
+        const confirmed = await confirmDiscardEditing();
+        if (!confirmed) return;
+      }
+      if (modalState.open) closeInstanceModal();
+      state.pendingRuntimeClientUpdates = {};
+      await loadSettingsSnapshot();
+      if (!state.loading) setStatus('info', '已退出编辑模式。');
+    }
+
+    function applyKindPaneLayout() {
+      const shell = document.getElementById('instance-shell');
+      const kindToggle = document.getElementById('toggle-service-kind-pane-btn');
+      const detailToggle = document.getElementById('toggle-detail-pane-btn');
+      const isMobile = window.innerWidth <= 900;
+      const nextKindWidth = Math.max(168, Math.min(280, Number(state.kindNavWidth) || 216));
+      const nextDetailWidth = Math.max(280, Math.min(420, Number(state.detailWidth) || 320));
+      const kindCollapsed = isMobile ? true : !!state.kindNavCollapsed;
+      const detailCollapsed = isMobile ? true : !!state.detailCollapsed;
+      shell.style.setProperty('--ai-kind-pane-width', `${nextKindWidth}px`);
+      shell.style.setProperty('--ai-kind-pane-size', kindCollapsed ? '0px' : `${nextKindWidth}px`);
+      shell.style.setProperty('--ai-detail-pane-width', `${nextDetailWidth}px`);
+      shell.style.setProperty('--ai-detail-pane-size', detailCollapsed ? '0px' : `${nextDetailWidth}px`);
+      shell.classList.toggle('kind-nav-collapsed', kindCollapsed);
+      shell.classList.toggle('detail-pane-collapsed', detailCollapsed);
+      kindToggle.textContent = kindCollapsed ? '›' : '‹';
+      kindToggle.setAttribute('aria-label', kindCollapsed ? '展开 service kind 侧栏' : '折叠 service kind 侧栏');
+      detailToggle.textContent = detailCollapsed ? '‹' : '›';
+      detailToggle.setAttribute('aria-label', detailCollapsed ? '展开详情侧栏' : '折叠详情侧栏');
+      writeStoredValue(UI_STORAGE_KEYS.kindNavCollapsed, state.kindNavCollapsed ? '1' : '0');
+      writeStoredValue(UI_STORAGE_KEYS.kindNavWidth, nextKindWidth);
+      writeStoredValue(UI_STORAGE_KEYS.detailPaneCollapsed, state.detailCollapsed ? '1' : '0');
+      writeStoredValue(UI_STORAGE_KEYS.detailPaneWidth, nextDetailWidth);
+    }
+
+    function renderServiceKindRail() {
+      const root = document.getElementById('service-kind-list');
+      root.innerHTML = state.serviceKinds.map(serviceKind => {
+        const stats = serviceUsage(serviceKind);
+        const clientCount = stats.usage.size;
+        return `
+          <button type="button" class="ai-kind-item ${serviceKind === activeServiceKind() ? 'is-active' : ''}" data-service-kind="${escHtml(serviceKind)}">
+            <div class="ai-kind-item-title">${escHtml(serviceKind)}</div>
+            <div class="ai-kind-item-counts">
+              <span class="ai-kind-item-count">services ${stats.serviceCount}</span>
+              <span class="ai-kind-item-count">clients ${clientCount}</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      root.querySelectorAll('[data-service-kind]').forEach(button => {
+        button.addEventListener('click', () => {
+          state.activeServiceKind = button.dataset.serviceKind;
+          clearDetailSelection();
+          writeStoredValue(UI_STORAGE_KEYS.activeServiceKind, state.activeServiceKind);
+          renderAll();
+        });
+      });
+    }
+
+    function renderWorkspaceChrome() {
+      const serviceKind = activeServiceKind();
+      const stats = serviceUsage(serviceKind);
+      document.getElementById('instance-kind-title').textContent = serviceKind;
+      document.getElementById('instance-kind-note').textContent = state.selectedDetail
+        ? '详情侧栏会展示当前选中实例的完整配置和运行态。'
+        : '';
+      document.getElementById('instance-kind-meta').innerHTML = `
+        <span class="ai-runtime-chip is-muted">service ${stats.serviceCount}</span>
+        <span class="ai-runtime-chip is-muted">client ${stats.usage.size}</span>
+        <span class="ai-runtime-chip is-muted">version ${escHtml(state.configVersion || 0)}</span>
+      `;
+
+      document.querySelectorAll('[data-instance-tab]').forEach(button => {
+        button.classList.toggle('is-active', button.dataset.instanceTab === state.activeInstanceTab);
+      });
+      document.querySelectorAll('[data-instance-pane]').forEach(pane => {
+        pane.classList.toggle('is-active', pane.dataset.instancePane === state.activeInstanceTab);
+      });
+      const addServiceBtn = document.getElementById('add-service-btn');
+      const addClientBtn = document.getElementById('add-client-btn');
+      addServiceBtn.hidden = state.activeInstanceTab !== 'services';
+      addClientBtn.hidden = state.activeInstanceTab !== 'clients';
+      addServiceBtn.disabled = !state.editing;
+      addClientBtn.disabled = !state.editing;
+      applyKindPaneLayout();
+      updateEditControls();
+    }
+
+    function updateSummary() {
+      const summary = document.getElementById('settings-summary');
+      summary.innerHTML = `
+        <article class="ai-services-summary-card">
+          <div class="ai-services-summary-label">Config Source</div>
+          <div class="ai-services-summary-value">${escHtml(state.configSource)}</div>
+        </article>
+        <article class="ai-services-summary-card">
+          <div class="ai-services-summary-label">Service Instances</div>
+          <div class="ai-services-summary-value">${totalServiceCount()}</div>
+        </article>
+        <article class="ai-services-summary-card">
+          <div class="ai-services-summary-label">Client Instances</div>
+          <div class="ai-services-summary-value">${totalClientCount()}</div>
+        </article>
+      `;
+    }
+
+    function renderReloadWorkers(rows) {
+      const root = document.getElementById('reload-workers');
+      const data = Array.isArray(rows) ? rows : [];
+      if (!data.length) {
+        root.innerHTML = '<div class="ai-services-empty is-compact">暂无重载记录</div>';
+        return;
+      }
+      root.innerHTML = data.map(row => {
+        const tone = row.state === 'error' ? 'err' : row.state === 'reloading' ? 'warn' : 'ok';
+        return `
+          <article class="ai-config-key-card ai-reload-worker-card" data-tone="${tone}">
+            <strong>Worker ${row.pid}</strong>
+            <span>${escHtml(row.state || 'unknown')}</span>
+            <p>v${row.version || 0} · ${escHtml((row.service_kinds || []).join(', ') || '—')}</p>
+            <p>${escHtml(row.error || formatIso(row.updated_at))}</p>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function runtimeWorkerTone(worker) {
+      const status = String(worker?.status || '').toLowerCase();
+      if (status.includes('error') || status.includes('dead')) return 'err';
+      if (status.includes('starting') || status.includes('reload')) return 'warn';
+      return 'ok';
+    }
+
+    function renderRuntimeSnapshot() {
+      const root = document.getElementById('runtime-snapshot');
+      const meta = document.getElementById('runtime-snapshot-meta');
+      const workers = Array.isArray(state.workers) ? state.workers : [];
+      const configChipTone = state.configLoaded ? 'ok' : 'warn';
+      if (meta) {
+        meta.innerHTML = `
+          <span class="ai-runtime-chip ${configChipTone}">${escHtml(state.configSource || 'defaults')}</span>
+          <span class="ai-runtime-chip is-muted">v${escHtml(state.configVersion || 0)}</span>
+        `;
+      }
+      const workerCards = workers.length
+        ? workers.map(worker => {
+            const tone = runtimeWorkerTone(worker);
+            return `
+              <article class="ai-config-key-card" data-tone="${tone}">
+                <strong>Worker ${escHtml(worker.pid ?? '—')}</strong>
+                <span>${escHtml(worker.status || 'unknown')}</span>
+                <p>req ${escHtml(worker.request_count ?? 0)} · ${escHtml(formatIso(worker.started_at) || '—')}</p>
+              </article>
+            `;
+          }).join('')
+        : '<div class="ai-services-empty is-compact">暂无 worker snapshot</div>';
+
+      root.innerHTML = `<div class="ai-config-key-grid">${workerCards}</div>`;
+    }
+
+    function renderServiceCard(serviceKind, entry) {
+      const serviceConfig = entry.config;
+      const instanceName = entry.isDefault ? 'default' : entry.key;
+      const editable = !!state.editing;
+      const runtimeClients = Array.isArray(entry.runtime?.clients) ? entry.runtime.clients : [];
+      if (!serviceConfig && !entry.runtime) {
+        return '';
+      }
+
+      const configuredBindings = (serviceConfig?.clients || []).map(normalizeBinding).filter(binding => binding.client);
+      const runtimeBindings = runtimeClients.map(client => ({ client: runtimeClientKey(client), internal: !!client.internal })).filter(binding => binding.client);
+      const bindings = configuredBindings.length ? configuredBindings : runtimeBindings;
+      const clientCount = bindings.length || runtimeClients.length;
+      const sourceLabel = detailSourceLabel(serviceConfig, entry.runtime);
+      const selected = state.selectedDetail?.entity === 'service' && state.selectedDetail?.serviceKind === serviceKind && state.selectedDetail?.key === instanceName;
+      const deleteButton = instanceName === 'default' ? '' : `
+              <button type="button" class="panel-btn ai-delete-service-btn" data-service-kind="${escHtml(serviceKind)}" data-service-key="${escHtml(instanceName)}" ${editable ? '' : 'disabled'}>删除</button>
+            `;
+      return `
+        <article class="ai-service-config-card ${selected ? 'is-selected' : ''}" data-service-kind="${escHtml(serviceKind)}" data-service-key="${escHtml(instanceName)}" data-detail-entity="service">
+          <div class="ai-instance-card-summary">
+            <div class="ai-instance-card-main">
+              <div class="ai-service-title-row">
+                <h3 class="ai-service-title">${escHtml(instanceName)}</h3>
+              </div>
+              <div class="ai-instance-muted-line">${escHtml(serviceKind)} · ${clientCount} 个 client · ${escHtml(sourceLabel)}</div>
+              <div class="ai-instance-muted-line">cooldown ${escHtml(serviceConfig?.fail_cooldown ?? entry.runtime?.fail_cooldown ?? 10)} · recovery ${escHtml(present(serviceConfig?.recovery_interval ?? entry.runtime?.recovery_interval))}</div>
+            </div>
+            <div class="ai-instance-card-actions">
+              <button type="button" class="panel-btn ai-edit-service-btn" data-service-kind="${escHtml(serviceKind)}" data-service-key="${escHtml(instanceName)}" ${editable ? '' : 'disabled'}>编辑</button>
+              ${deleteButton}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderServiceBoard() {
+      const serviceKind = activeServiceKind();
+      const root = document.getElementById('service-board');
+      const rows = serviceEntries(serviceKind).map(entry => renderServiceCard(serviceKind, entry)).join('');
+      root.innerHTML = rows || '<div class="ai-services-empty is-compact">当前 kind 还没有 service 实例。</div>';
+
+      root.querySelectorAll('.ai-edit-service-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          if (!state.editing) return;
+          const currentKind = button.dataset.serviceKind;
+          const currentKey = button.dataset.serviceKey;
+          const config = ensureServiceConfig(currentKind, currentKey);
+          openServiceModal({ serviceKind: currentKind, key: currentKey, config, mode: 'edit', isDefault: currentKey === 'default' });
+        });
+      });
+
+      root.querySelectorAll('[data-detail-entity="service"]').forEach(card => {
+        card.addEventListener('click', event => {
+          if (event.target.closest('button')) return;
+          openDetailPane('service', card.dataset.serviceKind, card.dataset.serviceKey);
+        });
+      });
+
+      root.querySelectorAll('.ai-delete-service-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+          if (!state.editing) return;
+          const serviceKind = button.dataset.serviceKind;
+          const serviceKey = button.dataset.serviceKey;
+          if (!serviceKind || !serviceKey || serviceKey === 'default') return;
+          const confirmed = await confirmServiceDelete(serviceKind, serviceKey);
+          if (!confirmed) return;
+          if (!removeServiceInstance(serviceKind, serviceKey)) return;
+          if (state.selectedDetail?.entity === 'service' && state.selectedDetail?.serviceKind === serviceKind && state.selectedDetail?.key === serviceKey) {
+            clearDetailSelection();
+          }
+          markDirty(true);
+          updateConfigBadge();
+          renderAll();
+        });
+      });
+    }
+
+    function renderClientLibrary() {
+      const serviceKind = activeServiceKind();
+      const clientRows = clientRowsForKind(serviceKind);
+      const root = document.getElementById('client-library');
+      if (!clientRows.length) {
+        root.innerHTML = '<div class="ai-services-empty is-compact">还没有 client 实例。</div>';
+        return;
+      }
+
+      root.innerHTML = clientRows.map(row => {
+        const key = row.key;
+        const client = row.config || row.runtime || {};
+        const isInternal = !!row.internal || (!!row.runtime && !row.config);
+        const maxConcurrent = client.max_concurrent == null ? '∞' : escHtml(client.max_concurrent);
+        const selected = state.selectedDetail?.entity === 'client' && state.selectedDetail?.serviceKind === serviceKind && state.selectedDetail?.key === key;
+        const actions = isInternal ? `
+                <button type="button" class="panel-btn ai-edit-client-btn" data-client-key="${escHtml(key)}" data-internal-client="1" ${state.editing ? '' : 'disabled'}>编辑</button>
+        ` : `
+                <button type="button" class="panel-btn ai-edit-client-btn" data-client-key="${escHtml(key)}" ${state.editing ? '' : 'disabled'}>编辑</button>
+                <button type="button" class="panel-btn ai-delete-client-btn" data-client-key="${escHtml(key)}" ${state.editing ? '' : 'disabled'}>删除</button>
+        `;
+        return `
+          <article class="ai-editor-form ai-client-instance-card ${selected ? 'is-selected' : ''}" data-client-key="${escHtml(key)}" data-detail-entity="client" data-service-kind="${escHtml(serviceKind)}">
+            <div class="ai-instance-card-summary">
+              <div class="ai-instance-card-main">
+                <div class="ai-service-title-row">
+                  <h3 class="ai-editor-title">${escHtml(key)}</h3>
+                </div>
+                <div class="ai-instance-muted-line">${escHtml(client.type || '未指定类型')}${isInternal ? ' · 内部 client' : ''}</div>
+                <div class="ai-instance-muted-line">并发 ${maxConcurrent} · priority ${escHtml(client.priority ?? 0)} · ${row.usageCount ? `当前 kind 挂载 ${row.usageCount}` : '当前 kind 未挂载'}</div>
+              </div>
+              <div class="ai-instance-card-actions">
+                ${actions}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      root.querySelectorAll('.ai-edit-client-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          if (!state.editing) return;
+          const key = button.dataset.clientKey;
+          if (button.dataset.internalClient === '1') {
+            const ref = runtimeClientServiceRef(activeServiceKind(), key);
+            const runtime = ref?.client || runtimeClientsForKind(activeServiceKind()).get(key) || {};
+            openRuntimeClientModal({
+              key,
+              config: runtime,
+              serviceType: ref?.serviceType || '',
+              serviceKey: ref?.serviceKey || 'default',
+            });
+            return;
+          }
+          openClientModal({ key, config: getServiceBucket(activeServiceKind()).clients[key], mode: 'edit' });
+        });
+      });
+
+      root.querySelectorAll('[data-detail-entity="client"]').forEach(card => {
+        card.addEventListener('click', event => {
+          if (event.target.closest('button')) return;
+          openDetailPane('client', card.dataset.serviceKind, card.dataset.clientKey);
+        });
+      });
+
+      root.querySelectorAll('.ai-delete-client-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          if (!state.editing) return;
+          const key = button.dataset.clientKey;
+          removeClientEverywhere(key, serviceKind);
+          delete getServiceBucket(serviceKind).clients[key];
+          if (state.selectedDetail?.entity === 'client' && state.selectedDetail?.serviceKind === serviceKind && state.selectedDetail?.key === key) {
+            clearDetailSelection();
+          }
+          markDirty(true);
+          updateConfigBadge();
+          renderAll();
+        });
+      });
+    }
+
+    function renderAll() {
+      renderWorkspaceChrome();
+      updateSummary();
+      renderRuntimeSnapshot();
+      renderServiceKindRail();
+      renderServiceBoard();
+      renderClientLibrary();
+      renderDetailPane();
+      renderReloadWorkers(state.reloadState);
+      updateConfigBadge();
+    }
+
+    async function loadSettingsSnapshot() {
+      state.loading = true;
+      setStatus('info', '正在载入 AI 服务设置…');
+      try {
+        const data = await fetchAdminJson('/admin/api/ai-services/settings');
+        const nextServiceKinds = Array.isArray(data.service_kinds) && data.service_kinds.length ? data.service_kinds : DEFAULT_SERVICE_KINDS.slice();
+        state.serviceKinds = nextServiceKinds;
+        state.config = ensureConfigShape(data.config, nextServiceKinds);
+        state.clientTypes = Array.isArray(data.client_types) && data.client_types.length ? data.client_types : ['openai-completion'];
+        state.workers = Array.isArray(data.workers) ? data.workers : [];
+        state.reloadState = Array.isArray(data.reload_state) ? data.reload_state : [];
+        state.runtimeServices = Array.isArray(data.services) ? data.services : [];
+        state.pendingRuntimeClientUpdates = {};
+        state.configSource = data.config_source || 'defaults';
+        state.configLoaded = !!data.config_loaded;
+        state.configVersion = Number(data.config_version || 0);
+        state.editing = false;
+        if (!nextServiceKinds.includes(state.activeServiceKind)) {
+          state.activeServiceKind = nextServiceKinds[0] || DEFAULT_SERVICE_KINDS[0];
+          writeStoredValue(UI_STORAGE_KEYS.activeServiceKind, state.activeServiceKind);
+        }
+        const configTag = document.getElementById('__AI_SERVICES_CONFIG__');
+        if (configTag) configTag.textContent = JSON.stringify(data.config || {}, null, 2);
+        state.dirty = false;
+        renderAll();
+        if (!state.configLoaded) {
+          setStatus('warn', '当前未检测到预定义 AI services config，保存后将写入 config/ai_services.yaml 并同步运行时。');
+        } else {
+          setStatus('success', `已载入 ${totalClientCount()} 个 client，${totalServiceCount()} 个 service 实例。`);
+        }
+      } catch (error) {
+        setStatus('error', `AI 服务设置载入失败：${error.message || error}`);
+      } finally {
+        state.loading = false;
+        updateConfigBadge();
+      }
+    }
+
+    async function applySettings() {
+      if (state.applying || !state.editing || !state.dirty) return;
+      state.applying = true;
+      updateConfigBadge();
+      setStatus('warn', '正在向全部 worker 下发 AI 服务配置；已有请求或新请求都可能被直接打断、失败。');
+      try {
+        const data = await fetchAdminJson('/admin/api/ai-services/settings/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: state.config, wait_for_reload: true }),
+        });
+        await applyPendingRuntimeClientUpdates();
+        state.reloadState = Array.isArray(data.reload_results) ? data.reload_results.map(row => ({
+          pid: row.pid,
+          version: row.version,
+          state: row.ok ? 'ready' : 'error',
+          service_kinds: row.service_kinds || [],
+          error: row.error || null,
+          updated_at: new Date().toISOString(),
+        })) : [];
+        renderReloadWorkers(state.reloadState);
+        setStatus('success', data.message || 'AI 服务配置已同步。');
+        await loadSettingsSnapshot();
+      } catch (error) {
+        setStatus('error', `AI 服务配置下发失败：${error.message || error}`);
+      } finally {
+        state.applying = false;
+        updateConfigBadge();
+      }
+    }
+
+    function bindKindPaneSplitter() {
+      const splitter = document.getElementById('service-kind-splitter');
+      const detailSplitter = document.getElementById('detail-pane-splitter');
+      const shell = document.getElementById('instance-shell');
+      splitter.addEventListener('pointerdown', event => {
+        if (event.target.closest('.ai-kind-splitter-toggle')) return;
+        if (window.innerWidth <= 900 || state.kindNavCollapsed) return;
+        const startX = event.clientX;
+        const startWidth = state.kindNavWidth;
+        splitter.classList.add('dragging');
+        const onMove = moveEvent => {
+          const nextWidth = Math.max(160, Math.min(320, startWidth + (moveEvent.clientX - startX)));
+          state.kindNavWidth = nextWidth;
+          shell.style.setProperty('--ai-kind-pane-width', `${nextWidth}px`);
+        };
+        const onUp = () => {
+          splitter.classList.remove('dragging');
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+          applyKindPaneLayout();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+
+      splitter.addEventListener('click', event => {
+        if (event.target.closest('.ai-kind-splitter-toggle')) return;
+        if (!state.kindNavCollapsed) return;
+        state.kindNavCollapsed = false;
+        applyKindPaneLayout();
+      });
+
+      document.getElementById('toggle-service-kind-pane-btn').addEventListener('click', event => {
+        event.stopPropagation();
+        state.kindNavCollapsed = !state.kindNavCollapsed;
+        applyKindPaneLayout();
+      });
+
+      detailSplitter.addEventListener('pointerdown', event => {
+        if (event.target.closest('.ai-detail-splitter-toggle')) return;
+        if (window.innerWidth <= 900 || state.detailCollapsed) return;
+        const startX = event.clientX;
+        const startWidth = state.detailWidth;
+        detailSplitter.classList.add('dragging');
+        const onMove = moveEvent => {
+          const nextWidth = Math.max(280, Math.min(420, startWidth + (startX - moveEvent.clientX)));
+          state.detailWidth = nextWidth;
+          shell.style.setProperty('--ai-detail-pane-size', `${nextWidth}px`);
+        };
+        const onUp = () => {
+          detailSplitter.classList.remove('dragging');
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+          applyKindPaneLayout();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+
+      detailSplitter.addEventListener('click', event => {
+        if (event.target.closest('.ai-detail-splitter-toggle')) return;
+        if (!state.detailCollapsed) return;
+        state.detailCollapsed = false;
+        applyKindPaneLayout();
+      });
+
+      document.getElementById('toggle-detail-pane-btn').addEventListener('click', event => {
+        event.stopPropagation();
+        state.detailCollapsed = !state.detailCollapsed;
+        applyKindPaneLayout();
+      });
+    }
+
+    function bindStaticEvents() {
+      document.querySelectorAll('[data-instance-tab]').forEach(button => {
+        button.addEventListener('click', () => {
+          state.activeInstanceTab = button.dataset.instanceTab === 'clients' ? 'clients' : 'services';
+          writeStoredValue(UI_STORAGE_KEYS.activeInstanceTab, state.activeInstanceTab);
+          renderWorkspaceChrome();
+        });
+      });
+
+      document.getElementById('add-service-btn').addEventListener('click', addServiceInstanceForActiveKind);
+
+      document.getElementById('add-client-btn').addEventListener('click', () => {
+        if (!state.config || !state.editing) return;
+        const nextKey = nextClientKey();
+        const client = createEmptyClient();
+        client.key = nextKey;
+        state.activeInstanceTab = 'clients';
+        writeStoredValue(UI_STORAGE_KEYS.activeInstanceTab, state.activeInstanceTab);
+        renderWorkspaceChrome();
+        openClientModal({ key: nextKey, config: client, mode: 'new' });
+      });
+
+      document.getElementById('settings-refresh-btn').addEventListener('click', loadSettingsSnapshot);
+      document.getElementById('settings-edit-btn').addEventListener('click', () => {
+        state.editing = true;
+        renderAll();
+        setStatus('info', '编辑模式已开启。');
+      });
+      document.getElementById('settings-cancel-btn').addEventListener('click', exitEditingMode);
+      document.getElementById('settings-apply-btn').addEventListener('click', applySettings);
+      document.getElementById('instance-modal-save-btn').addEventListener('click', saveInstanceModal);
+      document.getElementById('instance-modal-cancel-btn').addEventListener('click', closeInstanceModal);
+      document.getElementById('instance-modal-close-btn').addEventListener('click', closeInstanceModal);
+      document.getElementById('instance-modal-backdrop').addEventListener('click', event => {
+        if (event.target.id === 'instance-modal-backdrop') closeInstanceModal();
+      });
+      bindKindPaneSplitter();
+    }
+
+    bindStaticEvents();
+    applyKindPaneLayout();
+    loadSettingsSnapshot();
+  </script>
+</body>
+</html>

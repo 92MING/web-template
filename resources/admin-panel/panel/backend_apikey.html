@@ -1,0 +1,2737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后端 APIKey</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <script src="/html-assets/js/page-controls.js"></script>
+  <script src="/html-assets/js/core-ui-utils.js"></script>
+  <style>
+    html {
+      font-size: 11px;
+      height: 100%;
+    }
+
+    body.panel-page-body {
+      height: 100%;
+    }
+
+    .backend-apikey-page .panel-page {
+      min-height: 100%;
+      height: 100%;
+      padding: 4px;
+    }
+
+    .backend-apikey-page .panel-page-shell {
+      gap: 6px;
+      height: 100%;
+    }
+
+    .backend-apikey-page .panel-hero {
+      grid-template-columns: minmax(0, 1.35fr) minmax(200px, auto);
+      gap: 8px;
+      padding: 7px 9px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .backend-apikey-page .panel-kicker,
+    .backend-apikey-page .panel-stat-kicker,
+    .backend-apikey-page .panel-card-kicker,
+    .backend-apikey-page .mini-label,
+    .backend-apikey-page .stack-note,
+    .backend-apikey-page .kv-label {
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+
+    .backend-apikey-page .panel-title {
+      margin-top: 3px;
+      font-size: 14px;
+      line-height: 1.06;
+    }
+
+    .backend-apikey-page .panel-subtitle,
+    .backend-apikey-page .panel-note,
+    .backend-apikey-page .status-box,
+    .backend-apikey-page .panel-pill,
+    .backend-apikey-page .panel-btn,
+    .backend-apikey-page .field-input,
+    .backend-apikey-page .field-textarea,
+    .backend-apikey-page .select-input,
+    .backend-apikey-page .route-chip,
+    .backend-apikey-page .card-chip,
+    .backend-apikey-page .empty-box,
+    .backend-apikey-page .mini-value,
+    .backend-apikey-page .mini-table th,
+    .backend-apikey-page .mini-table td {
+      font-size: 10px;
+    }
+
+    .backend-apikey-page .panel-btn {
+      min-height: 28px;
+      padding: 0 8px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    .backend-apikey-page .status-box {
+      padding: 5px 8px;
+      border-radius: var(--proj-radius-lg);
+      line-height: 1.45;
+    }
+
+    .backend-apikey-page .panel-stat-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .backend-apikey-page .panel-stat-card {
+      border-radius: var(--proj-radius-lg);
+      padding: 4px 8px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .backend-apikey-page .panel-stat-kicker {
+      font-size: 9px;
+    }
+
+    .backend-apikey-page .panel-stat-value {
+      margin-top: 0;
+      font-size: 13px;
+    }
+
+    .backend-apikey-page .panel-note {
+      margin-top: 0;
+      font-size: 10px;
+      margin-left: auto;
+      color: var(--proj-page-muted);
+    }
+
+    .apikey-shell {
+      display: grid;
+      grid-template-columns: minmax(240px, 290px) 8px minmax(0, 1fr);
+      min-height: 0;
+      flex: 1 1 auto;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: var(--proj-radius-lg);
+      overflow: hidden;
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+    }
+
+    .apikey-shell.is-collapsed {
+      grid-template-columns: 0 8px minmax(0, 1fr);
+    }
+
+    .apikey-shell.is-collapsed .apikey-sidebar {
+      display: none;
+    }
+
+    .apikey-sidebar {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+      min-width: 0;
+      overflow: hidden;
+      border-right: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+    }
+
+    .sidebar-section {
+      padding: 8px 8px 0;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .field-input,
+    .field-textarea,
+    .select-input {
+      width: 100%;
+      min-height: 28px;
+      padding: 6px 8px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: var(--proj-page-surface-strong, rgba(255,255,255,.96));
+      color: var(--proj-page-text);
+      outline: none;
+      transition: border-color .12s ease, box-shadow .12s ease;
+    }
+
+    .field-input:focus,
+    .field-textarea:focus,
+    .select-input:focus {
+      border-color: rgba(37, 99, 235, 0.36);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+    }
+
+    .field-textarea {
+      min-height: 68px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .filter-fold,
+    .detail-fold,
+    .stack-card {
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+      overflow: hidden;
+    }
+
+    .filter-fold > summary,
+    .detail-fold > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px;
+    }
+
+    .filter-fold > summary::-webkit-details-marker,
+    .detail-fold > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .filter-fold[open] > summary,
+    .detail-fold[open] > summary {
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .stack-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px 0;
+    }
+
+    .stack-card-body,
+    .detail-fold-body,
+    .filter-grid,
+    .form-grid,
+    .kv-grid {
+      display: grid;
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .stack-title {
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--proj-page-text);
+    }
+
+    .stack-note,
+    .kv-label {
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+
+    .filter-grid.two,
+    .form-grid.two,
+    .kv-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .form-field,
+    .kv-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .form-field.full,
+    .kv-item.full {
+      grid-column: 1 / -1;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .card-chip,
+    .route-chip,
+    .chip-btn,
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+      color: var(--proj-page-muted);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .route-chip {
+      gap: 4px;
+    }
+
+    .chip-btn {
+      cursor: pointer;
+      transition: background .12s ease, border-color .12s ease, color .12s ease;
+    }
+
+    .chip-btn.active {
+      background: rgba(37, 99, 235, 0.1);
+      border-color: rgba(37, 99, 235, 0.24);
+      color: #1d4ed8;
+    }
+
+    .probe-tabs {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      padding: 0 8px;
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+    }
+    .probe-tab {
+      padding: 6px 10px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--proj-page-muted);
+      transition: color .12s ease, border-color .12s ease;
+    }
+    .probe-tab:hover {
+      color: var(--proj-page-text);
+    }
+    .probe-tab.active {
+      color: var(--proj-page-text);
+      border-bottom-color: rgba(37, 99, 235, 0.5);
+    }
+    .probe-panel {
+      display: none;
+      padding: 8px;
+    }
+    .probe-panel.active {
+      display: block;
+    }
+    .probe-panel .inline-actions {
+      justify-content: flex-start;
+    }
+
+    .status-pill.ok {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.26);
+      color: #047857;
+    }
+
+    .status-pill.err {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.28);
+      color: #b91c1c;
+    }
+
+    .status-pill.warn {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.26);
+      color: #b45309;
+    }
+
+    .sidebar-list-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px 8px;
+    }
+
+    .sidebar-list-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--proj-page-text);
+    }
+
+    .apikey-list {
+      display: grid;
+      gap: 5px;
+      padding: 0 8px 8px;
+      overflow: auto;
+      align-content: start;
+      min-height: 0;
+    }
+
+    .apikey-card {
+      display: grid;
+      gap: 5px;
+      padding: 8px 9px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+    }
+
+    .apikey-card:hover {
+      background: color-mix(in srgb, var(--proj-page-surface) 80%, transparent);
+      border-color: var(--proj-page-border, var(--panel-border-soft));
+    }
+
+    .apikey-card.active {
+      background: rgba(37, 99, 235, 0.08);
+      border-color: rgba(37, 99, 235, 0.22);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    }
+
+    .apikey-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .apikey-card-name {
+      min-width: 0;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--proj-page-text);
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .apikey-card-key,
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+    }
+
+    .apikey-card-key {
+      color: var(--proj-page-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.45;
+    }
+
+    .sidebar-splitter {
+      position: relative;
+      background: transparent;
+      cursor: col-resize;
+    }
+
+    .sidebar-splitter::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 50%;
+      width: 2px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--proj-page-border, var(--panel-border-soft)) 78%, transparent);
+    }
+
+    .sidebar-splitter.dragging::before,
+    .sidebar-splitter:hover::before {
+      background: rgba(37, 99, 235, 0.42);
+    }
+
+    .splitter-toggle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 18px;
+      height: 36px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: var(--proj-page-surface-strong, rgba(255,255,255,.96));
+      color: var(--proj-page-muted);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .apikey-detail {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .detail-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: color-mix(in srgb, var(--proj-page-surface) 97%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--proj-page-border, var(--panel-border-soft)) 72%, transparent);
+    }
+
+    .detail-head-main {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .detail-title {
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.08;
+      color: var(--proj-page-text);
+      word-break: break-word;
+    }
+
+    .detail-subtitle,
+    .mini-value {
+      color: var(--proj-page-muted);
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .detail-actions,
+    .inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .detail-scroll {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px 9px 9px;
+      display: grid;
+      gap: 6px;
+      align-content: start;
+    }
+
+    .detail-workbench {
+      --detail-insights-width: 328px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 10px minmax(260px, var(--detail-insights-width));
+      gap: 0;
+      min-height: 0;
+      align-items: start;
+    }
+
+    .detail-workbench.is-insights-collapsed {
+      grid-template-columns: minmax(0, 1fr) 10px 0;
+    }
+
+    .detail-workbench.is-insights-collapsed .detail-insights {
+      display: none;
+    }
+
+    .detail-primary,
+    .detail-insights {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+      min-width: 0;
+    }
+
+    .detail-insight-splitter {
+      position: relative;
+      min-height: 100%;
+      cursor: col-resize;
+      background: transparent;
+    }
+
+    .detail-insight-splitter::before {
+      content: "";
+      position: absolute;
+      top: 8px;
+      bottom: 8px;
+      left: 50%;
+      width: 2px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--proj-page-border, var(--panel-border-soft)) 78%, transparent);
+    }
+
+    .detail-insight-splitter:hover::before,
+    .detail-insight-splitter.dragging::before {
+      background: rgba(37, 99, 235, 0.42);
+    }
+
+    .detail-insight-toggle {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 18px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: var(--proj-page-surface-strong, rgba(255,255,255,.96));
+      color: var(--proj-page-muted);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      z-index: 1;
+    }
+
+    .table-wrap {
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      overflow: auto;
+    }
+
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 420px;
+    }
+
+    .mini-table th,
+    .mini-table td {
+      padding: 6px 7px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.45;
+    }
+
+    .mini-table th {
+      font-size: 9px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+      background: color-mix(in srgb, var(--proj-page-surface) 92%, transparent);
+      font-weight: 800;
+    }
+
+    .mini-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .empty-box {
+      min-height: 88px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      text-align: center;
+      line-height: 1.55;
+      color: var(--proj-page-muted);
+      border: 1px dashed var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--proj-page-surface) 88%, transparent);
+    }
+
+    .danger-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px dashed rgba(239, 68, 68, 0.28);
+      border-radius: 10px;
+      background: rgba(239, 68, 68, 0.06);
+    }
+
+    .switch-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+    }
+
+    .route-editor {
+      display: grid;
+      gap: 6px;
+    }
+
+    .route-editor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .route-editor-input-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .route-editor-input-row > .field-input,
+    .route-editor-input-row > .select-input {
+      min-width: 0;
+      flex: 0 0 auto;
+    }
+
+    .route-chip button {
+      border: none;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .assist-note {
+      color: var(--proj-page-muted);
+      line-height: 1.45;
+    }
+
+    .raw-edit-wrap {
+      display: grid;
+      gap: 6px;
+    }
+
+    .raw-edit-wrap > summary {
+      cursor: pointer;
+      list-style: none;
+      color: var(--proj-page-muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .raw-edit-wrap > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .raw-edit-wrap[open] > summary {
+      color: var(--proj-page-text);
+    }
+
+    .modal-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .modal-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 960px) {
+      .backend-apikey-page .panel-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .apikey-shell,
+      .apikey-shell.is-collapsed {
+        grid-template-columns: 1fr;
+      }
+
+      .apikey-shell .apikey-sidebar,
+      .apikey-shell.is-collapsed .apikey-sidebar {
+        display: grid;
+        border-right: none;
+        border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      }
+
+      .sidebar-splitter {
+        display: none;
+      }
+
+      .detail-workbench,
+      .detail-workbench.is-insights-collapsed {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-insight-splitter {
+        display: none;
+      }
+
+      .detail-insights {
+        order: -1;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .backend-apikey-page .panel-hero,
+      .backend-apikey-page .panel-summary-grid,
+      .filter-grid.two,
+      .form-grid.two,
+      .kv-grid.two {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .backend-apikey-page .expire-presets {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+    .backend-apikey-page .expire-presets .panel-btn {
+      padding: 2px 8px;
+      font-size: 9px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body class="panel-page-body backend-apikey-page">
+  <main class="panel-page">
+    <div class="panel-page-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker" data-i18n="apikey.hero.kicker">Backend APIKey</div>
+          <h1 class="panel-title" data-i18n="apikey.hero.title">APIKey 管理</h1>
+          <p class="panel-subtitle" data-i18n="apikey.hero.subtitle">左侧快速筛选和切换 key，右侧用折叠块收纳编辑、统计、验证和扣费操作，避免大面积平铺。</p>
+        </div>
+        <div class="panel-hero-actions">
+          <div id="toolbar-badge" class="panel-pill"><span class="panel-dot warn"></span><span data-i18n="apikey.badge.idle">等待载入</span></div>
+          <div class="panel-action-row">
+            <button id="refresh-btn" type="button" class="panel-btn" data-i18n="common.refresh">刷新</button>
+            <button id="create-btn" type="button" class="panel-btn panel-btn-primary" data-i18n="apikey.create.open">新建 APIKey</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-stat-grid">
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker" data-i18n="apikey.summary.total">Total</div>
+          <div id="summary-total" class="panel-stat-value">0</div>
+          <div id="summary-loaded" class="panel-note" data-i18n="apikey.summary.loaded">当前载入 0 条</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker" data-i18n="apikey.summary.active">Active</div>
+          <div id="summary-active" class="panel-stat-value">0</div>
+          <div class="panel-note" data-i18n="apikey.summary.active.note">可正常使用的 key</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker" data-i18n="apikey.summary.banned">Banned</div>
+          <div id="summary-banned" class="panel-stat-value">0</div>
+          <div class="panel-note" data-i18n="apikey.summary.banned.note">已封禁或停用</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker" data-i18n="apikey.summary.credit">Credit</div>
+          <div id="summary-credit" class="panel-stat-value">0</div>
+          <div class="panel-note" data-i18n="apikey.summary.credit.note">当前列表 credit 合计</div>
+        </article>
+      </section>
+
+      <section id="status-box" class="status-box" data-kind="info" data-i18n="apikey.status.loading">正在载入 APIKey 列表…</section>
+
+      <section id="apikey-shell" class="apikey-shell">
+        <aside class="apikey-sidebar">
+          <div class="sidebar-section">
+            <div class="search-row">
+              <input id="search-input" class="field-input" data-i18n-placeholder="apikey.search.placeholder" placeholder="按名称、key、备注筛选" />
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <details id="filter-fold" class="filter-fold">
+              <summary>
+                <div>
+                  <div class="stack-note" data-i18n="apikey.filter.kicker">Filter</div>
+                  <div class="stack-title" data-i18n="apikey.filter.title">快速过滤</div>
+                </div>
+                <span id="filter-summary" class="card-chip" data-i18n="apikey.filter.all">全部</span>
+              </summary>
+              <div class="filter-grid two">
+                <label class="form-field">
+                  <span class="mini-label" data-i18n="apikey.filter.status">状态</span>
+                  <select id="status-filter" class="select-input">
+                    <option value="all" data-i18n="apikey.filter.all">全部</option>
+                    <option value="active" data-i18n="apikey.filter.active">仅可用</option>
+                    <option value="banned" data-i18n="apikey.filter.banned">仅封禁</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span class="mini-label" data-i18n="apikey.filter.route">路由片段</span>
+                  <input id="route-filter" class="field-input" list="apikey-route-suggestions" data-i18n-placeholder="apikey.filter.route.placeholder" placeholder="如 /admin 或 /api/demo" />
+                </label>
+              </div>
+            </details>
+          </div>
+
+          <div class="sidebar-list-head">
+            <div class="sidebar-list-title" data-i18n="apikey.list.title">Key 列表</div>
+            <span id="list-count" class="card-chip">0</span>
+          </div>
+          <div id="apikey-list" class="apikey-list"></div>
+        </aside>
+
+        <div id="sidebar-splitter" class="sidebar-splitter" role="separator" aria-orientation="vertical">
+          <button id="splitter-toggle" type="button" class="splitter-toggle" aria-label="toggle">‹</button>
+        </div>
+
+        <section class="apikey-detail">
+          <div class="detail-head">
+            <div class="detail-head-main">
+              <div id="detail-title" class="detail-title" data-i18n="apikey.detail.empty.title">选择一个 APIKey</div>
+              <div id="detail-subtitle" class="detail-subtitle" data-i18n="apikey.detail.empty.subtitle">左侧选择后可查看统计、编辑路由权限、做验证探针与 credit 调整。</div>
+            </div>
+            <div class="detail-actions">
+              <button id="reload-detail-btn" type="button" class="panel-btn" data-i18n="common.reload">重新载入</button>
+              <button id="duplicate-btn" type="button" class="panel-btn hidden" data-i18n="apikey.duplicate">复制为新 key</button>
+            </div>
+          </div>
+
+          <div class="detail-scroll">
+            <div id="detail-empty" class="empty-box" data-i18n="apikey.detail.empty.copy">还没有选中 APIKey。先在左侧选择一项，或直接新建。</div>
+
+            <div id="detail-stack" class="hidden">
+              <div id="detail-workbench" class="detail-workbench">
+                <div class="detail-primary">
+                  <details id="editor-fold" class="detail-fold" open>
+                    <summary>
+                      <div>
+                        <div class="stack-note" data-i18n="apikey.edit.kicker">Edit</div>
+                        <div class="stack-title" data-i18n="apikey.edit.title">创建 / 编辑</div>
+                      </div>
+                      <div style="display:flex;gap:6px;align-items:center;">
+                        <button id="start-edit-btn" type="button" class="panel-btn" data-i18n="common.edit">编辑</button>
+                        <button id="cancel-edit-btn" type="button" class="panel-btn hidden" data-i18n="common.cancel">取消</button>
+                        <button id="save-edit-btn" type="button" class="panel-btn panel-btn-primary hidden" data-i18n="common.save">保存</button>
+                      </div>
+                    </summary>
+                    <div class="detail-fold-body">
+                      <div class="form-grid two">
+                        <label class="form-field">
+                          <span class="mini-label" data-i18n="apikey.field.name">Name</span>
+                          <input id="form-name" class="field-input" />
+                        </label>
+                        <label class="form-field">
+                          <span class="mini-label">Key</span>
+                          <input id="form-key" class="field-input mono" placeholder="留空将自动生成" />
+                        </label>
+                        <label class="form-field">
+                          <span class="mini-label" data-i18n="apikey.field.credit">Credit</span>
+                          <input id="form-credit" class="field-input" type="number" min="0" step="0.01" />
+                        </label>
+                        <label class="form-field">
+                          <span class="mini-label" data-i18n="apikey.field.status">Status</span>
+                          <select id="form-banned" class="select-input">
+                            <option value="false" data-i18n="apikey.status.active">可用</option>
+                            <option value="true" data-i18n="apikey.status.banned">已封禁</option>
+                          </select>
+                        </label>
+                        <label class="form-field full">
+                          <span class="mini-label" data-i18n="apikey.field.role">Role</span>
+                          <input id="form-role" class="field-input" placeholder="多个 role 用逗号分隔" />
+                        </label>
+                        <label class="form-field full">
+                          <span class="mini-label" data-i18n="apikey.field.userId">User ID</span>
+                          <input id="form-user-id" class="field-input mono" placeholder="可选，绑定业务用户 ID" />
+                        </label>
+                        <label class="form-field">
+                          <span class="mini-label" data-i18n="apikey.field.expire">Expire</span>
+                          <input id="form-expire-seconds" class="field-input" type="number" min="0" step="1" data-i18n-placeholder="apikey.form.expire.placeholder" placeholder="单位：秒，留空表示永久" />
+                          <div class="expire-presets">
+                            <button type="button" class="panel-btn" data-secs="86400">1天</button>
+                            <button type="button" class="panel-btn" data-secs="604800">1周</button>
+                            <button type="button" class="panel-btn" data-secs="2592000">1月</button>
+                            <button type="button" class="panel-btn" data-secs="15552000">半年</button>
+                          </div>
+                        </label>
+                        <label class="form-field full">
+                          <span class="mini-label" data-i18n="apikey.field.comment">Comment</span>
+                          <textarea id="form-comment" class="field-textarea"></textarea>
+                        </label>
+                        <div class="form-field full route-editor">
+                          <div class="route-editor-head">
+                            <span class="mini-label" data-i18n="apikey.field.whitelist">Whitelist</span>
+                            <label class="switch-line">
+                              <input id="form-whitelist-all" type="checkbox" />
+                              <span data-i18n="apikey.form.whitelist.all">允许全部</span>
+                            </label>
+                          </div>
+                          <div id="form-whitelist-chips" class="chip-row"></div>
+                          <div class="route-editor-input-row">
+                            <input id="form-whitelist-input" class="field-input mono" list="apikey-route-suggestions" data-i18n-placeholder="apikey.form.route.placeholder" placeholder="输入路由 pattern，如 /api/ai/*" />
+                            <button id="form-whitelist-add-btn" type="button" class="panel-btn" data-i18n="apikey.form.route.add">添加</button>
+                          </div>
+                          <div class="assist-note" data-i18n="apikey.form.route.hint">输入 /api 时，下方会给出现有路由提示；点添加后会写入列表。</div>
+                          <textarea id="form-whitelist" style="display:none"></textarea>
+                        </div>
+                        <div class="form-field full route-editor">
+                          <div class="route-editor-head">
+                            <span class="mini-label" data-i18n="apikey.field.blacklist">Blacklist</span>
+                          </div>
+                          <div id="form-blacklist-chips" class="chip-row"></div>
+                          <div class="route-editor-input-row">
+                            <input id="form-blacklist-input" class="field-input mono" list="apikey-route-suggestions" data-i18n-placeholder="apikey.form.route.placeholder" placeholder="输入路由 pattern，如 /admin/*" />
+                            <button id="form-blacklist-add-btn" type="button" class="panel-btn" data-i18n="apikey.form.route.add">添加</button>
+                          </div>
+                          <div class="assist-note" data-i18n="apikey.form.route.hint">输入 /api 时，下方会给出现有路由提示；点添加后会写入列表。</div>
+                          <textarea id="form-blacklist" style="display:none"></textarea>
+                        </div>
+                        <div class="form-field full rate-limit-editor">
+                          <span class="mini-label">Rate Limit</span>
+                          <div id="rate-limit-chips" class="chip-row"></div>
+                          <div class="route-editor-input-row">
+                            <input id="rate-limit-pattern" class="field-input mono" style="flex:1 1 140px;min-width:100px" list="apikey-route-suggestions" placeholder="路由 pattern，如 /api/*" />
+                            <input id="rate-limit-min-interval" class="field-input" type="number" min="0" style="width:84px" placeholder="最小间隔秒" />
+                            <select id="rate-limit-mode" class="select-input" style="width:90px">
+                              <option value="sliding_window">滑动窗口</option>
+                              <option value="fixed_window">固定窗口</option>
+                            </select>
+                            <input id="rate-limit-capacity" class="field-input" type="number" min="1" style="width:60px" placeholder="次数" />
+                            <select id="rate-limit-period" class="select-input" style="width:80px">
+                              <option value="1">每秒</option>
+                              <option value="60">每分钟</option>
+                              <option value="3600">每小时</option>
+                              <option value="86400">每天</option>
+                            </select>
+                            <input id="rate-limit-reset-time" class="field-input" type="time" style="width:100px;display:none" value="00:00" />
+                            <button type="button" class="panel-btn" id="rate-limit-add-btn">添加</button>
+                          </div>
+                          <textarea id="form-rate-limit" style="display:none"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details id="probe-fold" class="detail-fold">
+                    <summary>
+                      <div>
+                        <div class="stack-note" data-i18n="apikey.probe.kicker">Probe</div>
+                        <div class="stack-title" data-i18n="apikey.probe.title">验证与扣费测试</div>
+                      </div>
+
+                    </summary>
+                    <div class="detail-fold-body" style="padding: 0;">
+                      <div class="probe-tabs">
+                        <div class="probe-tab active" data-tab="route-test">路由请求测试</div>
+                        <div class="probe-tab" data-tab="charge-test">扣费测试</div>
+                      </div>
+                      <div id="probe-panel-route-test" class="probe-panel active">
+                        <div class="form-grid two">
+                          <label class="form-field full">
+                            <span class="mini-label" data-i18n="apikey.probe.route">Route</span>
+                            <input id="probe-route" class="field-input mono" list="apikey-route-suggestions" value="/api/demo/run" />
+                          </label>
+                          <label class="form-field">
+                            <span class="mini-label" data-i18n="apikey.probe.cost">Cost</span>
+                            <input id="probe-cost" class="field-input" type="number" min="0" step="0.01" value="0" />
+                          </label>
+                          <label class="form-field switch-line">
+                            <input id="probe-record-access" type="checkbox" />
+                            <span data-i18n="apikey.probe.recordAccess">记录 access</span>
+                          </label>
+                        </div>
+                        <div class="panel-note" style="margin: 4px 8px 6px;">输入任意路由, 测试此apikey是否有权限请求</div>
+                        <div class="inline-actions" style="padding: 0 8px 8px;">
+                          <button id="validate-btn" type="button" class="panel-btn" data-i18n="apikey.probe.validate">Validate</button>
+                        </div>
+                      </div>
+                      <div id="probe-panel-charge-test" class="probe-panel">
+                        <div class="form-grid two">
+                          <label class="form-field">
+                            <span class="mini-label" data-i18n="apikey.probe.cost">Cost</span>
+                            <input id="charge-cost" class="field-input" type="number" min="0" step="0.01" value="0" />
+                          </label>
+                        </div>
+                        <div class="inline-actions" style="padding: 0 8px 8px;">
+                          <button id="charge-btn" type="button" class="panel-btn panel-btn-primary" data-i18n="apikey.probe.charge">Charge</button>
+                        </div>
+                      </div>
+                      <div id="probe-result" class="status-box" data-kind="info" data-i18n="apikey.probe.result.empty" style="margin: 0 8px 8px;">还没有执行探针。</div>
+                    </div>
+                  </details>
+
+                  <details id="credit-fold" class="detail-fold">
+                    <summary>
+                      <div>
+                        <div class="stack-note" data-i18n="apikey.credit.kicker">Credit</div>
+                        <div class="stack-title" data-i18n="apikey.credit.title">Credit 调整</div>
+                      </div>
+                    </summary>
+                    <div class="detail-fold-body" style="padding: 0;">
+                      <div class="probe-tabs">
+                        <div class="probe-tab active" data-tab="credit-set">设置绝对值</div>
+                        <div class="probe-tab" data-tab="credit-delta">应用增减</div>
+                      </div>
+                      <div id="credit-panel-credit-set" class="probe-panel active">
+                        <div class="form-grid two">
+                          <label class="form-field">
+                            <span class="mini-label" data-i18n="apikey.credit.set">Set Credit</span>
+                            <input id="credit-set-value" class="field-input" type="number" min="0" step="0.01" />
+                          </label>
+                        </div>
+                        <div class="inline-actions" style="padding: 0 8px 8px;">
+                          <button id="credit-set-btn" type="button" class="panel-btn" data-i18n="apikey.credit.applySet">应用绝对值</button>
+                        </div>
+                      </div>
+                      <div id="credit-panel-credit-delta" class="probe-panel">
+                        <div class="form-grid two">
+                          <label class="form-field">
+                            <span class="mini-label" data-i18n="apikey.credit.delta">Delta</span>
+                            <input id="credit-delta-value" class="field-input" type="number" step="0.01" />
+                          </label>
+                        </div>
+                        <div class="inline-actions" style="padding: 0 8px 8px;">
+                          <button id="credit-delta-btn" type="button" class="panel-btn" data-i18n="apikey.credit.applyDelta">应用增减</button>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                </div>
+
+                <div id="detail-insight-splitter" class="detail-insight-splitter" role="separator" aria-orientation="vertical">
+                  <button id="detail-insight-toggle" type="button" class="detail-insight-toggle" aria-label="toggle">›</button>
+                </div>
+
+                <aside id="detail-insights" class="detail-insights">
+                  <section class="stack-card">
+                <div class="stack-card-head">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div>
+                      <div class="stack-note" data-i18n="apikey.snapshot.kicker">Snapshot</div>
+                      <div class="stack-title" data-i18n="apikey.snapshot.title">当前状态</div>
+                    </div>
+                    <span id="snapshot-status" class="status-pill warn">—</span>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <button id="snapshot-ban-btn" type="button" class="panel-btn" style="display:none"></button>
+                    <button id="delete-btn" type="button" class="panel-btn panel-btn-danger" data-i18n="common.delete">删除</button>
+                  </div>
+                </div>
+                <div class="stack-card-body">
+                  <div class="kv-grid two">
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.objectId">Object ID</div>
+                      <div id="snapshot-id" class="mini-value mono">—</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.createdAt">Created</div>
+                      <div id="snapshot-created" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.editedAt">Edited</div>
+                      <div id="snapshot-edited" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.expire">Expire</div>
+                      <div id="snapshot-expire" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.lastUsedAt">Last Used</div>
+                      <div id="snapshot-last-used" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item full">
+                      <div class="kv-label">Key</div>
+                      <div id="snapshot-key" class="mini-value mono">—</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.credit">Credit</div>
+                      <div id="snapshot-credit" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.field.comment">Comment</div>
+                      <div id="snapshot-comment" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item full">
+                      <div class="kv-label" data-i18n="apikey.field.role">Role</div>
+                      <div id="snapshot-role" class="mini-value">—</div>
+                    </div>
+                    <div class="kv-item full">
+                      <div class="kv-label" data-i18n="apikey.field.userId">User ID</div>
+                      <div id="snapshot-user-id" class="mini-value mono">—</div>
+                    </div>
+                    <div class="kv-item full">
+                      <div class="kv-label" data-i18n="apikey.field.whitelist">Whitelist</div>
+                      <div id="snapshot-whitelist" class="chip-row"></div>
+                    </div>
+                    <div class="kv-item full">
+                      <div class="kv-label" data-i18n="apikey.field.blacklist">Blacklist</div>
+                      <div id="snapshot-blacklist" class="chip-row"></div>
+                    </div>
+                  </div>
+                </div>
+                  </section>
+
+                  <details id="stats-fold" class="detail-fold" open>
+                <summary>
+                  <div>
+                    <div class="stack-note" data-i18n="apikey.stats.kicker">Stats</div>
+                    <div class="stack-title" data-i18n="apikey.stats.title">访问 / 扣费统计</div>
+                  </div>
+                  <span id="stats-chip" class="card-chip" data-i18n="apikey.stats.notLoaded">未载入</span>
+                </summary>
+                <div class="detail-fold-body">
+                  <div class="kv-grid two">
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.stats.accessCount">Access</div>
+                      <div id="stats-access" class="mini-value">0</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.stats.usageCount">Usage</div>
+                      <div id="stats-usage" class="mini-value">0</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.stats.totalCost">Total Cost</div>
+                      <div id="stats-cost" class="mini-value">0</div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="kv-label" data-i18n="apikey.stats.lastAccess">Last Access</div>
+                      <div id="stats-last-access" class="mini-value">—</div>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="mini-table">
+                      <thead>
+                        <tr>
+                          <th data-i18n="apikey.table.route">Route</th>
+                          <th data-i18n="apikey.table.access">Access</th>
+                          <th data-i18n="apikey.table.usage">Usage</th>
+                          <th data-i18n="apikey.table.cost">Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody id="route-stats-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+
+              <details id="access-history-fold" class="detail-fold">
+                <summary>
+                  <div>
+                    <div class="stack-note" data-i18n="apikey.stats.kicker">Stats</div>
+                    <div class="stack-title" data-i18n="apikey.history.title">访问历史</div>
+                  </div>
+                  <span id="access-history-chip" class="card-chip" data-i18n="apikey.stats.notLoaded">未载入</span>
+                </summary>
+                <div class="detail-fold-body">
+                  <div class="table-wrap">
+                    <table class="mini-table">
+                      <thead>
+                        <tr>
+                          <th data-i18n="apikey.history.time">Time</th>
+                          <th data-i18n="apikey.history.route">Route</th>
+                          <th data-i18n="apikey.history.patterns">Patterns</th>
+                          <th data-i18n="apikey.history.cost">Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody id="access-history-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+
+              <details id="credit-history-fold" class="detail-fold">
+                <summary>
+                  <div>
+                    <div class="stack-note" data-i18n="apikey.credit.kicker">Credit</div>
+                    <div class="stack-title" data-i18n="apikey.credit.history.title">Credit 历史</div>
+                  </div>
+                  <span id="credit-history-chip" class="card-chip" data-i18n="apikey.stats.notLoaded">未载入</span>
+                </summary>
+                <div class="detail-fold-body">
+                  <div class="table-wrap">
+                    <table class="mini-table">
+                      <thead>
+                        <tr>
+                          <th data-i18n="apikey.credit.history.time">Time</th>
+                          <th data-i18n="apikey.credit.history.action">Action</th>
+                          <th data-i18n="apikey.credit.history.delta">Delta</th>
+                          <th data-i18n="apikey.credit.history.balance">Balance</th>
+                          <th data-i18n="apikey.credit.history.route">Route</th>
+                        </tr>
+                      </thead>
+                      <tbody id="credit-history-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+            </aside>
+          </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <datalist id="apikey-route-suggestions"></datalist>
+
+  <script>
+    window.I18N = Object.assign({}, window.I18N || {}, {
+      'common.refresh': { 'zh-cn': '刷新', 'zh-tw': '刷新', en: 'Refresh' },
+      'common.reload': { 'zh-cn': '重新载入', 'zh-tw': '重新載入', en: 'Reload' },
+      'common.edit': { 'zh-cn': '编辑', 'zh-tw': '編輯', en: 'Edit' },
+      'common.save': { 'zh-cn': '保存', 'zh-tw': '保存', en: 'Save' },
+      'common.cancel': { 'zh-cn': '取消', 'zh-tw': '取消', en: 'Cancel' },
+      'common.delete': { 'zh-cn': '删除', 'zh-tw': '刪除', en: 'Delete' },
+      'apikey.hero.kicker': { 'zh-cn': 'Backend APIKey', 'zh-tw': 'Backend APIKey', en: 'Backend APIKey' },
+      'apikey.hero.title': { 'zh-cn': 'APIKey 管理', 'zh-tw': 'APIKey 管理', en: 'APIKey Manager' },
+      'apikey.hero.subtitle': { 'zh-cn': '左侧快速筛选和切换 key，右侧拆成主操作列与可拖拽统计侧栏，把编辑、统计、验证和扣费收进紧凑折叠块。', 'zh-tw': '左側快速篩選和切換 key，右側拆成主操作列與可拖曳統計側欄，把編輯、統計、驗證和扣費收進緊湊折疊塊。', en: 'Use the left list for fast filtering and selection, then keep editing in the main column and stats/history in a draggable insight rail.' },
+      'apikey.badge.idle': { 'zh-cn': '等待载入', 'zh-tw': '等待載入', en: 'Waiting' },
+      'apikey.create.open': { 'zh-cn': '新建 APIKey', 'zh-tw': '新建 APIKey', en: 'New APIKey' },
+      'apikey.summary.total': { 'zh-cn': 'Total', 'zh-tw': 'Total', en: 'Total' },
+      'apikey.summary.loaded': { 'zh-cn': '当前载入 0 条', 'zh-tw': '目前載入 0 筆', en: 'Loaded 0 items' },
+      'apikey.summary.active': { 'zh-cn': 'Active', 'zh-tw': 'Active', en: 'Active' },
+      'apikey.summary.active.note': { 'zh-cn': '可正常使用的 key', 'zh-tw': '可正常使用的 key', en: 'Usable keys' },
+      'apikey.summary.banned': { 'zh-cn': 'Banned', 'zh-tw': 'Banned', en: 'Banned' },
+      'apikey.summary.banned.note': { 'zh-cn': '已封禁或停用', 'zh-tw': '已封禁或停用', en: 'Blocked or disabled' },
+      'apikey.summary.credit': { 'zh-cn': 'Credit', 'zh-tw': 'Credit', en: 'Credit' },
+      'apikey.summary.credit.note': { 'zh-cn': '当前列表 credit 合计', 'zh-tw': '目前列表 credit 合計', en: 'Credit sum in current list' },
+      'apikey.status.loading': { 'zh-cn': '正在载入 APIKey 列表…', 'zh-tw': '正在載入 APIKey 列表…', en: 'Loading API key list…' },
+      'apikey.search.placeholder': { 'zh-cn': '按名称、key、备注筛选', 'zh-tw': '按名稱、key、備註篩選', en: 'Filter by name, key, or note' },
+      'apikey.filter.kicker': { 'zh-cn': 'Filter', 'zh-tw': 'Filter', en: 'Filter' },
+      'apikey.filter.title': { 'zh-cn': '快速过滤', 'zh-tw': '快速過濾', en: 'Quick Filter' },
+      'apikey.filter.all': { 'zh-cn': '全部', 'zh-tw': '全部', en: 'All' },
+      'apikey.filter.status': { 'zh-cn': '状态', 'zh-tw': '狀態', en: 'Status' },
+      'apikey.filter.active': { 'zh-cn': '仅可用', 'zh-tw': '僅可用', en: 'Active only' },
+      'apikey.filter.banned': { 'zh-cn': '仅封禁', 'zh-tw': '僅封禁', en: 'Banned only' },
+      'apikey.filter.route': { 'zh-cn': '路由片段', 'zh-tw': '路由片段', en: 'Route fragment' },
+      'apikey.filter.route.placeholder': { 'zh-cn': '如 /admin 或 /api/demo', 'zh-tw': '如 /admin 或 /api/demo', en: 'e.g. /admin or /api/demo' },
+      'apikey.list.title': { 'zh-cn': 'Key 列表', 'zh-tw': 'Key 列表', en: 'Key List' },
+      'apikey.detail.empty.title': { 'zh-cn': '选择一个 APIKey', 'zh-tw': '選擇一個 APIKey', en: 'Select an APIKey' },
+      'apikey.detail.empty.subtitle': { 'zh-cn': '左侧选择后可查看统计、编辑路由权限、做验证探针与 credit 调整。', 'zh-tw': '左側選擇後可查看統計、編輯路由權限、做驗證探針與 credit 調整。', en: 'Select a key to inspect stats, edit route rules, run validation probes, and adjust credit.' },
+      'apikey.detail.empty.copy': { 'zh-cn': '还没有选中 APIKey。先在左侧选择一项，或直接新建。', 'zh-tw': '還沒有選中 APIKey。先在左側選擇一項，或直接新建。', en: 'No APIKey selected yet. Pick one on the left or create a new key.' },
+      'apikey.snapshot.kicker': { 'zh-cn': 'Snapshot', 'zh-tw': 'Snapshot', en: 'Snapshot' },
+      'apikey.snapshot.title': { 'zh-cn': '当前状态', 'zh-tw': '當前狀態', en: 'Current State' },
+      'apikey.field.objectId': { 'zh-cn': 'Object ID', 'zh-tw': 'Object ID', en: 'Object ID' },
+      'apikey.field.createdAt': { 'zh-cn': '创建时间', 'zh-tw': '建立時間', en: 'Created At' },
+      'apikey.field.editedAt': { 'zh-cn': '编辑时间', 'zh-tw': '編輯時間', en: 'Edited At' },
+      'apikey.field.lastUsedAt': { 'zh-cn': '最近使用', 'zh-tw': '最近使用', en: 'Last Used At' },
+      'apikey.field.expire': { 'zh-cn': '过期', 'zh-tw': '過期', en: 'Expire' },
+      'apikey.field.credit': { 'zh-cn': 'Credit', 'zh-tw': 'Credit', en: 'Credit' },
+      'apikey.field.comment': { 'zh-cn': '备注', 'zh-tw': '備註', en: 'Comment' },
+      'apikey.field.role': { 'zh-cn': '角色', 'zh-tw': '角色', en: 'Role' },
+      'apikey.field.userId': { 'zh-cn': '用户 ID', 'zh-tw': '使用者 ID', en: 'User ID' },
+      'apikey.field.whitelist': { 'zh-cn': '白名单', 'zh-tw': '白名單', en: 'Whitelist' },
+      'apikey.field.blacklist': { 'zh-cn': '黑名单', 'zh-tw': '黑名單', en: 'Blacklist' },
+      'apikey.field.name': { 'zh-cn': '名称', 'zh-tw': '名稱', en: 'Name' },
+      'apikey.field.status': { 'zh-cn': '状态', 'zh-tw': '狀態', en: 'Status' },
+      'apikey.field.rateLimit': { 'zh-cn': 'Rate Limit', 'zh-tw': 'Rate Limit', en: 'Rate Limit' },
+      'apikey.edit.kicker': { 'zh-cn': 'Edit', 'zh-tw': 'Edit', en: 'Edit' },
+      'apikey.edit.title': { 'zh-cn': '创建 / 编辑', 'zh-tw': '建立 / 編輯', en: 'Create / Edit' },
+      'apikey.edit.mode.view': { 'zh-cn': '查看', 'zh-tw': '查看', en: 'View' },
+      'apikey.edit.mode.create': { 'zh-cn': '新建', 'zh-tw': '新建', en: 'Create' },
+      'apikey.edit.mode.edit': { 'zh-cn': '编辑', 'zh-tw': '編輯', en: 'Edit' },
+      'apikey.form.expire.placeholder': { 'zh-cn': '单位：秒，留空表示永久', 'zh-tw': '单位：秒，留空表示永久', en: 'Unit: seconds, leave empty for persistent' },
+      'apikey.form.whitelist.all': { 'zh-cn': '允许全部', 'zh-tw': '允許全部', en: 'Allow all' },
+      'apikey.form.route.add': { 'zh-cn': '添加', 'zh-tw': '添加', en: 'Add' },
+      'apikey.form.route.placeholder': { 'zh-cn': '输入路由 pattern，如 /api/ai/*', 'zh-tw': '輸入路由 pattern，如 /api/ai/*', en: 'Enter a route pattern, e.g. /api/ai/*' },
+      'apikey.form.route.hint': { 'zh-cn': '输入 /api 时，下方会给出现有路由提示；点添加后会写入列表。', 'zh-tw': '輸入 /api 時，下方會給出現有路由提示；點添加後會寫入列表。', en: 'Type /api to get existing route suggestions, then add the selected pattern into the list.' },
+      'apikey.form.raw.toggle': { 'zh-cn': '高级原始编辑', 'zh-tw': '高級原始編輯', en: 'Advanced raw editor' },
+      'apikey.expire.persistent': { 'zh-cn': '永久', 'zh-tw': '永久', en: 'Persistent' },
+      'apikey.modal.create.title': { 'zh-cn': '新建 APIKey', 'zh-tw': '新建 APIKey', en: 'Create APIKey' },
+      'apikey.modal.create.submit': { 'zh-cn': '创建', 'zh-tw': '建立', en: 'Create' },
+      'apikey.modal.create.duplicate': { 'zh-cn': '复制并创建', 'zh-tw': '複製並建立', en: 'Duplicate and create' },
+      'apikey.delete.confirm.title': { 'zh-cn': '删除确认', 'zh-tw': '刪除確認', en: 'Delete confirmation' },
+      'apikey.delete.confirm.text': { 'zh-cn': '确认删除当前 APIKey 吗？\n\n此操作不可撤销，并会一并清理该 key 的统计记录。', 'zh-tw': '確認刪除目前 APIKey 嗎？\n\n此操作不可撤銷，並會一併清理該 key 的統計記錄。', en: 'Delete the current APIKey?\n\nThis cannot be undone and also removes the usage stats.' },
+      'apikey.delete.confirm.ok': { 'zh-cn': '删除', 'zh-tw': '刪除', en: 'Delete' },
+      'apikey.form.whitelist.placeholder': { 'zh-cn': '每行一个 pattern，或输入 all', 'zh-tw': '每行一個 pattern，或輸入 all', en: 'One pattern per line, or type all' },
+      'apikey.form.blacklist.placeholder': { 'zh-cn': '每行一个 pattern', 'zh-tw': '每行一個 pattern', en: 'One pattern per line' },
+      'apikey.form.rateLimit.placeholder': { 'zh-cn': '如 {"/api/foo": {"minimum_interval_seconds": 1, "limits": []}}', 'zh-tw': '如 {"/api/foo": {"minimum_interval_seconds": 1, "limits": []}}', en: 'e.g. {"/api/foo": {"minimum_interval_seconds": 1, "limits": []}}' },
+      'apikey.stats.kicker': { 'zh-cn': 'Stats', 'zh-tw': 'Stats', en: 'Stats' },
+      'apikey.stats.title': { 'zh-cn': '访问 / 扣费统计', 'zh-tw': '訪問 / 扣費統計', en: 'Access / Charge Stats' },
+      'apikey.stats.notLoaded': { 'zh-cn': '未载入', 'zh-tw': '未載入', en: 'Not loaded' },
+      'apikey.stats.accessCount': { 'zh-cn': 'Access', 'zh-tw': 'Access', en: 'Access' },
+      'apikey.stats.usageCount': { 'zh-cn': 'Usage', 'zh-tw': 'Usage', en: 'Usage' },
+      'apikey.stats.totalCost': { 'zh-cn': 'Total Cost', 'zh-tw': 'Total Cost', en: 'Total Cost' },
+      'apikey.stats.lastAccess': { 'zh-cn': 'Last Access', 'zh-tw': 'Last Access', en: 'Last Access' },
+      'apikey.history.title': { 'zh-cn': '访问历史', 'zh-tw': '訪問歷史', en: 'Access History' },
+      'apikey.history.time': { 'zh-cn': '时间', 'zh-tw': '時間', en: 'Time' },
+      'apikey.history.route': { 'zh-cn': '路由', 'zh-tw': '路由', en: 'Route' },
+      'apikey.history.patterns': { 'zh-cn': '命中规则', 'zh-tw': '命中規則', en: 'Patterns' },
+      'apikey.history.cost': { 'zh-cn': 'Cost', 'zh-tw': 'Cost', en: 'Cost' },
+      'apikey.credit.history.title': { 'zh-cn': 'Credit 历史', 'zh-tw': 'Credit 歷史', en: 'Credit History' },
+      'apikey.credit.history.time': { 'zh-cn': '时间', 'zh-tw': '時間', en: 'Time' },
+      'apikey.credit.history.action': { 'zh-cn': '动作', 'zh-tw': '動作', en: 'Action' },
+      'apikey.credit.history.delta': { 'zh-cn': '变动', 'zh-tw': '變動', en: 'Delta' },
+      'apikey.credit.history.balance': { 'zh-cn': '余额变化', 'zh-tw': '餘額變化', en: 'Balance' },
+      'apikey.credit.history.route': { 'zh-cn': '关联路由', 'zh-tw': '關聯路由', en: 'Route' },
+      'apikey.credit.action.create': { 'zh-cn': '创建', 'zh-tw': '建立', en: 'Create' },
+      'apikey.credit.action.set': { 'zh-cn': '设值', 'zh-tw': '設值', en: 'Set' },
+      'apikey.credit.action.delta': { 'zh-cn': '增减', 'zh-tw': '增減', en: 'Delta' },
+      'apikey.credit.action.charge': { 'zh-cn': '扣费', 'zh-tw': '扣費', en: 'Charge' },
+      'apikey.probe.kicker': { 'zh-cn': 'Probe', 'zh-tw': 'Probe', en: 'Probe' },
+      'apikey.probe.title': { 'zh-cn': '验证与扣费测试', 'zh-tw': '驗證與扣費測試', en: 'Validation and Charge Probe' },
+      'apikey.probe.idle': { 'zh-cn': '待执行', 'zh-tw': '待執行', en: 'Idle' },
+      'apikey.probe.route': { 'zh-cn': '路由', 'zh-tw': '路由', en: 'Route' },
+      'apikey.probe.cost': { 'zh-cn': 'Cost', 'zh-tw': 'Cost', en: 'Cost' },
+      'apikey.probe.recordAccess': { 'zh-cn': '记录 access', 'zh-tw': '記錄 access', en: 'Record access' },
+      'apikey.probe.validate': { 'zh-cn': 'Validate', 'zh-tw': 'Validate', en: 'Validate' },
+      'apikey.probe.charge': { 'zh-cn': 'Charge', 'zh-tw': 'Charge', en: 'Charge' },
+      'apikey.probe.result.empty': { 'zh-cn': '还没有执行探针。', 'zh-tw': '還沒有執行探針。', en: 'No probe executed yet.' },
+      'apikey.credit.kicker': { 'zh-cn': 'Credit', 'zh-tw': 'Credit', en: 'Credit' },
+      'apikey.credit.title': { 'zh-cn': 'Credit 调整', 'zh-tw': 'Credit 調整', en: 'Credit Adjustment' },
+      'apikey.credit.quick': { 'zh-cn': '快捷', 'zh-tw': '快捷', en: 'Quick' },
+      'apikey.credit.set': { 'zh-cn': 'Set Credit', 'zh-tw': 'Set Credit', en: 'Set Credit' },
+      'apikey.credit.delta': { 'zh-cn': 'Delta', 'zh-tw': 'Delta', en: 'Delta' },
+      'apikey.credit.applySet': { 'zh-cn': '应用绝对值', 'zh-tw': '套用絕對值', en: 'Apply absolute' },
+      'apikey.credit.applyDelta': { 'zh-cn': '应用增减', 'zh-tw': '套用增減', en: 'Apply delta' },
+      'apikey.danger.kicker': { 'zh-cn': 'Danger', 'zh-tw': 'Danger', en: 'Danger' },
+      'apikey.danger.title': { 'zh-cn': '删除', 'zh-tw': '刪除', en: 'Delete' },
+      'apikey.danger.copy': { 'zh-cn': '删除当前 APIKey', 'zh-tw': '刪除目前 APIKey', en: 'Delete current APIKey' },
+      'apikey.danger.note': { 'zh-cn': '会同时清掉该 key 的 KV 统计记录。', 'zh-tw': '會同時清掉該 key 的 KV 統計記錄。', en: 'This also removes KV stats for the key.' },
+      'apikey.table.route': { 'zh-cn': 'Route', 'zh-tw': 'Route', en: 'Route' },
+      'apikey.table.access': { 'zh-cn': 'Access', 'zh-tw': 'Access', en: 'Access' },
+      'apikey.table.usage': { 'zh-cn': 'Usage', 'zh-tw': 'Usage', en: 'Usage' },
+      'apikey.table.cost': { 'zh-cn': 'Cost', 'zh-tw': 'Cost', en: 'Cost' },
+      'apikey.status.active': { 'zh-cn': '可用', 'zh-tw': '可用', en: 'Active' },
+      'apikey.status.banned': { 'zh-cn': '已封禁', 'zh-tw': '已封禁', en: 'Banned' },
+      'apikey.duplicate': { 'zh-cn': '复制为新 key', 'zh-tw': '複製為新 key', en: 'Duplicate as new key' }
+    });
+  </script>
+  <script>
+    'use strict';
+
+    const LS_PREFIX = 'proj.backend.apikey.';
+    const ui = window.ProjUtils || null;
+    const routeEditors = {};
+    const state = {
+      items: [],
+      filteredItems: [],
+      selectedId: '',
+      selectedItem: null,
+      selectedStats: null,
+      editingMode: 'view',
+      sideCollapsed: false,
+      sideWidth: 290,
+      detailInsightsCollapsed: false,
+      detailInsightsWidth: 328,
+      routeSuggestions: [],
+      filter: {
+        query: '',
+        status: 'all',
+        route: '',
+      },
+    };
+
+    const els = {
+      shell: document.getElementById('apikey-shell'),
+      list: document.getElementById('apikey-list'),
+      searchInput: document.getElementById('search-input'),
+      statusFilter: document.getElementById('status-filter'),
+      routeFilter: document.getElementById('route-filter'),
+      filterSummary: document.getElementById('filter-summary'),
+      listCount: document.getElementById('list-count'),
+      statusBox: document.getElementById('status-box'),
+      toolbarBadge: document.getElementById('toolbar-badge'),
+      summaryTotal: document.getElementById('summary-total'),
+      summaryLoaded: document.getElementById('summary-loaded'),
+      summaryActive: document.getElementById('summary-active'),
+      summaryBanned: document.getElementById('summary-banned'),
+      summaryCredit: document.getElementById('summary-credit'),
+      detailTitle: document.getElementById('detail-title'),
+      detailSubtitle: document.getElementById('detail-subtitle'),
+      detailEmpty: document.getElementById('detail-empty'),
+      detailStack: document.getElementById('detail-stack'),
+      detailWorkbench: document.getElementById('detail-workbench'),
+      detailInsightSplitter: document.getElementById('detail-insight-splitter'),
+      detailInsightToggle: document.getElementById('detail-insight-toggle'),
+      detailInsights: document.getElementById('detail-insights'),
+      reloadDetailBtn: document.getElementById('reload-detail-btn'),
+      duplicateBtn: document.getElementById('duplicate-btn'),
+      createBtn: document.getElementById('create-btn'),
+      refreshBtn: document.getElementById('refresh-btn'),
+      snapshotStatus: document.getElementById('snapshot-status'),
+      snapshotId: document.getElementById('snapshot-id'),
+      snapshotCreated: document.getElementById('snapshot-created'),
+      snapshotEdited: document.getElementById('snapshot-edited'),
+      snapshotExpire: document.getElementById('snapshot-expire'),
+      snapshotLastUsed: document.getElementById('snapshot-last-used'),
+      snapshotKey: document.getElementById('snapshot-key'),
+      snapshotCredit: document.getElementById('snapshot-credit'),
+      snapshotComment: document.getElementById('snapshot-comment'),
+      snapshotRole: document.getElementById('snapshot-role'),
+      snapshotUserId: document.getElementById('snapshot-user-id'),
+      snapshotWhitelist: document.getElementById('snapshot-whitelist'),
+      snapshotBlacklist: document.getElementById('snapshot-blacklist'),
+      snapshotBanBtn: document.getElementById('snapshot-ban-btn'),
+      editorFold: document.getElementById('editor-fold'),
+      startEditBtn: document.getElementById('start-edit-btn'),
+      cancelEditBtn: document.getElementById('cancel-edit-btn'),
+      saveEditBtn: document.getElementById('save-edit-btn'),
+      formName: document.getElementById('form-name'),
+      formKey: document.getElementById('form-key'),
+      formCredit: document.getElementById('form-credit'),
+      formBanned: document.getElementById('form-banned'),
+      formRole: document.getElementById('form-role'),
+      formUserId: document.getElementById('form-user-id'),
+      formExpireSeconds: document.getElementById('form-expire-seconds'),
+      formComment: document.getElementById('form-comment'),
+      formWhitelistAll: document.getElementById('form-whitelist-all'),
+      formWhitelistInput: document.getElementById('form-whitelist-input'),
+      formWhitelistAddBtn: document.getElementById('form-whitelist-add-btn'),
+      formWhitelistChips: document.getElementById('form-whitelist-chips'),
+      formWhitelist: document.getElementById('form-whitelist'),
+      formBlacklistInput: document.getElementById('form-blacklist-input'),
+      formBlacklistAddBtn: document.getElementById('form-blacklist-add-btn'),
+      formBlacklistChips: document.getElementById('form-blacklist-chips'),
+      formBlacklist: document.getElementById('form-blacklist'),
+      formRateLimit: document.getElementById('form-rate-limit'),
+      routeSuggestionList: document.getElementById('apikey-route-suggestions'),
+      statsChip: document.getElementById('stats-chip'),
+      statsAccess: document.getElementById('stats-access'),
+      statsUsage: document.getElementById('stats-usage'),
+      statsCost: document.getElementById('stats-cost'),
+      statsLastAccess: document.getElementById('stats-last-access'),
+      statsFold: document.getElementById('stats-fold'),
+      accessHistoryFold: document.getElementById('access-history-fold'),
+      accessHistoryChip: document.getElementById('access-history-chip'),
+      creditHistoryFold: document.getElementById('credit-history-fold'),
+      creditHistoryChip: document.getElementById('credit-history-chip'),
+      routeStatsBody: document.getElementById('route-stats-body'),
+      accessHistoryBody: document.getElementById('access-history-body'),
+      creditHistoryBody: document.getElementById('credit-history-body'),
+      probeRoute: document.getElementById('probe-route'),
+      probeCost: document.getElementById('probe-cost'),
+      probeRecordAccess: document.getElementById('probe-record-access'),
+      probeResult: document.getElementById('probe-result'),
+      validateBtn: document.getElementById('validate-btn'),
+      chargeBtn: document.getElementById('charge-btn'),
+      chargeCost: document.getElementById('charge-cost'),
+      probeTabs: document.querySelectorAll('#probe-fold .probe-tab'),
+      probePanels: document.querySelectorAll('#probe-fold .probe-panel'),
+      creditTabs: document.querySelectorAll('#credit-fold .probe-tab'),
+      creditPanels: document.querySelectorAll('#credit-fold .probe-panel'),
+      creditSetValue: document.getElementById('credit-set-value'),
+      creditDeltaValue: document.getElementById('credit-delta-value'),
+      creditSetBtn: document.getElementById('credit-set-btn'),
+      creditDeltaBtn: document.getElementById('credit-delta-btn'),
+      deleteBtn: document.getElementById('delete-btn'),
+      sidebarSplitter: document.getElementById('sidebar-splitter'),
+      splitterToggle: document.getElementById('splitter-toggle'),
+    };
+
+    function currentLang() {
+      return (document.documentElement.lang || 'zh-cn').toLowerCase();
+    }
+
+    function tr(key, fallback = '') {
+      const table = window.I18N || {};
+      const row = table[key];
+      return row?.[currentLang()] || row?.en || fallback || key;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function readPref(key, fallback) {
+      try {
+        const value = localStorage.getItem(LS_PREFIX + key);
+        return value == null ? fallback : value;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function writePref(key, value) {
+      try {
+        localStorage.setItem(LS_PREFIX + key, String(value));
+      } catch {}
+    }
+
+    function fmtNum(value) {
+      const num = Number(value || 0);
+      return Number.isFinite(num) ? num.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0';
+    }
+
+    function fmtDate(value) {
+      if (!value) return '—';
+      const stamp = typeof value === 'number' ? value * 1000 : Date.parse(String(value));
+      if (!Number.isFinite(stamp)) return String(value);
+      return new Date(stamp).toLocaleString(undefined, { hour12: false });
+    }
+
+    function fmtTtl(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num <= 0) return tr('apikey.expire.persistent', '永久');
+      if (num >= 86400) return Math.ceil(num / 86400) + 'd';
+      if (num >= 3600) return Math.ceil(num / 3600) + 'h';
+      if (num >= 60) return Math.ceil(num / 60) + 'm';
+      return Math.ceil(num) + 's';
+    }
+
+    function parseExpireSeconds(raw) {
+      const text = String(raw || '').trim();
+      if (!text) return null;
+      const value = Number(text);
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error('Expire seconds invalid');
+      }
+      return value;
+    }
+
+    function keyLabel(item) {
+      return item?.name?.trim() || item?.key || '—';
+    }
+
+    function formatRoleValue(value) {
+      const items = Array.isArray(value)
+        ? value.map((item) => String(item || '').trim()).filter(Boolean)
+        : (String(value || '').trim() ? [String(value || '').trim()] : []);
+      return items.join(', ');
+    }
+
+    function parseRoleValue(raw) {
+      const parts = String(raw || '')
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return parts.length ? parts : null;
+    }
+
+    function summarizeFilters() {
+      const parts = [];
+      if (state.filter.status !== 'all') parts.push(state.filter.status);
+      if (state.filter.route) parts.push(state.filter.route);
+      if (state.filter.query) parts.push(state.filter.query);
+      return parts.length ? parts.join(' · ') : tr('apikey.filter.all', '全部');
+    }
+
+    function setStatus(message, kind = 'info') {
+      els.statusBox.dataset.kind = kind;
+      els.statusBox.textContent = message;
+    }
+
+    function setToolbarBadge(kind, message) {
+      const dot = els.toolbarBadge.querySelector('.panel-dot');
+      const label = els.toolbarBadge.querySelector('span:last-child');
+      dot.className = 'panel-dot ' + (kind || 'warn');
+      label.textContent = message;
+    }
+
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        throw new Error(data.detail || data.message || ('HTTP ' + response.status));
+      }
+      return data;
+    }
+
+    function normalizePatternLines(raw) {
+      const lines = String(raw || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+      const dedup = [];
+      const seen = new Set();
+      lines.forEach((line) => {
+        const key = line.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        dedup.push(line);
+      });
+      return dedup;
+    }
+
+    function routeEditorElements(kind, root) {
+      if (root) {
+        return {
+          textarea: root.querySelector('[data-role="' + kind + '-textarea"]'),
+          chips: root.querySelector('[data-role="' + kind + '-chips"]'),
+          input: root.querySelector('[data-role="' + kind + '-input"]'),
+          addBtn: root.querySelector('[data-role="' + kind + '-add"]'),
+          allToggle: kind === 'whitelist' ? root.querySelector('[data-role="whitelist-all"]') : null,
+        };
+      }
+      if (kind === 'whitelist') {
+        return {
+          textarea: els.formWhitelist,
+          chips: els.formWhitelistChips,
+          input: els.formWhitelistInput,
+          addBtn: els.formWhitelistAddBtn,
+          allToggle: els.formWhitelistAll,
+        };
+      }
+      return {
+        textarea: els.formBlacklist,
+        chips: els.formBlacklistChips,
+        input: els.formBlacklistInput,
+        addBtn: els.formBlacklistAddBtn,
+        allToggle: null,
+      };
+    }
+
+    function createRouteEditorController(kind, root) {
+      const refs = routeEditorElements(kind, root);
+      let editorDisabled = false;
+      const controller = {
+        getValue() {
+          const lines = normalizePatternLines(refs.textarea?.value || '');
+          if (refs.allToggle && (refs.allToggle.checked || (lines.length === 1 && lines[0].toLowerCase() === 'all'))) {
+            return 'all';
+          }
+          return lines.filter((line) => line.toLowerCase() !== 'all');
+        },
+        setValue(value) {
+          if (!refs.textarea) return;
+          if (refs.allToggle) refs.allToggle.checked = value === 'all';
+          refs.textarea.value = value === 'all' ? 'all' : (Array.isArray(value) ? value : []).join('\n');
+          controller.render();
+        },
+        setDisabled(disabled) {
+          editorDisabled = !!disabled;
+          [refs.textarea, refs.input, refs.addBtn, refs.allToggle].forEach((el) => {
+            if (el) el.disabled = !!disabled;
+          });
+          if (refs.allToggle && refs.allToggle.checked) {
+            if (refs.input) refs.input.disabled = true;
+            if (refs.addBtn) refs.addBtn.disabled = true;
+          }
+        },
+        render() {
+          if (!refs.chips) return;
+          const value = controller.getValue();
+          const isAll = value === 'all';
+          if (refs.allToggle) refs.allToggle.checked = isAll;
+          if (refs.textarea) { refs.textarea.disabled = editorDisabled; refs.textarea.readOnly = true; }
+          if (refs.allToggle) refs.allToggle.disabled = editorDisabled;
+          if (refs.input) refs.input.disabled = editorDisabled || isAll;
+          if (refs.addBtn) refs.addBtn.disabled = editorDisabled || isAll;
+          const inputRow = refs.input?.closest('.route-editor-input-row');
+          if (inputRow) inputRow.style.display = isAll ? 'none' : '';
+          const assistNote = inputRow?.nextElementSibling;
+          if (assistNote && assistNote.classList.contains('assist-note')) assistNote.style.display = isAll ? 'none' : '';
+          const items = isAll ? [] : value;
+          refs.chips.innerHTML = items.length
+            ? items.map((item) => {
+                const canRemove = !(isAll && item === 'all');
+                return '<span class="route-chip mono">'
+                  + escapeHtml(item)
+                  + (canRemove ? '<button type="button" data-pattern="' + escapeHtml(item) + '">×</button>' : '')
+                  + '</span>';
+              }).join('')
+            : (isAll ? '' : '<span class="route-chip">—</span>');
+          Array.from(refs.chips.querySelectorAll('button[data-pattern]')).forEach((button) => {
+            button.addEventListener('click', () => controller.remove(button.dataset.pattern || ''));
+          });
+        },
+        add(value) {
+          const text = String(value ?? (refs.input?.value || '')).trim();
+          if (!text) return;
+          if (refs.allToggle && text.toLowerCase() === 'all') {
+            controller.setValue('all');
+          } else {
+            const current = controller.getValue();
+            const items = current === 'all' ? [] : current.slice();
+            if (!items.some((item) => item.toLowerCase() === text.toLowerCase())) items.push(text);
+            controller.setValue(items);
+          }
+          if (refs.input) refs.input.value = '';
+        },
+        remove(pattern) {
+          const current = controller.getValue();
+          const items = current === 'all' ? [] : current.filter((item) => item !== pattern);
+          controller.setValue(items);
+        },
+      };
+
+      refs.addBtn?.addEventListener('click', () => controller.add());
+      refs.input?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          controller.add();
+        }
+      });
+      refs.textarea?.addEventListener('input', () => controller.render());
+      refs.allToggle?.addEventListener('change', () => {
+        controller.setValue(refs.allToggle.checked ? 'all' : []);
+      });
+      controller.render();
+      return controller;
+    }
+
+    function createRateLimitEditor(root) {
+      const scope = root || document;
+      const patternInput = scope.querySelector('#rate-limit-pattern, [data-role="rate-limit-pattern"]');
+      const minIntervalInput = scope.querySelector('#rate-limit-min-interval, [data-role="rate-limit-min-interval"]');
+      const modeSelect = scope.querySelector('#rate-limit-mode, [data-role="rate-limit-mode"]');
+      const capacityInput = scope.querySelector('#rate-limit-capacity, [data-role="rate-limit-capacity"]');
+      const periodSelect = scope.querySelector('#rate-limit-period, [data-role="rate-limit-period"]');
+      const resetTimeInput = scope.querySelector('#rate-limit-reset-time, [data-role="rate-limit-reset-time"]');
+      const addBtn = scope.querySelector('#rate-limit-add-btn, [data-role="rate-limit-add"]');
+      const chipsBox = scope.querySelector('#rate-limit-chips, [data-role="rate-limit-chips"]');
+      const textarea = scope.querySelector('#form-rate-limit, [data-role="rate-limit"]');
+
+      function parseValue() {
+        try { return JSON.parse(textarea?.value || '{}'); } catch { return {}; }
+      }
+
+      function updateModeVisibility() {
+        const mode = modeSelect?.value || 'sliding_window';
+        if (periodSelect) periodSelect.style.display = mode === 'sliding_window' ? '' : 'none';
+        if (resetTimeInput) resetTimeInput.style.display = mode === 'fixed_window' ? '' : 'none';
+      }
+
+      function buildChipLabel(pattern, config) {
+        const minInterval = Number(config?.minimum_interval_seconds || 0);
+        const limit = (config?.limits || [])[0];
+        if (!limit) return pattern + ' (无限制)';
+        const capacity = Number(limit.capacity || 0);
+        const mode = limit.mode === 'fixed_window' ? '固定' : '滑动';
+        let label = pattern + ' · ' + mode + ' · ' + capacity + '次';
+        if (limit.mode === 'sliding_window') {
+          const period = Number(limit.reset_interval_seconds || 60);
+          let periodLabel = period + '秒';
+          if (period === 1) periodLabel = '秒';
+          else if (period === 60) periodLabel = '分钟';
+          else if (period === 3600) periodLabel = '小时';
+          else if (period === 86400) periodLabel = '天';
+          label += '/' + periodLabel;
+        } else if (limit.mode === 'fixed_window' && limit.reset_time) {
+          const h = String(limit.reset_time.hour || 0).padStart(2, '0');
+          const m = String(limit.reset_time.minute || 0).padStart(2, '0');
+          label += ' · 重置' + h + ':' + m;
+        }
+        if (minInterval > 0) label += ' · 间隔' + minInterval + '秒';
+        return label;
+      }
+
+      function render() {
+        const data = parseValue();
+        const entries = Object.entries(data);
+        if (chipsBox) {
+          chipsBox.innerHTML = entries.length
+            ? entries.map(([pattern, config]) => {
+                return '<span class="route-chip mono">' + escapeHtml(buildChipLabel(pattern, config)) + '<button type="button" data-pattern="' + escapeHtml(pattern) + '">×</button></span>';
+              }).join('')
+            : '<span class="route-chip">—</span>';
+          chipsBox.querySelectorAll('button[data-pattern]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const data = parseValue();
+              delete data[btn.dataset.pattern];
+              if (textarea) textarea.value = JSON.stringify(data, null, 2);
+              render();
+            });
+          });
+        }
+      }
+
+      function add() {
+        const pattern = String(patternInput?.value || '').trim();
+        const minInterval = Number(minIntervalInput?.value || 0);
+        const capacity = Number(capacityInput?.value || 0);
+        const mode = modeSelect?.value || 'sliding_window';
+        if (!pattern || !capacity) return;
+        const data = parseValue();
+        let limit;
+        if (mode === 'fixed_window') {
+          const timeVal = String(resetTimeInput?.value || '00:00').split(':');
+          const hour = Math.max(0, Math.min(23, Number(timeVal[0] || 0)));
+          const minute = Math.max(0, Math.min(59, Number(timeVal[1] || 0)));
+          limit = { mode: 'fixed_window', reset_time: { hour, minute }, capacity };
+        } else {
+          const period = Number(periodSelect?.value || 60);
+          limit = { mode: 'sliding_window', reset_interval_seconds: period, capacity };
+        }
+        data[pattern] = { minimum_interval_seconds: minInterval, limits: [limit] };
+        if (textarea) textarea.value = JSON.stringify(data, null, 2);
+        if (patternInput) patternInput.value = '';
+        if (minIntervalInput) minIntervalInput.value = '';
+        if (capacityInput) capacityInput.value = '';
+        render();
+      }
+
+      addBtn?.addEventListener('click', add);
+      patternInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+      capacityInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+      modeSelect?.addEventListener('change', updateModeVisibility);
+
+      updateModeVisibility();
+      render();
+      return {
+        render,
+        setValue(value) {
+          if (textarea) textarea.value = JSON.stringify(value || {}, null, 2);
+          render();
+        }
+      };
+    }
+
+    function routeSuggestionOptions(query) {
+      const text = String(query || '').trim().toLowerCase();
+      const base = state.routeSuggestions.slice();
+      if (!text) return base.slice(0, 500);
+      return base.filter((item) => item.toLowerCase().includes(text)).slice(0, 100);
+    }
+
+    function renderRouteSuggestionList() {
+      els.routeSuggestionList.innerHTML = routeSuggestionOptions('').map((item) => '<option value="' + escapeHtml(item) + '"></option>').join('');
+    }
+
+    async function loadRouteSuggestions() {
+      const payload = await api('/admin/openapi.json');
+      const paths = payload && typeof payload === 'object' && payload.paths && typeof payload.paths === 'object'
+        ? Object.keys(payload.paths)
+        : [];
+      state.routeSuggestions = paths.sort((left, right) => {
+        const leftIsApi = left.startsWith('/api');
+        const rightIsApi = right.startsWith('/api');
+        if (leftIsApi && !rightIsApi) return -1;
+        if (!leftIsApi && rightIsApi) return 1;
+        return left.localeCompare(right);
+      });
+      renderRouteSuggestionList();
+    }
+
+    function renderChips(target, value) {
+      const items = value === 'all' ? ['all'] : Array.isArray(value) ? value : [];
+      target.innerHTML = items.length
+        ? items.map((item) => '<span class="route-chip mono">' + escapeHtml(item) + '</span>').join('')
+        : '<span class="route-chip">—</span>';
+    }
+
+    function routeFilterMatches(item, routeQuery) {
+      if (!routeQuery) return true;
+      const values = [];
+      if (item.whitelist_routes === 'all') values.push('all');
+      else if (Array.isArray(item.whitelist_routes)) values.push(...item.whitelist_routes);
+      if (Array.isArray(item.blacklist_routes)) values.push(...item.blacklist_routes);
+      return values.some((value) => String(value || '').toLowerCase().includes(routeQuery));
+    }
+
+    function applyFilters() {
+      const query = state.filter.query.toLowerCase();
+      const routeQuery = state.filter.route.toLowerCase();
+      state.filteredItems = state.items.filter((item) => {
+        if (state.filter.status === 'active' && item.banned) return false;
+        if (state.filter.status === 'banned' && !item.banned) return false;
+        if (query) {
+          const haystack = [item.name, item.key, item.comment].filter(Boolean).join(' ').toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        return routeFilterMatches(item, routeQuery);
+      });
+      renderList();
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const active = state.items.filter((item) => !item.banned).length;
+      const banned = state.items.filter((item) => !!item.banned).length;
+      const credit = state.items.reduce((sum, item) => sum + Number(item.credit || 0), 0);
+      els.summaryTotal.textContent = String(state.items.length);
+      els.summaryLoaded.textContent = tr('apikey.summary.loaded', '当前载入 0 条').replace('0', String(state.items.length));
+      els.summaryActive.textContent = String(active);
+      els.summaryBanned.textContent = String(banned);
+      els.summaryCredit.textContent = fmtNum(credit);
+      els.listCount.textContent = String(state.filteredItems.length);
+      els.filterSummary.textContent = summarizeFilters();
+    }
+
+    function renderList() {
+      if (!state.filteredItems.length) {
+        els.list.innerHTML = '<div class="empty-box">' + escapeHtml(tr('apikey.detail.empty.copy', '还没有选中 APIKey。')) + '</div>';
+        return;
+      }
+      els.list.innerHTML = state.filteredItems.map((item) => {
+        const statusClass = item.banned ? 'err' : 'ok';
+        const statusText = item.banned ? tr('apikey.status.banned', '已封禁') : tr('apikey.status.active', '可用');
+        return [
+          '<button type="button" class="apikey-card' + (item.id === state.selectedId ? ' active' : '') + '" data-id="' + escapeHtml(item.id) + '">',
+          '  <div class="apikey-card-top">',
+          '    <div class="apikey-card-name">' + escapeHtml(keyLabel(item)) + '</div>',
+          '    <span class="status-pill ' + statusClass + '">' + escapeHtml(statusText) + '</span>',
+          '  </div>',
+          '  <div class="apikey-card-key">' + escapeHtml(item.key || '—') + '</div>',
+          '  <div class="chip-row">',
+          '    <span class="card-chip">credit ' + escapeHtml(fmtNum(item.credit)) + '</span>',
+          '    <span class="card-chip">' + escapeHtml(item.whitelist_routes === 'all' ? 'all' : String((item.whitelist_routes || []).length)) + ' wl</span>',
+          '    <span class="card-chip">' + escapeHtml(String((item.blacklist_routes || []).length)) + ' bl</span>',
+          '  </div>',
+          '</button>'
+        ].join('');
+      }).join('');
+      Array.from(els.list.querySelectorAll('.apikey-card')).forEach((button) => {
+        button.addEventListener('click', () => selectItem(button.dataset.id || ''));
+      });
+    }
+
+    async function loadList(preserveSelection = true) {
+      setStatus(tr('apikey.status.loading', '正在载入 APIKey 列表…'), 'info');
+      const payload = await api('/admin/apikeys');
+      state.items = Array.isArray(payload.items) ? payload.items : [];
+      if (preserveSelection && state.selectedId) {
+        const exists = state.items.find((item) => item.id === state.selectedId);
+        if (!exists) {
+          state.selectedId = '';
+          state.selectedItem = null;
+          state.selectedStats = null;
+        }
+      }
+      applyFilters();
+      setToolbarBadge('ok', state.items.length ? (tr('common.refresh', '刷新') + ' OK') : tr('apikey.badge.idle', '等待载入'));
+      setStatus(state.items.length ? ('Loaded ' + state.items.length + ' API keys') : 'No API keys', state.items.length ? 'success' : 'info');
+      if (els.statusBox) els.statusBox.style.display = 'none';
+      if (state.selectedId) {
+        await loadDetail(state.selectedId);
+      } else {
+        renderDetail();
+      }
+    }
+
+    async function selectItem(id) {
+      state.selectedId = id;
+      renderList();
+      await loadDetail(id);
+    }
+
+    async function loadDetail(id) {
+      if (!id) {
+        state.selectedItem = null;
+        state.selectedStats = null;
+        resetInsightFolds();
+        renderDetail();
+        return;
+      }
+      const [item, statsPayload] = await Promise.all([
+        api('/admin/apikeys/' + encodeURIComponent(id)),
+        api('/admin/apikeys/' + encodeURIComponent(id) + '/stats'),
+      ]);
+      state.selectedId = item.id;
+      state.selectedItem = item;
+      state.selectedStats = statsPayload.stats || null;
+      setEditMode('view');
+      resetInsightFolds();
+      renderList();
+      renderDetail();
+      setToolbarBadge(item.banned ? 'err' : 'ok', keyLabel(item));
+    }
+
+    function fillFormFromItem(item) {
+      els.formName.value = item?.name || '';
+      els.formKey.value = item?.key || '';
+      els.formCredit.value = item?.credit != null ? String(item.credit) : '0';
+      els.formBanned.value = item?.banned ? 'true' : 'false';
+      els.formRole.value = formatRoleValue(item?.role);
+      els.formUserId.value = item?.user_id || '';
+      els.formExpireSeconds.value = item?.ttl_state === 'expiring' && item?.ttl_seconds != null ? String(Math.max(0, Math.ceil(item.ttl_seconds))) : '';
+      els.formComment.value = item?.comment || '';
+      els.formWhitelist.value = item?.whitelist_routes === 'all' ? 'all' : (item?.whitelist_routes || []).join('\n');
+      els.formBlacklist.value = (item?.blacklist_routes || []).join('\n');
+      els.formRateLimit.value = JSON.stringify(item?.rate_limit || {}, null, 2);
+      routeEditors.whitelist?.render();
+      routeEditors.blacklist?.render();
+      routeEditors.rateLimit?.setValue(item?.rate_limit || {});
+    }
+
+    function renderRouteStats(routes) {
+      const entries = Object.entries(routes || {});
+      if (!entries.length) {
+        els.routeStatsBody.innerHTML = '<tr><td colspan="4">—</td></tr>';
+        return;
+      }
+      els.routeStatsBody.innerHTML = entries
+        .sort((a, b) => (b[1]?.access_count || 0) - (a[1]?.access_count || 0))
+        .map(([route, meta]) => {
+          return [
+            '<tr>',
+            '<td class="mono">' + escapeHtml(route) + '</td>',
+            '<td>' + escapeHtml(String(meta?.access_count || 0)) + '</td>',
+            '<td>' + escapeHtml(String(meta?.usage_count || 0)) + '</td>',
+            '<td>' + escapeHtml(fmtNum(meta?.total_cost || 0)) + '</td>',
+            '</tr>'
+          ].join('');
+        })
+        .join('');
+    }
+
+    function renderAccessHistory(entries) {
+      const items = Array.isArray(entries) ? entries : [];
+      if (!items.length) {
+        els.accessHistoryBody.innerHTML = '<tr><td colspan="4">—</td></tr>';
+        return;
+      }
+      els.accessHistoryBody.innerHTML = items.map((entry) => {
+        const patterns = Array.isArray(entry?.matched_patterns) && entry.matched_patterns.length
+          ? entry.matched_patterns.join(', ')
+          : '—';
+        return [
+          '<tr>',
+          '<td>' + escapeHtml(fmtDate(entry?.at || '')) + '</td>',
+          '<td class="mono">' + escapeHtml(String(entry?.route || '—')) + '</td>',
+          '<td>' + escapeHtml(patterns) + '</td>',
+          '<td>' + escapeHtml(fmtNum(entry?.cost || 0)) + '</td>',
+          '</tr>'
+        ].join('');
+      }).join('');
+    }
+
+    function creditActionLabel(action) {
+      const text = String(action || '').trim();
+      return tr('apikey.credit.action.' + text, text || '—');
+    }
+
+    function renderCreditHistory(entries) {
+      const items = Array.isArray(entries) ? entries : [];
+      if (!items.length) {
+        els.creditHistoryBody.innerHTML = '<tr><td colspan="5">—</td></tr>';
+        return;
+      }
+      els.creditHistoryBody.innerHTML = items.map((entry) => {
+        const delta = Number(entry?.delta || 0);
+        const balance = fmtNum(entry?.before_credit || 0) + ' → ' + fmtNum(entry?.after_credit || 0);
+        return [
+          '<tr>',
+          '<td>' + escapeHtml(fmtDate(entry?.at || '')) + '</td>',
+          '<td>' + escapeHtml(creditActionLabel(entry?.action)) + '</td>',
+          '<td>' + escapeHtml((delta > 0 ? '+' : '') + fmtNum(delta)) + '</td>',
+          '<td>' + escapeHtml(balance) + '</td>',
+          '<td class="mono">' + escapeHtml(String(entry?.route || '—')) + '</td>',
+          '</tr>'
+        ].join('');
+      }).join('');
+    }
+
+    function setEditMode(mode) {
+      state.editingMode = mode;
+      const editable = mode === 'create' || mode === 'edit';
+      els.cancelEditBtn.classList.toggle('hidden', !editable);
+      els.saveEditBtn.classList.toggle('hidden', !editable);
+      els.startEditBtn.classList.toggle('hidden', editable || !state.selectedItem);
+      [
+        els.formName,
+        els.formKey,
+        els.formCredit,
+        els.formBanned,
+        els.formRole,
+        els.formUserId,
+        els.formExpireSeconds,
+        els.formComment,
+        els.formWhitelist,
+        els.formBlacklist,
+        els.formRateLimit,
+      ].forEach((el) => {
+        el.disabled = !editable;
+      });
+      routeEditors.whitelist?.setDisabled(!editable);
+      routeEditors.blacklist?.setDisabled(!editable);
+      els.formKey.disabled = mode === 'edit';
+      if (editable) els.editorFold.open = true;
+    }
+
+    function renderDetail() {
+      const item = state.selectedItem;
+      const stats = state.selectedStats;
+      const showCreate = state.editingMode === 'create';
+      const hasItem = !!item;
+      const showDetail = hasItem || showCreate;
+
+      els.detailEmpty.classList.toggle('hidden', showDetail);
+      els.detailStack.classList.toggle('hidden', !showDetail);
+      els.reloadDetailBtn.disabled = !hasItem;
+      els.duplicateBtn.classList.toggle('hidden', !hasItem);
+      els.validateBtn.disabled = !hasItem;
+      els.chargeBtn.disabled = !hasItem;
+      els.creditSetBtn.disabled = !hasItem;
+      els.creditDeltaBtn.disabled = !hasItem;
+      els.deleteBtn.disabled = !hasItem;
+
+      if (!showDetail) {
+        els.detailTitle.textContent = tr('apikey.detail.empty.title', '选择一个 APIKey');
+        els.detailSubtitle.textContent = tr('apikey.detail.empty.subtitle', '左侧选择后可查看统计。');
+        return;
+      }
+
+      if (showCreate) {
+        els.detailTitle.textContent = tr('apikey.create.open', '新建 APIKey');
+        els.detailSubtitle.textContent = tr('apikey.hero.subtitle', '');
+      } else if (item) {
+        els.detailTitle.textContent = keyLabel(item);
+        els.detailSubtitle.textContent = item.key || '—';
+      }
+
+      if (item) {
+        els.snapshotStatus.className = 'status-pill ' + (item.banned ? 'err' : 'ok');
+        els.snapshotStatus.textContent = item.banned ? tr('apikey.status.banned', '已封禁') : tr('apikey.status.active', '可用');
+        els.snapshotBanBtn.style.display = '';
+        els.snapshotBanBtn.textContent = item.banned ? tr('apikey.action.unban', '解封') : tr('apikey.action.ban', '封禁');
+        els.snapshotBanBtn.className = 'panel-btn ' + (item.banned ? '' : 'panel-btn-warn');
+        els.snapshotId.textContent = item.id || '—';
+        els.snapshotCreated.textContent = fmtDate(item.created_at);
+        els.snapshotEdited.textContent = fmtDate(item.edited_at);
+        els.snapshotExpire.textContent = item.ttl_state === 'expiring'
+          ? (fmtDate(item.expire_at) + ' · ' + fmtTtl(item.ttl_seconds))
+          : tr('apikey.expire.persistent', '永久');
+        els.snapshotLastUsed.textContent = fmtDate(item.last_used_at);
+        els.snapshotKey.textContent = item.key || '—';
+        els.snapshotCredit.textContent = fmtNum(item.credit);
+        els.snapshotComment.textContent = item.comment || '—';
+        els.snapshotRole.textContent = formatRoleValue(item.role) || '—';
+        els.snapshotUserId.textContent = item.user_id || '—';
+        if (item.whitelist_routes === 'all') {
+          els.snapshotWhitelist.innerHTML = '';
+        } else {
+          renderChips(els.snapshotWhitelist, item.whitelist_routes);
+        }
+        renderChips(els.snapshotBlacklist, item.blacklist_routes);
+        fillFormFromItem(item);
+      } else {
+        els.snapshotStatus.className = 'status-pill warn';
+        els.snapshotStatus.textContent = tr('apikey.edit.mode.create', '新建');
+        els.snapshotBanBtn.style.display = 'none';
+        els.snapshotId.textContent = '—';
+        els.snapshotCreated.textContent = '—';
+        els.snapshotEdited.textContent = '—';
+        els.snapshotExpire.textContent = tr('apikey.expire.persistent', '永久');
+        els.snapshotLastUsed.textContent = '—';
+        els.snapshotKey.textContent = '—';
+        els.snapshotCredit.textContent = '0';
+        els.snapshotComment.textContent = '—';
+        els.snapshotRole.textContent = '—';
+        els.snapshotUserId.textContent = '—';
+        els.snapshotWhitelist.innerHTML = '';
+        renderChips(els.snapshotBlacklist, []);
+      }
+
+      const accessHistory = Array.isArray(stats?.access_history) ? stats.access_history : [];
+      const creditHistory = Array.isArray(stats?.credit_history) ? stats.credit_history : [];
+      els.statsAccess.textContent = fmtNum(stats?.access_count || 0);
+      els.statsUsage.textContent = fmtNum(stats?.usage_count || 0);
+      els.statsCost.textContent = fmtNum(stats?.total_cost || 0);
+      els.statsLastAccess.textContent = fmtDate(stats?.last_access_at || '');
+      els.statsChip.textContent = stats ? fmtDate(stats.last_access_at || stats.last_usage_at || item?.created_at || '') : tr('apikey.stats.notLoaded', '未载入');
+      els.accessHistoryChip.textContent = accessHistory.length ? (accessHistory.length + ' rows') : tr('apikey.stats.notLoaded', '未载入');
+      els.creditHistoryChip.textContent = creditHistory.length ? (creditHistory.length + ' rows') : tr('apikey.stats.notLoaded', '未载入');
+      renderRouteStats(stats?.routes || {});
+      renderAccessHistory(accessHistory);
+      renderCreditHistory(creditHistory);
+      setEditMode(state.editingMode);
+    }
+
+    function buildFormPayload() {
+      let rateLimit = {};
+      try {
+        rateLimit = JSON.parse(els.formRateLimit.value.trim() || '{}');
+      } catch {
+        throw new Error('Rate limit JSON invalid');
+      }
+      const whitelist = routeEditors.whitelist?.getValue() || normalizePatternLines(els.formWhitelist.value);
+      return {
+        key: els.formKey.value.trim() || undefined,
+        name: els.formName.value.trim() || null,
+        comment: els.formComment.value.trim() || null,
+        user_id: els.formUserId.value.trim() || null,
+        credit: Number(els.formCredit.value || 0),
+        role: parseRoleValue(els.formRole.value),
+        expire_seconds: parseExpireSeconds(els.formExpireSeconds.value),
+        banned: els.formBanned.value === 'true',
+        whitelist_routes: whitelist === 'all' ? 'all' : whitelist,
+        blacklist_routes: routeEditors.blacklist?.getValue() || normalizePatternLines(els.formBlacklist.value),
+        rate_limit: rateLimit,
+      };
+    }
+
+    async function saveEdit() {
+      try {
+        const payload = buildFormPayload();
+        if (state.editingMode === 'create') {
+          await api('/admin/apikeys', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          setStatus('APIKey created', 'success');
+          state.selectedId = '';
+          state.selectedItem = null;
+          state.selectedStats = null;
+        } else if (state.selectedId) {
+          await api('/admin/apikeys/' + encodeURIComponent(state.selectedId), {
+            method: 'PATCH',
+            body: JSON.stringify({
+              name: payload.name,
+              comment: payload.comment,
+              user_id: payload.user_id,
+              role: payload.role,
+              expire_seconds: payload.expire_seconds,
+              banned: payload.banned,
+              whitelist_routes: payload.whitelist_routes,
+              blacklist_routes: payload.blacklist_routes,
+              rate_limit: payload.rate_limit,
+            }),
+          });
+          if (Number(payload.credit) !== Number(state.selectedItem?.credit || 0)) {
+            await api('/admin/apikeys/' + encodeURIComponent(state.selectedId) + '/credit', {
+              method: 'POST',
+              body: JSON.stringify({ credit: payload.credit }),
+            });
+          }
+          setStatus('APIKey updated', 'success');
+        }
+        state.editingMode = 'view';
+        await loadList(false);
+      } catch (error) {
+        setStatus('Save failed: ' + (error.message || error), 'error');
+      }
+    }
+
+    async function applyCredit(kind) {
+      if (!state.selectedId) return;
+      try {
+        const body = kind === 'set'
+          ? { credit: Number(els.creditSetValue.value || 0) }
+          : { delta: Number(els.creditDeltaValue.value || 0) };
+        await api('/admin/apikeys/' + encodeURIComponent(state.selectedId) + '/credit', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        setStatus('Credit updated', 'success');
+        await loadDetail(state.selectedId);
+        await loadList();
+      } catch (error) {
+        setStatus('Credit update failed: ' + (error.message || error), 'error');
+      }
+    }
+
+    async function runValidate() {
+      if (!state.selectedItem) return;
+      try {
+        const result = await api('/admin/apikeys/validate', {
+          method: 'POST',
+          body: JSON.stringify({
+            key: state.selectedItem.key,
+            route: els.probeRoute.value.trim(),
+            cost: Number(els.probeCost.value || 0),
+            record_access: !!els.probeRecordAccess.checked,
+          }),
+        });
+        els.probeResult.dataset.kind = 'success';
+        els.probeResult.textContent = JSON.stringify(result, null, 2);
+        await loadDetail(state.selectedId);
+        await loadList();
+      } catch (error) {
+        els.probeResult.dataset.kind = 'error';
+        els.probeResult.textContent = error.message || String(error);
+      }
+    }
+
+    async function runCharge() {
+      if (!state.selectedId) return;
+      try {
+        const result = await api('/admin/apikeys/' + encodeURIComponent(state.selectedId) + '/charge', {
+          method: 'POST',
+          body: JSON.stringify({
+            route: '/probe/charge',
+            cost: Number(els.chargeCost.value || 0),
+          }),
+        });
+        els.probeResult.dataset.kind = 'success';
+        els.probeResult.textContent = JSON.stringify(result, null, 2);
+        state.selectedItem = result.apikey || state.selectedItem;
+        state.selectedStats = result.stats || state.selectedStats;
+        renderDetail();
+        await loadList();
+      } catch (error) {
+        els.probeResult.dataset.kind = 'error';
+        els.probeResult.textContent = error.message || String(error);
+      }
+    }
+
+    function switchProbeTab(tabName) {
+      els.probeTabs.forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+      els.probePanels.forEach((panel) => {
+        panel.classList.toggle('active', panel.id === 'probe-panel-' + tabName);
+      });
+    }
+
+    function switchCreditTab(tabName) {
+      els.creditTabs.forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+      els.creditPanels.forEach((panel) => {
+        panel.classList.toggle('active', panel.id === 'credit-panel-' + tabName);
+      });
+    }
+
+    async function toggleBan() {
+      if (!state.selectedId || !state.selectedItem) return;
+      const nextBanned = !state.selectedItem.banned;
+      try {
+        await api('/admin/apikeys/' + encodeURIComponent(state.selectedId), {
+          method: 'PATCH',
+          body: JSON.stringify({ banned: nextBanned }),
+        });
+        setStatus(nextBanned ? 'APIKey banned' : 'APIKey unbanned', 'success');
+        await loadDetail(state.selectedId);
+        await loadList();
+      } catch (error) {
+        setStatus('Ban toggle failed: ' + (error.message || error), 'error');
+      }
+    }
+
+    async function deleteCurrent() {
+      if (!state.selectedId) return;
+      const confirmed = ui && typeof ui.confirmDialog === 'function'
+        ? await ui.confirmDialog({
+            title: tr('apikey.delete.confirm.title', '删除确认'),
+            text: tr('apikey.delete.confirm.text', '确认删除当前 APIKey 吗？'),
+            okText: tr('apikey.delete.confirm.ok', '删除'),
+            tone: 'danger',
+          })
+        : confirm('Delete current APIKey?');
+      if (!confirmed) return;
+      try {
+        await api('/admin/apikeys/' + encodeURIComponent(state.selectedId), { method: 'DELETE' });
+        state.selectedId = '';
+        state.selectedItem = null;
+        state.selectedStats = null;
+        setStatus('APIKey deleted', 'success');
+        await loadList(false);
+      } catch (error) {
+        setStatus('Delete failed: ' + (error.message || error), 'error');
+      }
+    }
+
+    function beginCreate(seed = null) {
+      if (!seed) {
+        state.selectedStats = null;
+        resetInsightFolds();
+      }
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,.48);display:flex;align-items:center;justify-content:center;padding:20px;z-index:12000';
+      overlay.innerHTML = ''
+        + '<div style="width:min(860px,100%);max-height:min(90vh,900px);overflow:auto;border-radius:24px;border:1px solid rgba(148,163,184,.18);background:var(--proj-page-surface-strong,#fff);box-shadow:0 25px 50px -12px rgba(0,0,0,.35);padding:18px;">'
+        + '  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">'
+        + '    <div>'
+        + '      <div class="stack-note">' + escapeHtml(tr('apikey.hero.kicker', 'Backend APIKey')) + '</div>'
+        + '      <div class="detail-title">' + escapeHtml(tr('apikey.modal.create.title', '新建 APIKey')) + '</div>'
+        + '    </div>'
+        + '    <button type="button" data-role="close" class="panel-btn">' + escapeHtml(tr('common.cancel', '取消')) + '</button>'
+        + '  </div>'
+        + '  <div class="modal-grid two">'
+        + '    <label class="form-field"><span class="mini-label">' + escapeHtml(tr('apikey.field.name', 'Name')) + '</span><input data-role="name" class="field-input" value="' + escapeHtml(seed?.name || '') + '" /></label>'
+        + '    <label class="form-field"><span class="mini-label">Key</span><input data-role="key" class="field-input mono" value="" placeholder="留空将自动生成" /></label>'
+        + '    <label class="form-field"><span class="mini-label">' + escapeHtml(tr('apikey.field.credit', 'Credit')) + '</span><input data-role="credit" class="field-input" type="number" min="0" step="0.01" value="' + escapeHtml(String(seed?.credit ?? 0)) + '" /></label>'
+        + '    <label class="form-field"><span class="mini-label">' + escapeHtml(tr('apikey.field.expire', 'Expire')) + '</span><input data-role="expire" class="field-input" type="number" min="0" step="1" placeholder="' + escapeHtml(tr('apikey.form.expire.placeholder', '单位：秒，留空表示永久')) + '" /><div class="expire-presets"><button type="button" class="panel-btn" data-secs="86400">1天</button><button type="button" class="panel-btn" data-secs="604800">1周</button><button type="button" class="panel-btn" data-secs="2592000">1月</button><button type="button" class="panel-btn" data-secs="15552000">半年</button></div></label>'
+        + '    <label class="form-field"><span class="mini-label">' + escapeHtml(tr('apikey.field.status', 'Status')) + '</span><select data-role="banned" class="select-input"><option value="false">' + escapeHtml(tr('apikey.status.active', '可用')) + '</option><option value="true">' + escapeHtml(tr('apikey.status.banned', '已封禁')) + '</option></select></label>'
+        + '    <label class="form-field"><span class="mini-label">' + escapeHtml(tr('apikey.field.role', 'Role')) + '</span><input data-role="role" class="field-input" value="' + escapeHtml(formatRoleValue(seed?.role)) + '" placeholder="多个 role 用逗号分隔" /></label>'
+        + '    <label class="form-field"><span class="mini-label">' + escapeHtml(tr('apikey.field.userId', 'User ID')) + '</span><input data-role="user-id" class="field-input mono" value="' + escapeHtml(seed?.user_id || '') + '" placeholder="可选，绑定业务用户 ID" /></label>'
+        + '    <label class="form-field" style="grid-column:1 / -1"><span class="mini-label">' + escapeHtml(tr('apikey.field.comment', 'Comment')) + '</span><textarea data-role="comment" class="field-textarea">' + escapeHtml(seed?.comment || '') + '</textarea></label>'
+        + '    <div class="form-field route-editor" style="grid-column:1 / -1">'
+        + '      <div class="route-editor-head"><span class="mini-label">' + escapeHtml(tr('apikey.field.whitelist', 'Whitelist')) + '</span><label class="switch-line"><input data-role="whitelist-all" type="checkbox" /><span>' + escapeHtml(tr('apikey.form.whitelist.all', '允许全部')) + '</span></label></div>'
+        + '      <div data-role="whitelist-chips" class="chip-row"></div>'
+        + '      <div class="route-editor-input-row"><input data-role="whitelist-input" class="field-input mono" list="apikey-route-suggestions" placeholder="' + escapeHtml(tr('apikey.form.route.placeholder', '输入路由 pattern')) + '" /><button data-role="whitelist-add" type="button" class="panel-btn">' + escapeHtml(tr('apikey.form.route.add', '添加')) + '</button></div>'
+        + '      <textarea data-role="whitelist-textarea" style="display:none">' + escapeHtml(seed?.whitelist_routes === 'all' ? 'all' : (seed?.whitelist_routes || []).join('\n')) + '</textarea>'
+        + '    </div>'
+        + '    <div class="form-field route-editor" style="grid-column:1 / -1">'
+        + '      <div class="route-editor-head"><span class="mini-label">' + escapeHtml(tr('apikey.field.blacklist', 'Blacklist')) + '</span></div>'
+        + '      <div data-role="blacklist-chips" class="chip-row"></div>'
+        + '      <div class="route-editor-input-row"><input data-role="blacklist-input" class="field-input mono" list="apikey-route-suggestions" placeholder="' + escapeHtml(tr('apikey.form.route.placeholder', '输入路由 pattern')) + '" /><button data-role="blacklist-add" type="button" class="panel-btn">' + escapeHtml(tr('apikey.form.route.add', '添加')) + '</button></div>'
+        + '      <textarea data-role="blacklist-textarea" style="display:none">' + escapeHtml((seed?.blacklist_routes || ['/admin/*']).join('\n')) + '</textarea>'
+        + '    </div>'
+        + '    <div class="form-field rate-limit-editor" style="grid-column:1 / -1"><span class="mini-label">' + escapeHtml(tr('apikey.field.rateLimit', 'Rate Limit')) + '</span><div data-role="rate-limit-chips" class="chip-row"></div><div class="route-editor-input-row"><input data-role="rate-limit-pattern" class="field-input mono" style="flex:1 1 140px;min-width:100px" list="apikey-route-suggestions" placeholder="路由 pattern，如 /api/*" /><input data-role="rate-limit-min-interval" class="field-input" type="number" min="0" style="width:84px" placeholder="最小间隔秒" /><select data-role="rate-limit-mode" class="select-input" style="width:90px"><option value="sliding_window">滑动窗口</option><option value="fixed_window">固定窗口</option></select><input data-role="rate-limit-capacity" class="field-input" type="number" min="1" style="width:60px" placeholder="次数" /><select data-role="rate-limit-period" class="select-input" style="width:80px"><option value="1">每秒</option><option value="60">每分钟</option><option value="3600">每小时</option><option value="86400">每天</option></select><input data-role="rate-limit-reset-time" class="field-input" type="time" style="width:100px;display:none" value="00:00" /><button type="button" data-role="rate-limit-add" class="panel-btn">添加</button></div><textarea data-role="rate-limit" style="display:none">' + escapeHtml(JSON.stringify(seed?.rate_limit || {}, null, 2)) + '</textarea></div>'
+        + '  </div>'
+        + '  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">'
+        + '    <button type="button" data-role="cancel" class="panel-btn">' + escapeHtml(tr('common.cancel', '取消')) + '</button>'
+        + '    <button type="button" data-role="submit" class="panel-btn panel-btn-primary">' + escapeHtml(tr(seed ? 'apikey.modal.create.duplicate' : 'apikey.modal.create.submit', seed ? '复制并创建' : '创建')) + '</button>'
+        + '  </div>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      const whitelistController = createRouteEditorController('whitelist', overlay);
+      const blacklistController = createRouteEditorController('blacklist', overlay);
+      const rateLimitController = createRateLimitEditor(overlay);
+      whitelistController.setValue(seed?.whitelist_routes || 'all');
+      blacklistController.setValue(seed?.blacklist_routes || ['/admin/*']);
+      rateLimitController.setValue(seed?.rate_limit || {});
+      const bannedSelect = overlay.querySelector('[data-role="banned"]');
+      if (bannedSelect) bannedSelect.value = seed?.banned ? 'true' : 'false';
+
+      async function submitModal() {
+        try {
+          let rateLimit = {};
+          try {
+            rateLimit = JSON.parse(String(overlay.querySelector('[data-role="rate-limit"]')?.value || '{}').trim() || '{}');
+          } catch {
+            throw new Error('Rate limit JSON invalid');
+          }
+          const created = await api('/admin/apikeys', {
+            method: 'POST',
+            body: JSON.stringify({
+              key: String(overlay.querySelector('[data-role="key"]')?.value || '').trim() || undefined,
+              name: String(overlay.querySelector('[data-role="name"]')?.value || '').trim() || null,
+              comment: String(overlay.querySelector('[data-role="comment"]')?.value || '').trim() || null,
+              user_id: String(overlay.querySelector('[data-role="user-id"]')?.value || '').trim() || null,
+              credit: Number(overlay.querySelector('[data-role="credit"]')?.value || 0),
+              role: parseRoleValue(String(overlay.querySelector('[data-role="role"]')?.value || '')),
+              expire_seconds: parseExpireSeconds(String(overlay.querySelector('[data-role="expire"]')?.value || '')),
+              banned: String(overlay.querySelector('[data-role="banned"]')?.value || 'false') === 'true',
+              whitelist_routes: whitelistController.getValue(),
+              blacklist_routes: blacklistController.getValue(),
+              rate_limit: rateLimit,
+            }),
+          });
+          overlay.remove();
+          state.selectedId = created.id || '';
+          setStatus('APIKey created', 'success');
+          await loadList(false);
+          if (state.selectedId) await loadDetail(state.selectedId);
+        } catch (error) {
+          setStatus('Create failed: ' + (error.message || error), 'error');
+        }
+      }
+
+      function closeModal() {
+        overlay.remove();
+      }
+
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) closeModal();
+      });
+      overlay.querySelector('[data-role="close"]').addEventListener('click', closeModal);
+      overlay.querySelector('[data-role="cancel"]').addEventListener('click', closeModal);
+      overlay.querySelector('[data-role="submit"]').addEventListener('click', submitModal);
+    }
+
+    function beginEdit() {
+      if (!state.selectedItem) return;
+      state.editingMode = 'edit';
+      renderDetail();
+    }
+
+    function cancelEdit() {
+      state.editingMode = 'view';
+      fillFormFromItem(state.selectedItem || null);
+      renderDetail();
+    }
+
+    function resetInsightFolds() {
+      const stats = state.selectedStats;
+      const hasAccessHistory = Array.isArray(stats?.access_history) && stats.access_history.length > 0;
+      const hasCreditHistory = Array.isArray(stats?.credit_history) && stats.credit_history.length > 0;
+      if (els.statsFold) els.statsFold.open = true;
+      if (els.accessHistoryFold) els.accessHistoryFold.open = hasAccessHistory;
+      if (els.creditHistoryFold) els.creditHistoryFold.open = hasCreditHistory;
+    }
+
+    function applySidebarState() {
+      els.shell.classList.toggle('is-collapsed', !!state.sideCollapsed);
+      els.splitterToggle.textContent = state.sideCollapsed ? '›' : '‹';
+      if (!state.sideCollapsed) {
+        els.shell.style.gridTemplateColumns = 'minmax(240px, ' + Math.max(240, state.sideWidth) + 'px) 8px minmax(0, 1fr)';
+      } else {
+        els.shell.style.removeProperty('grid-template-columns');
+      }
+    }
+
+    function applyDetailWorkbenchState() {
+      if (!els.detailWorkbench) return;
+      const compact = window.matchMedia('(max-width: 960px)').matches;
+      state.detailInsightsWidth = Math.max(260, Math.min(460, Number(state.detailInsightsWidth) || 328));
+      els.detailWorkbench.style.setProperty('--detail-insights-width', state.detailInsightsWidth + 'px');
+      els.detailWorkbench.classList.toggle('is-insights-collapsed', !compact && !!state.detailInsightsCollapsed);
+      if (els.detailInsightToggle) {
+        els.detailInsightToggle.textContent = compact ? '•' : (state.detailInsightsCollapsed ? '‹' : '›');
+        els.detailInsightToggle.disabled = compact;
+        els.detailInsightToggle.setAttribute('aria-expanded', compact ? 'true' : String(!state.detailInsightsCollapsed));
+        els.detailInsightToggle.setAttribute('aria-label', compact
+          ? '窄屏模式下固定显示统计侧栏'
+          : (state.detailInsightsCollapsed ? '展开统计侧栏' : '折叠统计侧栏'));
+      }
+      if (els.detailInsightSplitter) {
+        els.detailInsightSplitter.setAttribute('aria-valuemin', '260');
+        els.detailInsightSplitter.setAttribute('aria-valuemax', '460');
+        els.detailInsightSplitter.setAttribute('aria-valuenow', String(Math.round(state.detailInsightsWidth)));
+      }
+    }
+
+    function toggleSidebar() {
+      state.sideCollapsed = !state.sideCollapsed;
+      writePref('sideCollapsed', state.sideCollapsed ? '1' : '0');
+      applySidebarState();
+    }
+
+    function toggleDetailInsights() {
+      if (window.matchMedia('(max-width: 960px)').matches) return;
+      state.detailInsightsCollapsed = !state.detailInsightsCollapsed;
+      writePref('detailInsightsCollapsed', state.detailInsightsCollapsed ? '1' : '0');
+      applyDetailWorkbenchState();
+    }
+
+    function bindSidebarSplitter() {
+      let dragging = false;
+      els.sidebarSplitter.addEventListener('pointerdown', (event) => {
+        if (state.sideCollapsed || window.matchMedia('(max-width: 960px)').matches) return;
+        dragging = true;
+        els.sidebarSplitter.classList.add('dragging');
+        els.sidebarSplitter.setPointerCapture(event.pointerId);
+      });
+      els.sidebarSplitter.addEventListener('pointermove', (event) => {
+        if (!dragging || state.sideCollapsed) return;
+        const rect = els.shell.getBoundingClientRect();
+        state.sideWidth = Math.max(240, Math.min(420, Math.round(event.clientX - rect.left)));
+        els.shell.style.gridTemplateColumns = 'minmax(240px, ' + state.sideWidth + 'px) 8px minmax(0, 1fr)';
+      });
+      function stopDragging(event) {
+        if (!dragging) return;
+        dragging = false;
+        els.sidebarSplitter.classList.remove('dragging');
+        try { els.sidebarSplitter.releasePointerCapture(event.pointerId); } catch {}
+        writePref('sideWidth', state.sideWidth);
+      }
+      els.sidebarSplitter.addEventListener('pointerup', stopDragging);
+      els.sidebarSplitter.addEventListener('pointercancel', stopDragging);
+    }
+
+    function bindDetailInsightSplitter() {
+      if (!els.detailInsightSplitter) return;
+      let dragging = false;
+      els.detailInsightSplitter.addEventListener('pointerdown', (event) => {
+        if (window.matchMedia('(max-width: 960px)').matches) return;
+        if (event.target instanceof Element && event.target.closest('.detail-insight-toggle')) return;
+        dragging = true;
+        state.detailInsightsCollapsed = false;
+        els.detailInsightSplitter.classList.add('dragging');
+        els.detailInsightSplitter.setPointerCapture(event.pointerId);
+        applyDetailWorkbenchState();
+      });
+      els.detailInsightSplitter.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        const rect = els.detailWorkbench.getBoundingClientRect();
+        state.detailInsightsWidth = Math.max(260, Math.min(460, Math.round(rect.right - event.clientX)));
+        applyDetailWorkbenchState();
+      });
+      function stopDragging(event) {
+        if (!dragging) return;
+        dragging = false;
+        els.detailInsightSplitter.classList.remove('dragging');
+        try { els.detailInsightSplitter.releasePointerCapture(event.pointerId); } catch {}
+        writePref('detailInsightsWidth', state.detailInsightsWidth);
+      }
+      els.detailInsightSplitter.addEventListener('pointerup', stopDragging);
+      els.detailInsightSplitter.addEventListener('pointercancel', stopDragging);
+      els.detailInsightSplitter.addEventListener('dblclick', toggleDetailInsights);
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (!key) return;
+        el.textContent = tr(key, el.textContent || '');
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (!key) return;
+        el.setAttribute('placeholder', tr(key, el.getAttribute('placeholder') || ''));
+      });
+      updateSummary();
+      renderDetail();
+    }
+
+    function bindEvents() {
+      els.searchInput.addEventListener('input', () => {
+        state.filter.query = els.searchInput.value.trim();
+        applyFilters();
+      });
+      els.statusFilter.addEventListener('change', () => {
+        state.filter.status = els.statusFilter.value;
+        applyFilters();
+      });
+      els.routeFilter.addEventListener('input', () => {
+        state.filter.route = els.routeFilter.value.trim();
+        applyFilters();
+      });
+      els.refreshBtn.addEventListener('click', () => loadList().catch((error) => setStatus(error.message || String(error), 'error')));
+      els.reloadDetailBtn.addEventListener('click', () => loadDetail(state.selectedId).catch((error) => setStatus(error.message || String(error), 'error')));
+      els.createBtn.addEventListener('click', () => beginCreate());
+      els.startEditBtn.addEventListener('click', beginEdit);
+      els.cancelEditBtn.addEventListener('click', cancelEdit);
+      els.saveEditBtn.addEventListener('click', saveEdit);
+      els.validateBtn.addEventListener('click', runValidate);
+      els.chargeBtn.addEventListener('click', runCharge);
+      els.probeTabs.forEach((tab) => {
+        tab.addEventListener('click', () => switchProbeTab(tab.dataset.tab));
+      });
+      els.creditTabs.forEach((tab) => {
+        tab.addEventListener('click', () => switchCreditTab(tab.dataset.tab));
+      });
+      els.creditSetBtn.addEventListener('click', () => applyCredit('set'));
+      els.creditDeltaBtn.addEventListener('click', () => applyCredit('delta'));
+      els.snapshotBanBtn.addEventListener('click', toggleBan);
+      els.deleteBtn.addEventListener('click', deleteCurrent);
+      els.duplicateBtn.addEventListener('click', () => beginCreate(state.selectedItem));
+      els.splitterToggle.addEventListener('click', toggleSidebar);
+      els.detailInsightToggle?.addEventListener('click', toggleDetailInsights);
+      window.addEventListener('proj-lang-changed', applyI18n);
+      window.addEventListener('resize', applyDetailWorkbenchState);
+      bindSidebarSplitter();
+      bindDetailInsightSplitter();
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.expire-presets button[data-secs]');
+        if (!btn) return;
+        const input = btn.closest('label')?.querySelector('input');
+        if (input) input.value = btn.dataset.secs;
+      });
+    }
+
+    function init() {
+      state.sideCollapsed = readPref('sideCollapsed', '0') === '1';
+      state.sideWidth = Number(readPref('sideWidth', '290')) || 290;
+      state.detailInsightsCollapsed = readPref('detailInsightsCollapsed', '0') === '1';
+      state.detailInsightsWidth = Number(readPref('detailInsightsWidth', '328')) || 328;
+      routeEditors.whitelist = createRouteEditorController('whitelist');
+      routeEditors.blacklist = createRouteEditorController('blacklist');
+      routeEditors.rateLimit = createRateLimitEditor();
+      applySidebarState();
+      applyDetailWorkbenchState();
+      bindEvents();
+      applyI18n();
+      loadRouteSuggestions().catch(() => {});
+      loadList().catch((error) => {
+        setStatus('Load failed: ' + (error.message || error), 'error');
+        setToolbarBadge('err', 'Load failed');
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

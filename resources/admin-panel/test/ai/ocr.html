@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR 图片文字识别</title>
+<link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC",sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+.header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:1.25rem 2rem;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.header h1{font-size:1.5rem;font-weight:700;letter-spacing:.02em}
+.header a{color:rgba(255,255,255,.9);text-decoration:none;font-size:.95rem;transition:color .2s}
+.header a:hover{color:#fff}
+.container{max-width:1400px;margin:0 auto;padding:1.5rem}
+
+/* Drop Zone */
+.drop-zone{border:2.5px dashed #a0aec0;border-radius:16px;padding:3rem 2rem;text-align:center;cursor:pointer;transition:all .25s ease;background:#fff;position:relative}
+.drop-zone:hover,.drop-zone.dragover{border-color:#667eea;background:#f0f0ff;transform:translateY(-1px);box-shadow:0 4px 20px rgba(102,126,234,.15)}
+.drop-zone.dragover::after{content:'松开以上传图片';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(102,126,234,.12);border-radius:14px;font-size:1.25rem;font-weight:600;color:#667eea;pointer-events:none}
+.drop-zone-icon{display:flex;align-items:center;justify-content:center;margin-bottom:.75rem;opacity:.7}
+.drop-zone p{color:#666;margin:.25rem 0}
+.drop-zone .hint{font-size:.82rem;color:#999;margin-top:.5rem}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.55rem 1.1rem;border:none;border-radius:8px;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;box-shadow:0 2px 8px rgba(102,126,234,.3)}
+.btn-primary:hover{box-shadow:0 4px 16px rgba(102,126,234,.45);filter:brightness(1.05)}
+.btn-secondary{background:#e2e8f0;color:#4a5568}
+.btn-secondary:hover{background:#cbd5e0}
+.btn-danger{background:#fed7d7;color:#c53030}
+.btn-danger:hover{background:#feb2b2}
+.btn-success{background:#c6f6d5;color:#276749}
+.btn-success:hover{background:#9ae6b4}
+.btn-sm{padding:.35rem .7rem;font-size:.8rem;border-radius:6px}
+
+/* Image Cards */
+.image-list{display:flex;flex-direction:column;gap:1.25rem;margin-top:1.25rem}
+.image-card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);overflow:hidden;transition:box-shadow .2s}
+.image-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1)}
+.image-card-inner{display:grid;grid-template-columns:1fr 1fr;min-height:220px}
+@media(max-width:768px){.image-card-inner{grid-template-columns:1fr;}}
+.image-side{padding:1rem;display:flex;flex-direction:column;gap:.6rem;border-right:1px solid #edf2f7}
+@media(max-width:768px){.image-side{border-right:none;border-bottom:1px solid #edf2f7}}
+.image-preview-wrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;background:#fafafa;border-radius:10px;overflow:hidden;min-height:160px;cursor:zoom-in}
+.image-preview-wrap img{max-width:100%;max-height:300px;object-fit:contain;transition:transform .3s}
+.image-meta{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.image-meta .name{font-size:.85rem;font-weight:600;color:#2d3748;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.image-meta .size{font-size:.78rem;color:#a0aec0}
+.result-side{padding:1rem;display:flex;flex-direction:column;gap:.6rem;position:relative}
+.result-text{flex:1;background:#f7fafc;border:1px solid #e2e8f0;border-radius:10px;padding:.85rem;font-size:.88rem;line-height:1.7;white-space:pre-wrap;word-break:break-all;overflow-y:auto;max-height:350px;min-height:100px;color:#2d3748;font-family:"Noto Sans SC","Microsoft YaHei",sans-serif}
+.result-text.empty{display:flex;align-items:center;justify-content:center;color:#a0aec0;font-style:italic}
+.result-footer{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.stat-badge{font-size:.75rem;padding:.2rem .55rem;border-radius:20px;background:#edf2f7;color:#4a5568}
+
+/* Spinner */
+.spinner{display:inline-block;width:20px;height:20px;border:2.5px solid #e2e8f0;border-top-color:#667eea;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.processing-overlay{position:absolute;inset:0;background:rgba(255,255,255,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;border-radius:10px;z-index:5}
+.processing-overlay .spinner{width:32px;height:32px}
+
+/* Modal / Lightbox */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-backdrop.open{opacity:1;pointer-events:auto}
+.modal-content{position:relative;max-width:95vw;max-height:92vh;display:flex;align-items:center;justify-content:center}
+.modal-content img{max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px;cursor:grab;transition:transform .2s}
+.modal-content img.grabbing{cursor:grabbing}
+.modal-close{position:fixed;top:1rem;right:1.5rem;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1.5rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;z-index:1001}
+.modal-close:hover{background:rgba(255,255,255,.3)}
+.modal-zoom-controls{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);display:flex;gap:.5rem;z-index:1001}
+.modal-zoom-controls button{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1.2rem;cursor:pointer;transition:background .2s}
+.modal-zoom-controls button:hover{background:rgba(255,255,255,.3)}
+
+/* Toolbar */
+.toolbar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:1rem;padding:1rem;background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.toolbar-divider{width:1px;height:24px;background:#e2e8f0}
+
+/* Examples */
+.examples-section{margin-top:1.5rem;background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.examples-section h3{font-size:1rem;font-weight:700;color:#2d3748;margin-bottom:.75rem}
+.example-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem}
+.example-card{border:1.5px solid #e2e8f0;border-radius:10px;padding:1rem;text-align:center;cursor:pointer;transition:all .2s}
+.example-card:hover{border-color:#667eea;background:#f7f0ff;transform:translateY(-2px);box-shadow:0 4px 12px rgba(102,126,234,.12)}
+.example-card .icon{display:flex;align-items:center;justify-content:center;margin-bottom:.5rem}
+.example-card .label{font-size:.85rem;font-weight:600;color:#4a5568}
+.example-card .desc{font-size:.75rem;color:#a0aec0;margin-top:.25rem}
+
+/* Toast */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);background:#2d3748;color:#fff;padding:.65rem 1.4rem;border-radius:10px;font-size:.88rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.2);z-index:2000;opacity:0;transition:all .35s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Empty state */
+.empty-state{text-align:center;padding:3rem 1rem;color:#a0aec0}
+.empty-state .icon{display:flex;align-items:center;justify-content:center;margin-bottom:.75rem;opacity:.5}
+
+/* File input hidden */
+.file-input-hidden{position:absolute;opacity:0;width:0;height:0}
+
+:root{
+  --ocr-bg:#edf2f6;
+  --ocr-surface:#ffffff;
+  --ocr-border:#d7dee8;
+  --ocr-text:#142033;
+  --ocr-text-soft:#415369;
+  --ocr-muted:#748194;
+  --ocr-accent:#24557a;
+  --ocr-accent-soft:#ebf1f6;
+  --ocr-danger:#b14646;
+  --ocr-success:#1f6b42;
+  --ocr-image-bg:#f7f9fb;
+  --ocr-overlay:rgba(255,255,255,.9);
+}
+html.dark{
+  --ocr-bg:#020617;
+  --ocr-surface:#0f172a;
+  --ocr-border:#24324a;
+  --ocr-text:#e5edf9;
+  --ocr-text-soft:#cbd5e1;
+  --ocr-muted:#9fb0ca;
+  --ocr-accent:#60a5fa;
+  --ocr-accent-soft:rgba(96,165,250,.18);
+  --ocr-danger:#f87171;
+  --ocr-success:#34d399;
+  --ocr-image-bg:#14223a;
+  --ocr-overlay:rgba(2,6,23,.78);
+}
+body{font-family:"Segoe UI Variable Text","Segoe UI","PingFang SC",system-ui,-apple-system,sans-serif;background:var(--ocr-bg);color:var(--ocr-text)}
+.header{background:var(--ocr-surface);color:var(--ocr-text);padding:1rem 1.5rem;border-bottom:1px solid var(--ocr-border);box-shadow:none}
+.header a{color:var(--ocr-accent)}
+.header a:hover{color:#1f4868}
+.container{max-width:1280px;padding:1rem 1.25rem 1.25rem}
+.drop-zone{border:1px dashed var(--ocr-border);border-radius:12px;padding:2.5rem 1.75rem;background:var(--ocr-surface)}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--ocr-accent);background:var(--ocr-accent-soft);transform:none;box-shadow:none}
+.drop-zone.dragover::after{background:rgba(36,85,122,.08);border-radius:10px;font-size:1rem;color:var(--ocr-accent)}
+.drop-zone p{color:var(--ocr-text-soft)}
+.drop-zone .hint{color:var(--ocr-muted)}
+.btn{padding:.5rem 1rem;border-radius:8px;font-size:.84rem}
+.btn-primary{background:var(--ocr-accent);color:#fff;box-shadow:none}
+.btn-primary:hover{box-shadow:none;filter:none;background:#1f4868}
+.btn-secondary{background:var(--ocr-accent-soft);color:var(--ocr-text-soft);border:1px solid var(--ocr-border)}
+.btn-secondary:hover{background:var(--ocr-accent-soft);filter:brightness(.96)}
+.btn-danger{background:rgba(177,70,70,.14);color:var(--ocr-danger);border:1px solid rgba(177,70,70,.32)}
+.btn-danger:hover{background:rgba(177,70,70,.2)}
+.btn-success{background:rgba(31,107,66,.14);color:var(--ocr-success);border:1px solid rgba(31,107,66,.32)}
+.btn-success:hover{background:rgba(31,107,66,.2)}
+.image-card{border:1px solid var(--ocr-border);border-radius:10px;box-shadow:none;background:var(--ocr-surface)}
+.image-card:hover{box-shadow:none}
+.image-side,.result-side{padding:.9rem}
+.image-preview-wrap{background:var(--ocr-image-bg);border-radius:8px}
+.image-meta .name{color:var(--ocr-text)}
+.image-meta .size{color:var(--ocr-muted)}
+.result-text{background:var(--ocr-surface);border:1px solid var(--ocr-border);border-radius:8px;color:var(--ocr-text-soft)}
+.stat-badge{background:var(--ocr-accent-soft);color:var(--ocr-text-soft);border:1px solid var(--ocr-border)}
+.processing-overlay{background:var(--ocr-overlay)}
+.modal-close,.modal-zoom-controls button{background:rgba(20,32,51,.72)}
+.toolbar{margin-top:.85rem;padding:.85rem;background:var(--ocr-surface);border-radius:10px;border:1px solid var(--ocr-border);box-shadow:none}
+.toolbar-divider{background:var(--ocr-border)}
+.examples-section{margin-top:1.25rem;background:var(--ocr-surface);border-radius:10px;padding:1rem;border:1px solid var(--ocr-border);box-shadow:none}
+.examples-section h3{color:var(--ocr-text)}
+.example-card{border:1px solid var(--ocr-border);border-radius:8px}
+.example-card:hover{border-color:var(--ocr-accent);background:var(--ocr-accent-soft);transform:none;box-shadow:none}
+.example-card .label{color:var(--ocr-text-soft)}
+.example-card .desc{color:var(--ocr-muted)}
+.spinner{border-top-color:var(--ocr-accent)}
+.toast{background:#1d2b3a;border-radius:8px;box-shadow:none;transform:translateX(-50%);transition:opacity .16s ease}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.empty-state{color:var(--ocr-muted)}
+
+/* Fill panel iframe width when embedded, keep centered layout for standalone page. */
+body[data-proj-embedded="1"] .container{
+  max-width:none !important;
+  width:100%;
+  margin:0;
+  padding-left:12px;
+  padding-right:12px;
+}
+</style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1 style="display:flex;align-items:center;gap:.55rem"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path><path d="M9 9h2"></path></svg>OCR 图片文字识别</h1>
+  <a href="/admin/test/ai">← AI 测试</a>
+</div>
+
+<div class="container">
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon"><svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></div>
+    <p style="font-size:1.1rem;font-weight:600;color:#4a5568">拖放图片到此处</p>
+    <p style="font-size:.9rem;color:#718096">或点击选择文件</p>
+    <p class="hint">支持 JPG / PNG / BMP / WebP / GIF &nbsp;|&nbsp; 可同时上传多张 &nbsp;|&nbsp; Ctrl+V 粘贴截图</p>
+    <input type="file" id="fileInput" class="file-input-hidden" accept="image/*" multiple>
+  </div>
+
+  <!-- Upload Buttons Row -->
+  <div style="display:flex;gap:.75rem;margin-top:.75rem;flex-wrap:wrap">
+    <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      选择文件
+    </button>
+    <label class="btn btn-secondary" style="cursor:pointer">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      拍照上传
+      <input type="file" class="file-input-hidden" accept="image/*" capture="environment" id="cameraInput">
+    </label>
+    <button class="btn btn-secondary" onclick="pasteFromClipboard()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg>
+      粘贴截图
+    </button>
+  </div>
+
+  <!-- Toolbar (hidden when no images) -->
+  <div class="toolbar" id="toolbar" style="display:none">
+    <button class="btn btn-primary" onclick="ocrAll()" id="btnOcrAll">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      全部识别
+    </button>
+    <button class="btn btn-success" onclick="copyAll()" id="btnCopyAll">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      复制全部
+    </button>
+    <div class="toolbar-divider"></div>
+    <button class="btn btn-danger btn-sm" onclick="clearAll()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+      清空全部
+    </button>
+    <div style="flex:1"></div>
+    <span class="stat-badge" id="imageCount">0 张图片</span>
+  </div>
+
+  <!-- Image List -->
+  <div class="image-list" id="imageList"></div>
+
+  <!-- Empty State -->
+  <div class="empty-state" id="emptyState">
+    <div class="icon"><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg></div>
+    <p style="font-size:1rem;font-weight:600;margin-bottom:.3rem">暂无图片</p>
+    <p style="font-size:.85rem">上传图片开始文字识别</p>
+  </div>
+</div>
+
+<!-- Lightbox Modal -->
+<div class="modal-backdrop" id="lightbox" onclick="closeLightbox(event)">
+  <button class="modal-close" onclick="closeLightbox(event)" title="关闭"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+  <div class="modal-content">
+    <img id="lightboxImg" src="" alt="Preview" draggable="false">
+  </div>
+  <div class="modal-zoom-controls">
+    <button onclick="zoomLightbox(-1)" title="缩小">−</button>
+    <button onclick="zoomLightbox(0)" title="重置">⟳</button>
+    <button onclick="zoomLightbox(1)" title="放大">+</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──
+let images = []; // { id, file, name, size, dataUrl, resultText, processingTime, processing }
+let nextId = 1;
+let lightboxZoom = 1;
+let lightboxPan = { x: 0, y: 0, dragging: false, sx: 0, sy: 0 };
+
+// ── DOM refs ──
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const cameraInput = document.getElementById('cameraInput');
+const imageList = document.getElementById('imageList');
+const toolbar = document.getElementById('toolbar');
+const emptyState = document.getElementById('emptyState');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+
+// ── Helpers ──
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function showToast(msg, duration = 2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function updateToolbar() {
+  const has = images.length > 0;
+  toolbar.style.display = has ? 'flex' : 'none';
+  emptyState.style.display = has ? 'none' : 'block';
+  document.getElementById('imageCount').textContent = images.length + ' 张图片';
+}
+
+// ── File Reading ──
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+async function addFiles(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const dataUrl = await readFileAsDataUrl(file);
+    images.push({
+      id: nextId++,
+      file,
+      name: file.name,
+      size: file.size,
+      dataUrl,
+      resultText: '',
+      processingTime: null,
+      processing: false
+    });
+  }
+  renderList();
+  if (files.length) showToast(`已添加 ${files.length} 张图片`);
+}
+
+// ── Drag & Drop ──
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]);
+});
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if (fileInput.files.length) addFiles([...fileInput.files]); fileInput.value = ''; });
+cameraInput.addEventListener('change', () => { if (cameraInput.files.length) addFiles([...cameraInput.files]); cameraInput.value = ''; });
+
+// ── Paste ──
+document.addEventListener('paste', e => {
+  const items = [...(e.clipboardData?.items || [])];
+  const imgItems = items.filter(i => i.type.startsWith('image/'));
+  if (!imgItems.length) return;
+  e.preventDefault();
+  const files = imgItems.map(i => {
+    const f = i.getAsFile();
+    // give a name based on timestamp
+    return new File([f], `截图_${Date.now()}.png`, { type: f.type });
+  });
+  addFiles(files);
+});
+
+async function pasteFromClipboard() {
+  try {
+    const clipItems = await navigator.clipboard.read();
+    const files = [];
+    for (const item of clipItems) {
+      const imgType = item.types.find(t => t.startsWith('image/'));
+      if (imgType) {
+        const blob = await item.getType(imgType);
+        files.push(new File([blob], `截图_${Date.now()}.png`, { type: imgType }));
+      }
+    }
+    if (files.length) addFiles(files);
+    else showToast('剪贴板中没有图片');
+  } catch {
+    showToast('无法读取剪贴板，请使用 Ctrl+V');
+  }
+}
+
+// ── Example Images ──
+async function loadExampleImage(url, name) {
+  showToast('加载示例图片…');
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const file = new File([blob], name, { type: blob.type || 'image/png' });
+    await addFiles([file]);
+  } catch {
+    showToast('加载失败，请手动上传图片');
+  }
+}
+
+// ── OCR API ──
+async function ocrSingle(imgObj) {
+  imgObj.processing = true;
+  renderList();
+  const fd = new FormData();
+  fd.append('file', imgObj.file);
+  const t0 = performance.now();
+  try {
+    const resp = await fetch('/ai/ocr', { method: 'POST', body: fd });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    imgObj.resultText = data.text || '(空结果)';
+  } catch (err) {
+    imgObj.resultText = `识别失败: ${err.message}`;
+  }
+  imgObj.processingTime = ((performance.now() - t0) / 1000).toFixed(2);
+  imgObj.processing = false;
+  renderList();
+}
+
+async function ocrAll() {
+  const pending = images.filter(i => !i.resultText && !i.processing);
+  if (!pending.length) {
+    // re-run all
+    for (const img of images) { img.resultText = ''; img.processingTime = null; }
+  }
+  const targets = images.filter(i => !i.processing);
+  for (const img of targets) {
+    await ocrSingle(img);
+  }
+  showToast('全部识别完成');
+}
+
+// ── Copy ──
+function copySingle(id) {
+  const img = images.find(i => i.id === id);
+  if (!img?.resultText) return;
+  navigator.clipboard.writeText(img.resultText).then(() => showToast('已复制'));
+}
+
+function copyAll() {
+  const allText = images.map(i => i.resultText).filter(Boolean).join('\n\n---\n\n');
+  if (!allText) { showToast('没有可复制的结果'); return; }
+  navigator.clipboard.writeText(allText).then(() => showToast('已复制全部结果'));
+}
+
+// ── Remove ──
+function removeImage(id) {
+  images = images.filter(i => i.id !== id);
+  renderList();
+}
+
+function clearAll() {
+  if (images.length && !confirm('确定要清空全部图片和结果吗？')) return;
+  images = [];
+  renderList();
+}
+
+// ── Lightbox ──
+function openLightbox(dataUrl) {
+  lightboxImg.src = dataUrl;
+  lightboxZoom = 1;
+  lightboxPan = { x: 0, y: 0, dragging: false, sx: 0, sy: 0 };
+  applyLightboxTransform();
+  lightbox.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(e) {
+  if (e && e.target !== lightbox && e.target !== document.querySelector('.modal-close')) return;
+  lightbox.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function zoomLightbox(dir) {
+  if (dir === 0) { lightboxZoom = 1; lightboxPan.x = 0; lightboxPan.y = 0; }
+  else lightboxZoom = Math.max(0.2, Math.min(8, lightboxZoom + dir * 0.3));
+  applyLightboxTransform();
+}
+
+function applyLightboxTransform() {
+  lightboxImg.style.transform = `translate(${lightboxPan.x}px,${lightboxPan.y}px) scale(${lightboxZoom})`;
+}
+
+lightboxImg.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomLightbox(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
+lightboxImg.addEventListener('mousedown', e => {
+  e.preventDefault();
+  lightboxPan.dragging = true;
+  lightboxPan.sx = e.clientX - lightboxPan.x;
+  lightboxPan.sy = e.clientY - lightboxPan.y;
+  lightboxImg.classList.add('grabbing');
+});
+window.addEventListener('mousemove', e => {
+  if (!lightboxPan.dragging) return;
+  lightboxPan.x = e.clientX - lightboxPan.sx;
+  lightboxPan.y = e.clientY - lightboxPan.sy;
+  applyLightboxTransform();
+});
+window.addEventListener('mouseup', () => {
+  lightboxPan.dragging = false;
+  lightboxImg.classList.remove('grabbing');
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && lightbox.classList.contains('open')) {
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
+
+// ── Render ──
+function renderList() {
+  updateToolbar();
+  if (!images.length) { imageList.innerHTML = ''; return; }
+
+  imageList.innerHTML = images.map(img => {
+    const charCount = img.resultText ? img.resultText.length : 0;
+    const wordCount = img.resultText ? img.resultText.trim().split(/\s+/).filter(Boolean).length : 0;
+    const hasResult = !!img.resultText;
+
+    return `
+    <div class="image-card" data-id="${img.id}">
+      <div class="image-card-inner">
+        <!-- Left: Image -->
+        <div class="image-side">
+          <div class="image-meta">
+            <span class="name" title="${esc(img.name)}">${esc(img.name)}</span>
+            <span class="size">${formatSize(img.size)}</span>
+            <div style="flex:1"></div>
+            <button class="btn btn-danger btn-sm" onclick="removeImage(${img.id})" title="移除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+          </div>
+          <div class="image-preview-wrap" onclick="openLightbox(images.find(i=>i.id===${img.id}).dataUrl)">
+            <img src="${img.dataUrl}" alt="${esc(img.name)}">
+          </div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="ocrSingle(images.find(i=>i.id===${img.id}))" ${img.processing ? 'disabled' : ''}>
+              ${img.processing ? '<span class="spinner"></span> 识别中…' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg> 识别文字'}
+            </button>
+          </div>
+        </div>
+        <!-- Right: Result -->
+        <div class="result-side">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:.85rem;font-weight:600;color:#4a5568">识别结果</span>
+            ${hasResult ? `<button class="btn btn-secondary btn-sm" onclick="copySingle(${img.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> 复制</button>` : ''}
+          </div>
+          <div class="result-text${hasResult ? '' : ' empty'}" style="position:relative">
+            ${img.processing ? `
+              <div class="processing-overlay">
+                <div class="spinner"></div>
+                <span style="font-size:.85rem;color:#667eea;font-weight:500">正在识别…</span>
+              </div>
+            ` : ''}
+            ${hasResult ? esc(img.resultText) : (img.processing ? '' : '点击"识别文字"开始 OCR')}
+          </div>
+          <div class="result-footer">
+            ${hasResult ? `
+              <span class="stat-badge">${charCount} 字符</span>
+              <span class="stat-badge">${wordCount} 词</span>
+            ` : ''}
+            ${img.processingTime ? `<span class="stat-badge">耗时 ${img.processingTime}s</span>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Initial render
+renderList();
+</script>
+</body>
+</html>

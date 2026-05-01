@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f5f5f5">
+<title>e-Shop 购物网站</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
+  .toolbar { display: flex; flex-direction: column; gap: 0.75rem; }
+  .cat-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .nav-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: var(--builtin-radius, 6px); border: 1px solid var(--builtin-border, #d1d5db); background: var(--builtin-button-bg, #ffffff); color: var(--builtin-color-text, #111827); font-weight: 500; cursor: pointer; font: inherit; text-decoration: none; }
+  .nav-btn:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  .nav-btn-primary { background: var(--builtin-primary, #2563eb); border-color: var(--builtin-primary, #2563eb); color: #fff; }
+  .nav-btn-primary:hover { background: var(--builtin-primary-hover, #1d4ed8); }
+  .ai-chat { position: fixed; bottom: 1rem; right: 1rem; width: 320px; z-index: 100; }
+  .ai-chat-messages { height: 200px; overflow-y: auto; background: var(--builtin-header-bg, #fafafa); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; }
+  @media (max-width: 720px) {
+    .ai-chat { width: calc(100% - 2rem); left: 1rem; right: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<builtin-tpl-frontpage-shop id="tpl" promo-text="e-Shop">
+  <builtin-navbar slot="navbar" brand="e-Shop" mode="default" sticky>
+    <div slot="brand" style="display:flex;align-items:center;gap:8px;">
+      <builtin-icon name="shopping" size="24"></builtin-icon>
+      <span data-i18n="eshop.title">e-Shop</span>
+    </div>
+    <div slot="actions" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn" display="buttons"></builtin-lang-switcher>
+      <builtin-theme-toggle></builtin-theme-toggle>
+      <a href="ai-chat.html" class="nav-btn nav-btn-primary">
+        <builtin-icon name="robot" size="16"></builtin-icon>
+        <span data-i18n="eshop.ai_customer_service">AI 客服</span>
+      </a>
+      <a href="favorites.html" class="nav-btn">
+        <builtin-icon name="heart" size="16"></builtin-icon>
+        <span data-i18n="eshop.favorites">收藏</span>
+      </a>
+      <a href="orders.html" class="nav-btn" data-i18n="eshop.my_orders">我的订单</a>
+      <button id="btn-cart" class="nav-btn" data-i18n="eshop.cart">
+        <builtin-icon name="shopping-cart" size="16" variant="outlined"></builtin-icon>
+        购物车 <builtin-badge id="cart-count" text="0" variant="primary" pill></builtin-badge>
+      </button>
+      <a href="user-profile.html" class="nav-btn">
+        <builtin-icon name="user" size="16" variant="outlined"></builtin-icon>
+        <span data-i18n="eshop.user_profile">个人中心</span>
+      </a>
+      <a href="merchant.html" class="nav-btn" id="btn-merchant" style="display:none;">
+        <builtin-icon name="shop" size="16"></builtin-icon>
+        <span data-i18n="eshop.enter_merchant">商家后台</span>
+      </a>
+      <button id="btn-logout" class="nav-btn" data-i18n="eshop.logout">退出</button>
+    </div>
+  </builtin-navbar>
+
+  <div slot="promo" class="toolbar">
+    <builtin-search-bar id="search-bar" placeholder="搜索商品..." data-i18n-placeholder="eshop.search_placeholder"></builtin-search-bar>
+    <div class="cat-filters" id="cat-filters">
+      <button id="btn-cat-all" class="nav-btn nav-btn-primary" data-cat="all">全部</button>
+    </div>
+  </div>
+</builtin-tpl-frontpage-shop>
+
+<!-- AI Chat -->
+<builtin-card class="ai-chat" variant="elevated">
+  <div slot="header" style="display:flex;align-items:center;gap:6px;">
+    <builtin-icon name="message" size="16"></builtin-icon>
+    <span data-i18n="eshop.ai_customer_service">AI 客服</span>
+  </div>
+  <div class="ai-chat-messages" id="ai-messages">
+    <div style="font-size:0.875rem;color:var(--builtin-color-muted,#6b7280);" data-i18n="eshop.ai_greeting">AI: 您好！有什么可以帮您的吗？</div>
+  </div>
+  <div slot="footer" style="display:flex;gap:0.5rem;align-items:center;">
+    <input id="ai-input" placeholder="输入问题..." style="flex:1;min-height:34px;padding:6px 9px;border:1px solid var(--builtin-border,#d1d5db);border-radius:var(--builtin-radius,6px);background:var(--builtin-input-bg,#ffffff);color:inherit;font:inherit;" data-i18n-placeholder="eshop.input_question">
+    <button id="btn-ai-send" class="nav-btn nav-btn-primary" data-i18n="eshop.send">发送</button>
+  </div>
+</builtin-card>
+
+<!-- Cart Drawer -->
+<builtin-drawer id="cart-drawer" placement="right" size="360px">
+  <div slot="title" data-i18n="eshop.cart">购物车</div>
+  <div id="cart-items" data-i18n="eshop.cart_empty">空</div>
+  <div style="margin-top:1rem;">
+    <button id="btn-checkout" class="nav-btn nav-btn-primary" style="width:100%;" data-i18n="eshop.go_to_checkout">结算</button>
+  </div>
+</builtin-drawer>
+
+<script type="module">
+import { initEshop, api, t, applyI18n, USER_ID, logout, isMerchant } from './eshop-utils.js';
+
+await initEshop();
+
+// Show merchant console button for merchant/admin roles
+if (isMerchant()) {
+  const btn = document.getElementById('btn-merchant');
+  if (btn) btn.style.display = 'inline-flex';
+}
+
+document.getElementById('btn-logout').addEventListener('click', logout);
+
+const $ = id => document.getElementById(id);
+let cart = [];
+let allProducts = [];
+let currentProducts = [];
+let categories = [];
+
+// Load categories
+(async () => {
+  const res = await api('/shop/categories');
+  categories = (res && res.categories) || [];
+  const container = $('cat-filters');
+  categories.forEach(cat => {
+    if (cat.id === 'all') return;
+    const btn = document.createElement('button');
+    btn.className = 'nav-btn';
+    btn.dataset.cat = cat.id;
+    btn.textContent = cat.name;
+    container.appendChild(btn);
+  });
+  // Bind category buttons
+  container.querySelectorAll('button[data-cat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setActiveCategory(btn.dataset.cat);
+      if (btn.dataset.cat === 'all') {
+        currentProducts = allProducts;
+      } else {
+        currentProducts = allProducts.filter(p => p.category === btn.dataset.cat);
+      }
+      renderProducts();
+    });
+  });
+})();
+
+function setActiveCategory(activeId) {
+  document.querySelectorAll('#cat-filters button[data-cat]').forEach(btn => {
+    btn.classList.toggle('nav-btn-primary', btn.dataset.cat === activeId);
+  });
+}
+
+const tpl = $('tpl');
+await customElements.whenDefined('builtin-tpl-frontpage-shop');
+await tpl.updateComplete;
+
+function renderProducts() {
+  const shadow = tpl.shadowRoot;
+  if (!shadow) return;
+  const grid = shadow.querySelector('.product-grid');
+  if (!grid) return;
+  if (currentProducts.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--builtin-color-muted);padding:40px;"><builtin-alert variant="info">${t('eshop.no_results')}</builtin-alert></div>`;
+    return;
+  }
+  // Use builtin-product-grid component dynamically
+  let pg = grid.querySelector('builtin-product-grid');
+  if (!pg) {
+    pg = document.createElement('builtin-product-grid');
+    pg.style.cssText = 'grid-column:1/-1;';
+    grid.innerHTML = '';
+    grid.appendChild(pg);
+  }
+  pg.products = currentProducts.map(p => ({
+    id: p.id,
+    title: p.name,
+    price: '¥' + p.price,
+    originalPrice: p.old_price ? '¥' + p.old_price : undefined,
+    image: p.image,
+    rating: p.rating,
+    sales: p.sales,
+    tags: p.tags || [],
+    href: 'product-detail.html?id=' + p.id,
+  }));
+  pg.addEventListener('builtin-product-click', (e) => {
+    location.href = 'product-detail.html?id=' + e.detail.id;
+  });
+}
+
+(async () => {
+  const r = await api('/shop/products');
+  const list = (r && r.products) || [];
+  allProducts = list;
+  currentProducts = allProducts;
+  renderProducts();
+})();
+
+async function doSearch() {
+  const q = $('search-bar').value?.trim() || '';
+  if (!q) {
+    currentProducts = allProducts;
+    setActiveCategory('all');
+    renderProducts();
+    return;
+  }
+  const r = await api('/shop/products/search?q=' + encodeURIComponent(q));
+  currentProducts = (r && r.products) || [];
+  setActiveCategory('');
+  renderProducts();
+}
+
+$('search-bar').addEventListener('builtin-search', doSearch);
+
+const loadCart = async () => {
+  const r = await api('/shop/cart?user_id=' + USER_ID);
+  cart = (r && r.items) || [];
+  const count = cart.reduce((s, i) => s + (i.quantity || 0), 0);
+  $('cart-count').text = String(count);
+  if (!cart.length) {
+    $('cart-items').innerHTML = `<builtin-alert variant="info">${await t('eshop.cart_empty')}</builtin-alert>`;
+  } else {
+    $('cart-items').innerHTML = cart.map(item => `
+      <div style="padding:0.5rem;border-bottom:1px solid var(--builtin-border-soft,#e5e7eb);display:flex;align-items:center;gap:8px;">
+        <img src="${item.image}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">
+        <div style="flex:1;font-size:13px;">
+          <div style="font-weight:500;">${item.name}</div>
+          <div style="color:var(--builtin-primary);">¥${item.price} x${item.quantity}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+};
+
+$('btn-cart').addEventListener('click', () => {
+  loadCart().then(() => $('cart-drawer').openDrawer());
+});
+
+$('btn-checkout').addEventListener('click', async () => {
+  if (!cart.length) return;
+  location.href = 'checkout.html';
+});
+
+$('btn-ai-send').addEventListener('click', async () => {
+  const msg = $('ai-input').value.trim();
+  if (!msg) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'font-size:0.875rem;margin-bottom:0.25rem;';
+  div.innerHTML = `<strong>我:</strong> ${msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
+  $('ai-messages').appendChild(div);
+  $('ai-input').value = '';
+
+  const r = await api('/shop/ai-chat', { method: 'POST', body: JSON.stringify({ message: msg }) });
+  const reply = (r && r.reply) || '...';
+  const div2 = document.createElement('div');
+  div2.style.cssText = 'font-size:0.875rem;margin-bottom:0.25rem;color:var(--builtin-color-muted,#6b7280);';
+  div2.innerHTML = `<strong>AI:</strong> ${reply.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
+  $('ai-messages').appendChild(div2);
+  $('ai-messages').scrollTop = $('ai-messages').scrollHeight;
+});
+</script>
+</body>
+</html>

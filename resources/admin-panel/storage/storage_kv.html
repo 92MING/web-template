@@ -1,0 +1,3613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KV 存储浏览器</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/vendor/highlight/highlight.css" />
+  <link rel="stylesheet" href="/html-assets/css/storage-ui-shared.css" />
+  <script src="/vendor/highlight/highlight.js"></script>
+  <script src="/vendor/chart/chart.js"></script>
+  <script src="/html-assets/js/storage-ui-shared.js"></script>
+  <script src="/html-assets/js/storage-icons.js"></script>
+  <style>
+    /* ── Page-specific layout ── */
+    .kv-empty-block {
+      padding: 14px 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 90%, transparent);
+    }
+    .ns-tree-shell { display: grid; gap: 4px; }
+    .ns-node-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      transition: background .12s ease;
+    }
+    .ns-node-row:hover { background: rgba(79,70,229,.05); }
+    .ns-toggle {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .ns-toggle:hover { background: rgba(79,70,229,.08); color: var(--text); }
+    .ns-label-btn {
+      min-width: 0;
+      flex: 1 1 auto;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .ns-label-btn:hover { color: var(--brand); }
+    .ns-count {
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .ns-children {
+      padding-left: 16px;
+      margin-left: 9px;
+      border-left: 1px solid var(--border);
+      display: grid;
+      gap: 2px;
+    }
+    .ns-leaf-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      transition: background .12s ease;
+      cursor: pointer;
+    }
+    .ns-leaf-row:hover { background: rgba(79,70,229,.05); }
+    .ns-leaf-key {
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .ns-leaf-meta {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .kv-mobile-shell { padding: 12px 12px 18px; }
+    @media (max-width: 900px) {
+      .kv-mobile-shell { padding: 8px; }
+    }
+
+    /* ── Key rows ── */
+    .key-row { transition: background .1s; cursor: pointer; }
+    .key-row:hover { background: rgba(79,70,229,.04); }
+    .key-row.active { background: var(--row-active); }
+
+    /* ── Sort buttons ── */
+    .sort-btn { cursor: pointer; user-select: none; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--muted); transition: background .15s; }
+    .sort-btn:hover { background: rgba(79,70,229,.06); }
+    .sort-btn.active-sort { color: var(--brand); }
+
+    /* ── Namespace tree ── */
+    .ns-node { cursor: pointer; user-select: none; }
+    .ns-node:hover { background: rgba(79,70,229,.04); }
+    .ns-children { padding-left: 16px; border-left: 1px solid var(--border); margin-left: 10px; }
+    .ns-icon { display: inline-block; width: 14px; text-align: center; font-size: 10px; color: var(--muted); }
+
+    /* ── Search history ── */
+    .search-history {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+      box-shadow: var(--shadow); max-height: 220px; overflow: auto; margin-top: 2px;
+    }
+    .sh-item { padding: 5px 10px; cursor: pointer; font-size: 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .sh-item:last-child { border-bottom: none; }
+    .sh-item:hover { background: rgba(79,70,229,.04); }
+    .sh-remove { cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+    .sh-remove:hover { background: rgba(79,70,229,.06); color: var(--text); }
+
+    /* ── Filter chip ── */
+    .filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--panel-soft); color: var(--muted); font-size: 11px; font-weight: 500; border: 1px solid var(--border); }
+    .kv-filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel-soft) 92%, transparent); color: var(--muted); font-size: 11px; line-height: 1.2; }
+    .kv-filter-chip strong { color: var(--text); font-weight: 800; }
+    .kv-filter-chip-remove { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; }
+    .kv-filter-chip-remove:hover { background: rgba(79,70,229,.08); color: var(--text); }
+    .kv-filter-chip-remove .storage-icon { width: 11px; height: 11px; }
+
+    /* ── Dry-run list ── */
+    .dry-list { max-height: 200px; overflow-y: auto; margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; }
+    .dry-list div { padding: 3px 8px; font-family: monospace; font-size: 11px; border-bottom: 1px solid var(--border); }
+    .dry-list div:last-child { border-bottom: none; }
+
+    /* ── Modal ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 8000; display: flex; align-items: center; justify-content: center; }
+    .modal-box { background: var(--panel); border-radius: 10px; padding: 16px; max-width: 480px; width: 94%; box-shadow: var(--shadow); max-height: 90vh; overflow-y: auto; }
+    .modal-box.wide { max-width: 680px; }
+
+    /* ── Empty state ── */
+    .empty-state { padding: 16px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+
+    /* ── JSON tree view (Redis Insight style) ── */
+    .dtree { list-style: none; margin: 0; padding: 0 0 0 16px; }
+    .dtree-root { padding-left: 0; }
+    .dtree li { line-height: 1.65; }
+    .dtree-row { display: inline-flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+    .dtree-tog { cursor: pointer; }
+    .dtree-tog:hover .dtree-k { color: var(--brand); }
+    .dtree-exp {
+      width: 12px; flex-shrink: 0; font-size: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--muted); cursor: pointer; user-select: none;
+    }
+    .dtree-k { color: var(--text); font-weight: 600; }
+    .dtree-c { color: var(--muted); }
+    .dtree-s { color: #059669; } html.dark .dtree-s { color: #34d399; }
+    .dtree-n { color: #d97706; } html.dark .dtree-n { color: #fbbf24; }
+    .dtree-b { color: #4f46e5; } html.dark .dtree-b { color: #818cf8; }
+    .dtree-x { color: #94a3b8; font-style: italic; }
+    .dtree-oid { color: #059669; font-weight: 500; } html.dark .dtree-oid { color: #34d399; }
+    .dtree-date { color: #be123c; } html.dark .dtree-date { color: #fb7185; }
+    .dtree-meta { color: var(--muted); font-size: 11px; font-style: italic; }
+
+    .storage-kv-shell {
+      --kv-key-pane-width: 46%;
+      padding: 6px 8px 10px;
+      gap: 4px;
+      height: 100vh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .storage-db-topbar {
+      padding: 6px 10px;
+    }
+    .storage-workspace-shell {
+      gap: 4px;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .storage-section-stack {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .storage-section-panel[data-workspace-panel="data"].active {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      height: 100%;
+    }
+    .storage-section-panel[data-workspace-panel="analysis"].active,
+    .storage-section-panel[data-workspace-panel="database"].active {
+      min-height: 0;
+      height: 100%;
+      overflow-y: auto;
+      align-content: start;
+      padding-right: 2px;
+    }
+    .kv-data-toolbar-card,
+    .kv-key-browser,
+    .kv-value-browser,
+    .kv-analysis-hero,
+    .kv-analysis-card,
+    .kv-db-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      box-shadow: var(--shadow);
+    }
+    .kv-data-toolbar-card,
+    .kv-analysis-hero,
+    .kv-db-card {
+      padding: 8px 10px;
+    }
+    .kv-toolbar-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.72fr) minmax(320px, 1.48fr) auto;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .kv-toolbar-row .btn {
+      min-height: 34px;
+      padding-inline: 10px;
+    }
+    .kv-scope-shell {
+      position: relative;
+      min-width: 0;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-soft) 92%, transparent);
+    }
+    .kv-scope-label {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .kv-scope-shell input {
+      flex: 1 1 auto;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .kv-search-shell {
+      position: relative;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-soft) 92%, transparent);
+    }
+    .kv-search-shell .storage-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .kv-search-shell input {
+      flex: 1 1 auto;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .kv-search-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+    .kv-search-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+    .kv-search-main-btn { padding-inline: 12px; }
+    .kv-search-toggle-btn { min-width: 34px; padding: 0 10px; }
+    .kv-search-panel { position: absolute; top: calc(100% + 10px); right: 0; z-index: 80; width: min(640px, calc(100vw - 32px)); padding: 14px; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--panel) 96%, transparent); box-shadow: 0 24px 48px rgba(15,23,42,.16); display: none; }
+    html.dark .kv-search-panel { box-shadow: 0 24px 48px rgba(2,6,23,.42); }
+    .kv-search-panel.is-open { display: block; }
+    .kv-search-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .kv-search-panel-copy { display: grid; gap: 3px; min-width: 0; }
+    .kv-search-panel-title { font-size: 14px; font-weight: 900; color: var(--text); }
+      .kv-search-panel-meta { display: none; }
+    .kv-search-panel-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .kv-search-panel-stack { display: grid; gap: 10px; }
+    .kv-search-panel-row { display: grid; gap: 6px; }
+    .kv-search-panel-inline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+    .kv-search-panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .kv-toolbar-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .kv-toolbar-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .kv-toolbar-pill strong {
+      color: var(--text);
+      font-size: 11px;
+    }
+    .kv-hidden-controls {
+      display: none;
+    }
+    .kv-browser-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, var(--kv-key-pane-width)) 10px minmax(420px, 1fr);
+      gap: 10px;
+      align-items: stretch;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .kv-browser-resizer {
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(180deg, rgba(15, 118, 110, 0.14), rgba(8, 145, 178, 0.2));
+      cursor: col-resize;
+      position: relative;
+      touch-action: none;
+      z-index: 2;
+    }
+    .kv-browser-resizer::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.42);
+    }
+    .kv-browser-resizer.is-dragging::after {
+      background: rgba(79, 70, 229, 0.36);
+    }
+    .kv-key-browser,
+    .kv-value-browser {
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      overflow: hidden;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .kv-browser-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .kv-browser-head-copy {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+      flex: 0 1 auto;
+    }
+    .kv-browser-title {
+      font-size: 15px;
+      line-height: 1.1;
+      font-weight: 900;
+      color: var(--text);
+    }
+    .kv-key-browser .storage-fold-kicker,
+    .kv-key-browser .kv-browser-subtitle {
+      display: none;
+    }
+    .kv-browser-summary {
+      min-width: 0;
+      flex: 1 1 240px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .kv-browser-head-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .kv-browser-subtitle {
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .kv-results-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .kv-results-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+    }
+    .kv-results-toggle .btn {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+    }
+    .kv-results-toggle .btn.active-view {
+      background: var(--brand) !important;
+      color: #fff !important;
+      border-color: var(--brand) !important;
+    }
+    .kv-results-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .kv-results-metrics .pill {
+      min-height: 26px;
+      font-size: 11px;
+    }
+    .kv-list-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+      overflow: hidden;
+    }
+    .kv-list-shell #keyList {
+      min-height: 0;
+      max-height: none;
+      height: 100%;
+      padding: 4px 0;
+      overflow: auto;
+    }
+    .kv-detail-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .kv-detail-key {
+      font-size: 15px;
+      line-height: 1.35;
+      font-weight: 800;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .kv-detail-meta-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .kv-detail-meta-strip .pill {
+      min-height: 24px;
+      font-size: 11px;
+    }
+    .kv-detail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .kv-detail-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(120px, 0.38fr) minmax(120px, 0.38fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .kv-detail-form label {
+      display: grid;
+      gap: 5px;
+    }
+    .kv-detail-form label span {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      color: var(--muted);
+    }
+    .kv-detail-tabs {
+      display: grid;
+      grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .kv-detail-mode-tabs {
+      flex: 0 0 auto;
+      min-width: 156px;
+      min-height: 24px;
+      padding: 1px;
+      gap: 2px;
+      border-radius: 7px;
+    }
+    .kv-detail-mode-tabs::before,
+    .kv-detail-mode-tabs .storage-workspace-indicator {
+      border-radius: 5px;
+    }
+    .kv-detail-mode-tabs::before {
+      inset: 1px;
+    }
+    .kv-detail-mode-tabs .storage-workspace-indicator {
+      top: 1px;
+      bottom: 1px;
+      left: 1px;
+    }
+    .kv-detail-mode-tabs .storage-workspace-tab {
+      padding: 0 8px;
+      border-radius: 6px;
+      text-align: center;
+      justify-items: center;
+      min-height: 22px;
+    }
+    .kv-detail-mode-tabs .storage-workspace-tab-title {
+      font-size: 11px;
+      line-height: 1.2;
+    }
+    .kv-detail-tabs .storage-toolbar-group {
+      gap: 4px;
+      min-width: 0;
+      justify-content: flex-end;
+    }
+    .kv-detail-tabs .btn {
+      min-height: 24px;
+      border-radius: 6px;
+      padding: 0 8px;
+      font-size: 11px;
+    }
+    #charCount {
+      margin-left: 4px;
+      font-size: 10px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+    .kv-value-surface {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+      overflow: hidden;
+    }
+    .kv-value-surface > div {
+      height: 100%;
+      min-height: 0;
+      overflow: auto;
+    }
+    .kv-value-surface textarea,
+    .kv-value-surface pre,
+    .kv-value-surface #treeContent {
+      margin: 0;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      min-height: 100%;
+    }
+    .kv-value-surface textarea {
+      padding: 14px 16px;
+      height: 100%;
+      resize: none;
+    }
+    .kv-json-editor {
+      display: grid;
+      gap: 8px;
+      padding: 14px 16px;
+      min-height: 380px;
+      max-height: 68vh;
+      overflow: auto;
+    }
+    .kv-json-group {
+      border-left: 1px solid var(--border);
+      padding-left: 12px;
+      margin-left: 8px;
+      display: grid;
+      gap: 8px;
+    }
+    .kv-json-node {
+      display: grid;
+      gap: 8px;
+    }
+    .kv-json-node summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .kv-json-node summary::-webkit-details-marker {
+      display: none;
+    }
+    .kv-json-field {
+      display: grid;
+      grid-template-columns: minmax(120px, 220px) minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+    }
+    .kv-json-field.is-clickable {
+      cursor: pointer;
+    }
+    .kv-json-field.is-clickable:hover {
+      border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand-soft) 74%, transparent);
+    }
+    .kv-json-field-key {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .kv-json-field-value {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .kv-insight-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .kv-insight-card {
+      min-width: 0;
+      display: grid;
+      gap: 1px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel-soft) 88%, transparent);
+    }
+    .kv-insight-label {
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .kv-insight-value {
+      font-size: 13px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: var(--text);
+      word-break: break-word;
+    }
+    .kv-insight-meta {
+      font-size: 9px;
+      line-height: 1.3;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .kv-analysis-layout {
+      display: grid;
+      gap: 8px;
+      align-items: start;
+    }
+    .kv-analysis-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      min-width: 0;
+    }
+    .kv-analysis-summary[hidden] {
+      display: none !important;
+    }
+    .kv-analysis-summary .kv-filter-chip {
+      padding: 2px 8px;
+      gap: 4px;
+      font-size: 10px;
+      line-height: 1.15;
+    }
+    .kv-analysis-actions {
+      gap: 4px;
+      align-items: center;
+    }
+    .kv-analysis-stack,
+    .kv-db-stack {
+      display: grid;
+      gap: 8px;
+    }
+    .kv-analysis-card {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel-soft) 92%, transparent);
+      overflow: hidden;
+    }
+    .kv-db-card {
+      display: grid;
+      gap: 8px;
+    }
+    .kv-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .kv-card-title {
+      font-size: 12px;
+      line-height: 1.15;
+      font-weight: 900;
+      color: var(--text);
+    }
+    .kv-fold-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .kv-fold-card > summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      user-select: none;
+      background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
+    }
+    .kv-fold-card > summary::-webkit-details-marker {
+      display: none;
+    }
+    .kv-fold-card-head {
+      min-width: 0;
+      display: grid;
+      gap: 1px;
+    }
+    .kv-fold-card-title {
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--text);
+    }
+    .kv-fold-card-meta {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .kv-fold-card-icon {
+      flex-shrink: 0;
+      color: var(--muted);
+      font-size: 12px;
+      transition: transform .16s ease;
+    }
+    .kv-fold-card[open] .kv-fold-card-icon {
+      transform: rotate(90deg);
+    }
+    .kv-fold-card-body {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .kv-fold-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      gap: 8px;
+      align-items: start;
+    }
+    .kv-fold-card .storage-compact-list,
+    .kv-fold-card .storage-meta-list {
+      max-height: 220px;
+      overflow: auto;
+    }
+    .kv-fold-card .kv-chart-shell {
+      height: 184px;
+    }
+    .kv-fold-card .storage-compact-item {
+      padding: 6px 10px;
+    }
+    .kv-fold-card .storage-compact-item-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .kv-fold-card .storage-compact-item-meta {
+      margin-top: 2px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      align-items: baseline;
+    }
+    .kv-fold-card .storage-compact-item-meta .kv-meta-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .kv-fold-card .storage-compact-item-meta .kv-meta-chip-label {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .kv-fold-card .storage-compact-item-meta .kv-meta-chip-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .kv-card-copy { display: none; }
+    .kv-inline-editor-note { display: none; }
+    @media (max-width: 640px) {
+      #searchApplyBtn span:last-child,
+      #openFilterBtn .btn-label,
+      #clearSearchBtn span:last-child,
+      #createBtn span:last-child,
+      #refreshBtn span:last-child,
+      #batchDeleteBtn span:last-child,
+      #batchTTLBtn span:last-child,
+      #batchExportBtn span:last-child,
+      #duplicateBtn span:last-child,
+      #renameBtn span:last-child,
+      #editBtn span:last-child,
+      #saveBtn span:last-child,
+      #copyBtn span:last-child,
+      #downloadBtn span:last-child,
+      #databaseExportBtn span:last-child,
+      #databaseCleanupBtn span:last-child,
+      #dbCreateBtn span:last-child {
+        display: none;
+      }
+      #searchApplyBtn,
+      #clearSearchBtn,
+      #createBtn,
+      #refreshBtn,
+      #batchDeleteBtn,
+      #batchTTLBtn,
+      #batchExportBtn,
+      #duplicateBtn,
+      #renameBtn,
+      #editBtn,
+      #saveBtn,
+      #copyBtn,
+      #downloadBtn,
+      #databaseExportBtn,
+      #databaseCleanupBtn,
+      #dbCreateBtn {
+        min-width: 36px;
+        padding: 0 10px;
+      }
+    }
+    .kv-chart-shell {
+      position: relative;
+      height: 220px;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .kv-chart-shell > canvas {
+      position: absolute !important;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+    }
+    #dataWorkspaceMeta {
+      margin-top: 0 !important;
+      min-width: 0;
+      flex: 1 1 280px;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+    @media (max-width: 1100px) {
+      .kv-toolbar-row {
+        grid-template-columns: 1fr;
+      }
+      .kv-browser-grid {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 0;
+      }
+      .kv-browser-resizer {
+        display: none;
+      }
+      .kv-key-browser,
+      .kv-value-browser {
+        height: auto;
+      }
+      #dataWorkspaceMeta {
+        flex-basis: 100%;
+        text-align: left;
+      }
+    }
+    @media (max-width: 640px) {
+      .kv-search-panel {
+        left: 0;
+        right: auto;
+        width: min(100%, calc(100vw - 16px));
+      }
+      .kv-search-panel-grid,
+      .kv-search-panel-inline,
+      .kv-detail-form {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Compact pass: tighten everything inside KV workspace ── */
+    .storage-kv-shell { padding: 4px 6px 6px; gap: 4px; }
+    .storage-kv-shell .storage-db-topbar { padding: 4px 8px; }
+    .storage-kv-shell .kv-data-toolbar-card,
+    .storage-kv-shell .kv-db-card { padding: 5px 7px; }
+    .storage-kv-shell .kv-analysis-hero { padding: 4px 6px; }
+    .storage-kv-shell .kv-toolbar-row { gap: 6px; }
+    .storage-kv-shell .kv-toolbar-row .btn { min-height: 28px; padding-inline: 8px; font-size: 12px; }
+    .storage-kv-shell .kv-scope-shell,
+    .storage-kv-shell .kv-search-shell { min-height: 28px; padding: 0 8px; gap: 6px; border-radius: 10px; }
+    .storage-kv-shell .kv-scope-shell input,
+    .storage-kv-shell .kv-search-shell input { font-size: 12px; }
+    .storage-kv-shell .kv-scope-label { font-size: 9px; }
+    .storage-kv-shell .kv-search-shell .storage-icon { width: 14px; height: 14px; }
+    .storage-kv-shell .kv-search-actions { gap: 4px; }
+    .storage-kv-shell .kv-search-main-btn { padding-inline: 10px; }
+    .storage-kv-shell .kv-search-toggle-btn { min-width: 28px; padding: 0 8px; }
+
+    .storage-kv-shell .kv-toolbar-pill { min-height: 18px; padding: 0 6px; font-size: 9px; gap: 4px; }
+    .storage-kv-shell .kv-toolbar-pill strong { font-size: 10px; }
+    .storage-kv-shell .kv-toolbar-pills { gap: 4px; }
+
+    .storage-kv-shell .kv-browser-grid {
+      gap: 6px;
+      height: calc(100vh - 140px);
+      min-height: 420px;
+    }
+    .storage-kv-shell .kv-key-browser,
+    .storage-kv-shell .kv-value-browser {
+      padding: 8px 10px;
+      gap: 8px;
+      border-radius: 12px;
+    }
+    .storage-kv-shell .kv-browser-head { gap: 6px; }
+    .storage-kv-shell .kv-browser-title { font-size: 12px; }
+    .storage-kv-shell .kv-browser-subtitle { font-size: 10px; line-height: 1.3; }
+    .storage-kv-shell .kv-browser-summary { gap: 4px; }
+    .storage-kv-shell .kv-browser-head-actions { gap: 6px; }
+    .storage-kv-shell .kv-analysis-hero .btn { min-height: 24px; padding-inline: 7px; font-size: 10px; }
+    .storage-kv-shell .kv-analysis-hero .storage-fold-kicker { font-size: 9px; }
+
+    .storage-kv-shell .kv-results-toggle { padding: 2px; gap: 2px; }
+    .storage-kv-shell .kv-results-toggle .btn { min-height: 22px; padding: 0 8px; font-size: 11px; }
+    .storage-kv-shell .kv-results-bar { gap: 6px; }
+    .storage-kv-shell .kv-results-metrics { gap: 4px; }
+    .storage-kv-shell .kv-results-metrics .pill { min-height: 20px; font-size: 10px; padding: 0 8px; }
+    .storage-kv-shell .sort-btn { font-size: 10px; padding: 1px 5px; }
+
+    .storage-kv-shell .kv-list-shell { border-radius: 10px; }
+    .storage-kv-shell .kv-list-shell #keyList { padding: 2px 0; }
+    .storage-kv-shell .kv-list-shell .key-row { padding: 4px 8px !important; gap: 6px !important; }
+    .storage-kv-shell .kv-list-shell .key-row .mono.text-sm { font-size: 11px; line-height: 1.25; }
+    .storage-kv-shell .kv-list-shell .key-row .text-xs { font-size: 10px; }
+    .storage-kv-shell .kv-list-shell .key-row .pill { min-height: 18px; padding: 0 6px; font-size: 9px; }
+    .storage-kv-shell .kv-list-shell .key-row input.check { width: 12px; height: 12px; }
+    .storage-kv-shell .kv-list-shell .ns-node { padding: 2px 8px !important; font-size: 11px; }
+    .storage-kv-shell .kv-list-shell .ns-children { padding-left: 12px; margin-left: 8px; }
+
+    .storage-kv-shell .kv-detail-head { gap: 8px; }
+    .storage-kv-shell .kv-detail-key { font-size: 13px; line-height: 1.3; }
+    .storage-kv-shell .kv-detail-meta-strip { gap: 4px; margin-top: 4px; }
+    .storage-kv-shell .kv-detail-meta-strip .pill { min-height: 18px; font-size: 10px; padding: 0 6px; }
+    .storage-kv-shell .kv-detail-actions { gap: 4px; }
+    .storage-kv-shell .kv-detail-actions .btn { min-height: 24px; padding: 0 8px; font-size: 11px; }
+
+    .storage-kv-shell .kv-detail-form { gap: 8px; }
+    .storage-kv-shell .kv-detail-form label { gap: 3px; }
+    .storage-kv-shell .kv-detail-form label span {
+      min-height: 16px; padding: 0 6px; font-size: 9px; letter-spacing: .04em; border-radius: 999px;
+    }
+    .storage-kv-shell .kv-detail-form .input,
+    .storage-kv-shell .kv-detail-form .select { min-height: 24px; font-size: 11px; padding: 0 8px; }
+    .storage-kv-shell .kv-detail-form .btn { min-height: 24px; font-size: 11px; padding: 0 10px; }
+
+    .storage-kv-shell .kv-detail-tabs { gap: 4px; }
+    .storage-kv-shell .kv-detail-mode-tabs .storage-workspace-tab { padding: 3px 6px; }
+    .storage-kv-shell .kv-detail-mode-tabs .storage-workspace-tab-title { font-size: 10px; }
+    .storage-kv-shell .kv-detail-tabs .btn { min-height: 21px; padding: 0 6px; font-size: 10px; }
+    @media (max-width: 860px) {
+      .kv-detail-tabs {
+        grid-template-columns: 1fr;
+      }
+      .kv-detail-tabs .storage-toolbar-group {
+        justify-content: flex-start;
+      }
+    }
+
+    .storage-kv-shell .kv-value-surface { border-radius: 10px; }
+    .storage-kv-shell .kv-value-surface textarea { padding: 8px 10px; font-size: 12px; }
+    .storage-kv-shell .kv-json-editor { padding: 8px 10px; gap: 6px; min-height: 0; }
+    .storage-kv-shell .kv-json-field { padding: 5px 8px; gap: 8px; border-radius: 8px; }
+    .storage-kv-shell .kv-json-field-key,
+    .storage-kv-shell .kv-json-field-value { font-size: 11px; }
+
+    .storage-kv-shell .kv-results-bar,
+    .storage-kv-shell .storage-fold-toolbar { padding-top: 4px !important; }
+    .storage-kv-shell #keyListPager .btn { min-height: 22px; padding: 0 8px; font-size: 11px; }
+    .storage-kv-shell #batchBar .btn,
+    .storage-kv-shell #filterBar .btn { min-height: 22px; padding: 0 8px; font-size: 11px; }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body>
+  <div class="storage-workbench storage-kv-shell">
+    <header class="card storage-header">
+      <div class="storage-shell-bar">
+        <div id="clientMeta" class="storage-header-meta"></div>
+        <div class="storage-client-shell">
+          <div class="storage-client-controls">
+            <label class="storage-toolbar-label is-wide">
+              <span id="clientLabel">Client</span>
+              <select id="clientSelector" class="select storage-client-select"></select>
+            </label>
+            <label class="storage-toolbar-label">
+              <span id="autoRefreshLabel">刷新</span>
+              <select id="autoRefreshSelect" class="select">
+                <option value="0" selected>手动</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+                <option value="30000">30s</option>
+                <option value="60000">60s</option>
+              </select>
+            </label>
+          </div>
+          <div class="storage-toolbar-group storage-client-actions">
+            <button id="refreshAllBtn" type="button" class="btn btn-secondary btn-sm" title="刷新"><span data-icon="refresh"></span></button>
+            <button id="cleanupBtn" type="button" class="btn btn-secondary btn-sm" title="清理 TTL"><span data-icon="trash"></span></button>
+          </div>
+        </div>
+      </div>
+      <div id="clientTabs" class="storage-client-tabs"></div>
+    </header>
+
+    <div class="storage-workspace-shell">
+        <div class="storage-workspace-tabs kv-section-tabs">
+          <button type="button" class="storage-workspace-tab active" data-workspace-section="data">
+            <span class="storage-workspace-tab-title">数据</span>
+          </button>
+          <button type="button" class="storage-workspace-tab" data-workspace-section="analysis">
+            <span class="storage-workspace-tab-title">分析</span>
+          </button>
+          <button type="button" class="storage-workspace-tab" data-workspace-section="database">
+            <span class="storage-workspace-tab-title">数据库详情</span>
+          </button>
+        </div>
+
+      <div class="storage-section-stack">
+        <section class="storage-section-panel active" data-workspace-panel="data">
+          <div class="kv-data-toolbar-card">
+            <div class="kv-toolbar-row">
+              <div id="prefixWrapper" class="kv-scope-shell">
+                <span class="kv-scope-label">Scope</span>
+                <input id="prefixInput" class="mono" autocomplete="off" placeholder="Prefix / Namespace" />
+                <div id="searchHistoryDD" class="search-history" style="display:none"></div>
+              </div>
+              <div class="kv-search-shell" id="kvSearchShell">
+                <span data-icon="search"></span>
+                <input id="qFilterInput" placeholder="搜索 key，例如 user / config / token / session:*" />
+                <div class="kv-search-actions">
+                  <button id="searchApplyBtn" class="btn btn-primary btn-sm kv-search-main-btn" type="button"><span data-icon="search"></span><span>搜索</span></button>
+                  <button id="openFilterBtn" class="btn btn-secondary btn-sm kv-search-toggle-btn" type="button" aria-expanded="false" aria-controls="kvAdvancedSearchPanel" title="高级搜索"><span data-icon="filter"></span><span class="btn-label">进阶</span><span id="filterCountBadge" class="pill pill-rose" style="display:none;padding:0 5px;font-size:9px">0</span></button>
+                </div>
+                <div id="kvAdvancedSearchPanel" class="kv-search-panel" role="dialog" aria-label="KV 高级搜索面板">
+                  <div class="kv-search-panel-head">
+                    <div class="kv-search-panel-copy">
+                      <div class="storage-fold-kicker">Filters</div>
+                      <div class="kv-search-panel-title">高级搜索</div>
+                      <div class="kv-search-panel-meta">Wildcard 默认开</div>
+                    </div>
+                    <button id="closeFilterPanelBtn" class="btn btn-secondary btn-sm" type="button">关闭</button>
+                  </div>
+                  <div class="kv-search-panel-grid">
+                    <div class="kv-search-panel-stack">
+                      <div class="kv-search-panel-row"><label class="storage-section-title">Prefix / Namespace</label><input id="advPrefix" class="input mono" placeholder="如 user: / session/app/" /></div>
+                      <div class="kv-search-panel-row"><label class="storage-section-title">Value 数据类型</label><select id="advValueKind" class="select"><option value="">全部</option><option value="object">Object</option><option value="array">Array</option><option value="string">String</option><option value="bytes">Bytes</option><option value="null">Null</option><option value="bool">Boolean</option><option value="int">Integer</option><option value="float">Float</option></select></div>
+                      <div class="kv-search-panel-row"><label class="storage-section-title">TTL 状态</label><select id="advTTLState" class="select"><option value="">全部</option><option value="persistent">永久</option><option value="expiring">有 TTL</option></select></div>
+                    </div>
+                    <div class="kv-search-panel-stack">
+                      <label class="kv-search-panel-row" style="gap:0"><span class="storage-section-title">匹配方式</span><span class="storage-toolbar-group" style="margin-top:8px"><input type="checkbox" id="advWildcard" class="check" checked /><span class="text-xs" style="color:var(--muted)">wildcard 搜索</span></span></label>
+                      <div class="kv-search-panel-row"><label class="storage-section-title">TTL 范围</label><div class="kv-search-panel-inline"><input id="advMinTTL" type="number" min="0" class="input" placeholder="最小 TTL (秒)" /><input id="advMaxTTL" type="number" min="0" class="input" placeholder="最大 TTL (秒)" /></div></div>
+                      <div class="kv-search-panel-row"><label class="storage-section-title">当前关键词行为</label><div class="storage-field-hint" id="advQueryModeHint">未输入关键词时不会附加名称匹配条件。</div></div>
+                    </div>
+                  </div>
+                  <div class="kv-search-panel-footer">
+                    <div class="text-xs" style="color:var(--muted)">当前范围：<span class="mono" id="advScopeLabel">/</span></div>
+                    <div class="storage-toolbar-group">
+                      <button id="resetFiltersBtn" class="btn btn-secondary btn-sm" type="button">重置</button>
+                      <button id="applyFiltersBtn" class="btn btn-primary btn-sm" type="button">应用过滤</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="storage-toolbar-group">
+                <button id="clearSearchBtn" class="btn btn-secondary btn-sm"><span data-icon="close"></span><span>清空</span></button>
+                <button type="button" class="btn btn-success btn-sm" id="createBtn"><span data-icon="plus"></span><span>添加 Key</span></button>
+                <button type="button" class="btn btn-secondary btn-sm" id="refreshBtn"><span data-icon="refresh"></span><span>刷新</span></button>
+              </div>
+            </div>
+            <div class="kv-hidden-controls">
+              <input id="pageInput" value="1" />
+              <select id="pageSizeInput"><option>20</option><option selected>50</option><option>100</option><option>200</option></select>
+              <input id="importInput" type="file" accept=".json" />
+              <select id="exportFormatSelect"><option value="json">JSON</option><option value="csv">CSV</option><option value="excel">Excel</option></select>
+            </div>
+          </div>
+
+          <div class="kv-browser-grid">
+            <section class="kv-key-browser relative">
+              <div class="kv-browser-head">
+                <div class="kv-browser-head-copy">
+                  <div class="storage-fold-kicker">Data</div>
+                  <div class="kv-browser-title">Key Explorer</div>
+                  <div id="keyListMeta" class="kv-browser-subtitle">—</div>
+                </div>
+                <div class="kv-browser-summary">
+                  <span class="kv-toolbar-pill"><strong id="dataMatchedCount">0</strong> 匹配</span>
+                  <span class="kv-toolbar-pill"><strong id="dataPersistentCount">0</strong> 永久</span>
+                  <span class="kv-toolbar-pill"><strong id="dataNamespaceCount">0</strong> Prefix</span>
+                  <span class="kv-toolbar-pill"><strong id="dataSoonestTTL">—</strong> 最早过期</span>
+                </div>
+                <div class="kv-browser-head-actions">
+                  <div class="kv-results-toggle">
+                    <button id="viewListBtn" class="btn btn-secondary btn-sm active-view" title="列表视图"><span data-icon="list"></span></button>
+                    <button id="viewTreeBtn" class="btn btn-secondary btn-sm" title="树状视图"><span data-icon="tree"></span></button>
+                    <button id="treeDelimiterBtn" class="btn btn-secondary btn-sm" type="button" title="切换树分隔符" style="display:none"><span>:</span></button>
+                  </div>
+                </div>
+              </div>
+              <div id="filterBar" class="storage-signal-card" style="display:none">
+                <div id="filterSummary" class="flex flex-wrap gap-1"></div>
+              </div>
+              <div id="batchBar" class="storage-signal-card" style="display:none">
+                <div class="storage-toolbar-group">
+                  <span id="batchCount" class="text-xs font-bold">已选 0 项</span>
+                  <button id="batchDeleteBtn" class="btn btn-danger btn-sm"><span data-icon="trash"></span><span>删除</span></button>
+                  <button id="batchTTLBtn" class="btn btn-secondary btn-sm"><span data-icon="history"></span><span>TTL</span></button>
+                  <button id="batchExportBtn" class="btn btn-secondary btn-sm"><span data-icon="download"></span><span>导出</span></button>
+                  <button id="selectAllBtn" class="btn btn-secondary btn-sm">全选</button>
+                  <button id="deselectAllBtn" class="btn btn-secondary btn-sm">取消</button>
+                </div>
+              </div>
+              <div class="kv-results-bar">
+                <div class="storage-toolbar-group">
+                  <span class="sort-btn active-sort" data-sort="name" id="sortNameBtn">名称<span id="sortNameArr">↑</span></span>
+                  <span class="sort-btn" data-sort="ttl" id="sortTtlBtn">TTL<span id="sortTtlArr">↕</span></span>
+                </div>
+                <div class="kv-results-metrics">
+                  <span class="pill pill-slate">Scope <span id="summaryPage">—</span></span>
+                  <span class="pill pill-indigo">Latency <span id="summaryLatency">—</span></span>
+                  <span class="pill pill-emerald">Selected <span id="summarySelected">0</span></span>
+                </div>
+              </div>
+              <div id="keyListShell" class="kv-list-shell">
+                <div id="keyListLoading" class="loading-mask"><div class="spinner"></div></div>
+                <div id="keyList" class="overflow-auto" tabindex="0"></div>
+              </div>
+              <div id="keyListPager" class="storage-fold-toolbar" style="padding-top:6px">
+                <span id="pageInfo" class="text-xs" style="color:var(--muted)">—</span>
+                <div class="storage-toolbar-group">
+                  <button id="prevPageBtn" class="btn btn-secondary btn-sm" disabled><span data-icon="chevronLeft"></span><span>上页</span></button>
+                  <button id="nextPageBtn" class="btn btn-secondary btn-sm" disabled>下页</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="kv-browser-resizer" id="kvBrowserResizer" title="拖动调整 Key / Value 宽度"></div>
+
+            <section class="kv-value-browser relative">
+              <div id="detailLoading" class="loading-mask"><div class="spinner"></div></div>
+              <div class="kv-detail-head">
+                <div class="min-w-0">
+                  <div id="detailKey" class="kv-detail-key">未选择</div>
+                  <div class="kv-detail-meta-strip">
+                    <span id="typeBadge" class="pill pill-sky">类型: —</span>
+                    <span id="ttlBadge" class="pill pill-slate">TTL: —</span>
+                    <span id="keySizeBadge" class="pill pill-indigo">Key Size: —</span>
+                    <span id="valueSizeBadge" class="pill pill-violet">Value Size: —</span>
+                  </div>
+                </div>
+                <div class="kv-detail-actions">
+                    <button id="duplicateBtn" class="btn btn-secondary btn-sm"><span data-icon="copy"></span><span>复制副本</span></button>
+                    <button id="renameBtn" class="btn btn-secondary btn-sm"><span data-icon="move"></span><span>重命名</span></button>
+                  <button id="editBtn" class="btn btn-secondary btn-sm"><span data-icon="edit"></span><span>编辑</span></button>
+                  <button id="cancelEditBtn" class="btn btn-secondary btn-sm" style="display:none">取消</button>
+                  <button id="saveBtn" class="btn btn-primary btn-sm" style="display:none"><span data-icon="save"></span><span>保存</span></button>
+                  <button id="deleteBtn" class="btn btn-danger btn-sm"><span data-icon="trash"></span><span>删除</span></button>
+                </div>
+              </div>
+              <div class="kv-detail-form">
+                <label>
+                  <span>Key</span>
+                  <input id="keyNameInput" class="input mono" placeholder="key" />
+                </label>
+                <label>
+                  <span>Value Type</span>
+                  <select id="valueModeInput" class="select">
+                    <option value="json">JSON</option>
+                    <option value="text">Text</option>
+                    <option value="base64">Base64</option>
+                  </select>
+                </label>
+                <label>
+                  <span>TTL 秒</span>
+                  <input id="ttlInput" type="number" min="0" class="input" placeholder="永久" />
+                </label>
+                <button id="updateTTLBtn" class="btn btn-secondary btn-sm">更新TTL</button>
+              </div>
+              <div class="kv-detail-tabs">
+                <div class="storage-workspace-tabs kv-detail-mode-tabs">
+                  <button id="tabPreview" class="storage-workspace-tab active" type="button"><span class="storage-workspace-tab-title">字段</span></button>
+                  <button id="tabEdit" class="storage-workspace-tab" type="button"><span class="storage-workspace-tab-title">原始值</span></button>
+                </div>
+                <div class="storage-toolbar-group">
+                  <button id="formatJsonBtn" class="btn btn-secondary btn-sm">格式化</button>
+                  <button id="copyBtn" class="btn btn-secondary btn-sm"><span data-icon="copy"></span><span>复制</span></button>
+                  <button id="downloadBtn" class="btn btn-secondary btn-sm"><span data-icon="download"></span><span>下载</span></button>
+                  <span id="charCount" class="text-xs" style="color:var(--muted)"></span>
+                </div>
+              </div>
+              <div class="kv-value-surface">
+                <div id="previewPanel">
+                  <div id="treeContent" class="kv-json-editor"></div>
+                </div>
+                <div id="editorPanel" style="display:none">
+                  <textarea id="valueEditor" rows="14" class="textarea mono" placeholder="JSON / 文本 / Base64" style="font-size:12px"></textarea>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="storage-section-panel" data-workspace-panel="analysis">
+          <div class="kv-analysis-hero">
+            <div class="kv-browser-head">
+              <div class="kv-browser-head-copy">
+                <div class="kv-browser-title">KV 分析</div>
+                <div id="analysisSummary" class="kv-analysis-summary" hidden></div>
+              </div>
+              <div class="storage-toolbar-group kv-analysis-actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="analysisFilterBtn"><span data-icon="filter"></span><span>筛选</span></button>
+                <button type="button" class="btn btn-secondary btn-sm" id="analysisClearFiltersBtn" hidden>清空</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="databaseExportBtn"><span data-icon="download"></span><span>导出当前结果</span></button>
+                <button type="button" class="btn btn-secondary btn-sm" id="databaseCleanupBtn"><span data-icon="trash"></span><span>清理过期</span></button>
+              </div>
+            </div>
+            <div class="kv-insight-grid">
+              <div class="kv-insight-card"><div class="kv-insight-label">Matched Keys</div><div id="analysisMatchedCount" class="kv-insight-value">0</div><div class="kv-insight-meta">当前 scope 命中的 key 数。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">Scanned Keys</div><div id="analysisScannedCount" class="kv-insight-value">0</div><div class="kv-insight-meta">本次 summary 实际扫描的 key 总量。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">No Expiry</div><div id="analysisPersistentCount" class="kv-insight-value">0</div><div class="kv-insight-meta">没有 TTL 的持久 key。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">Expiring</div><div id="analysisExpiringCount" class="kv-insight-value">0</div><div class="kv-insight-meta">有 TTL 的 key 数量。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">Soon</div><div id="analysisSoonCount" class="kv-insight-value">0</div><div class="kv-insight-meta">1 小时内即将过期。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">Avg TTL</div><div id="analysisAvgTTL" class="kv-insight-value">—</div><div class="kv-insight-meta">存在 TTL key 的平均剩余时间。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">Sampled Value Bytes</div><div id="analysisSampledBytes" class="kv-insight-value">—</div><div id="analysisSampledBytesMeta" class="kv-insight-meta">基于值样本估算当前范围的数据体量。</div></div>
+              <div class="kv-insight-card"><div class="kv-insight-label">Avg Value Size</div><div id="analysisAvgValueBytes" class="kv-insight-value">—</div><div id="analysisAvgValueBytesMeta" class="kv-insight-meta">样本 value 的平均大小。</div></div>
+            </div>
+          </div>
+
+          <div class="kv-analysis-layout">
+            <details class="kv-fold-card" data-storage-fold="analysis-ttl" open>
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">TTL 视图</div>
+                  <div class="kv-fold-card-meta">TTL 分布、永久占比和即将过期情况。</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div class="kv-fold-grid">
+                  <div class="kv-analysis-card">
+                    <div class="kv-card-head">
+                      <div>
+                        <div class="kv-card-title">TTL 分布</div>
+                        <div id="ttlBucketMeta" class="kv-card-copy">—</div>
+                      </div>
+                    </div>
+                    <div class="kv-chart-shell"><canvas id="ttlDistributionChart"></canvas></div>
+                    <div id="ttlBucketList" class="storage-compact-list"></div>
+                  </div>
+                  <div class="kv-analysis-card">
+                    <div class="kv-card-head">
+                      <div>
+                        <div class="kv-card-title">TTL 结构</div>
+                        <div id="analysisExpiryMixMeta" class="kv-card-copy">当前范围内“永久 / 即将过期 / 其他 TTL”的占比。</div>
+                      </div>
+                    </div>
+                    <div class="kv-chart-shell"><canvas id="expiryMixChart"></canvas></div>
+                  </div>
+                  <div class="kv-analysis-card">
+                    <div class="kv-card-head">
+                      <div>
+                        <div class="kv-card-title">即将过期</div>
+                        <div id="soonestExpiringMeta" class="kv-card-copy">—</div>
+                      </div>
+                    </div>
+                    <div id="soonestExpiringList" class="storage-compact-list"></div>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="kv-fold-card" data-storage-fold="analysis-distribution">
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">分布与结构</div>
+                  <div class="kv-fold-card-meta">Prefix 热点、Key 长度和值类型采样。</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div class="kv-fold-grid">
+                  <div class="kv-analysis-card">
+                    <div class="kv-card-head">
+                      <div>
+                        <div class="kv-card-title">Prefix 热点</div>
+                        <div id="namespaceBreakdownMeta" class="kv-card-copy">—</div>
+                      </div>
+                    </div>
+                    <div class="kv-chart-shell"><canvas id="namespaceChart"></canvas></div>
+                    <div id="namespaceList" class="storage-compact-list"></div>
+                  </div>
+                  <div class="kv-analysis-card">
+                    <div class="kv-card-head">
+                      <div>
+                        <div class="kv-card-title">Key 长度分布</div>
+                        <div id="keyLengthMeta" class="kv-card-copy">—</div>
+                      </div>
+                    </div>
+                    <div class="kv-chart-shell"><canvas id="keyLengthChart"></canvas></div>
+                  </div>
+                  <div class="kv-analysis-card">
+                    <div class="kv-card-head">
+                      <div>
+                        <div class="kv-card-title">值类型分布</div>
+                        <div id="valueTypeMeta" class="kv-card-copy">—</div>
+                      </div>
+                    </div>
+                    <div class="kv-chart-shell"><canvas id="valueTypeChart"></canvas></div>
+                    <div id="valueTypeList" class="storage-compact-list"></div>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="kv-fold-card" data-storage-fold="analysis-outliers">
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">大项与异常</div>
+                  <div class="kv-fold-card-meta">查看 value 较大或更值得优先检查的 key。</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div class="kv-analysis-card">
+                  <div class="kv-card-head">
+                    <div>
+                      <div class="kv-card-title">最大 Key</div>
+                      <div id="largestKeysMeta" class="kv-card-copy">—</div>
+                    </div>
+                  </div>
+                  <div id="largestKeysList" class="storage-compact-list"></div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="storage-section-panel" data-workspace-panel="database">
+          <div class="kv-db-card">
+            <div class="kv-browser-head">
+              <div class="kv-browser-head-copy">
+                <div class="storage-fold-kicker">Database Detail</div>
+                <div id="dbDetailTitle" class="kv-browser-title">数据库详情</div>
+                <div id="dbDetailMeta" class="kv-browser-subtitle">—</div>
+              </div>
+              <div class="storage-toolbar-group">
+                <button type="button" class="btn btn-primary btn-sm" id="databaseRefreshBtn">重新扫描</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="dbCreateBtn"><span data-icon="plus"></span><span>新建 Key</span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="kv-db-layout">
+            <details class="kv-fold-card" data-storage-fold="database-config" open>
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">连接与配置</div>
+                  <div class="kv-fold-card-meta">当前 client、后端类型、namespace 与扫描策略。</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div id="dbConfigList" class="storage-meta-list"></div>
+              </div>
+            </details>
+
+            <details class="kv-fold-card" data-storage-fold="database-maintenance" open>
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">维护操作</div>
+                  <div id="dbMaintenanceMeta" class="kv-fold-card-meta">—</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div class="storage-action-grid">
+                  <button id="dbBatchTtlBtn" class="btn btn-secondary btn-sm">批量 TTL</button>
+                  <button id="dbDryDeleteBtn" class="btn btn-secondary btn-sm">试删预览</button>
+                  <button id="dbPrefixDeleteBtn" class="btn btn-danger btn-sm">前缀删除</button>
+                  <button id="exportBtn" class="btn btn-secondary btn-sm"><span data-icon="download"></span><span>导出结果</span></button>
+                  <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                    <span data-icon="upload"></span>
+                    <span>导入 JSON</span>
+                    <input type="file" accept=".json" id="importInputLabelProxy" style="display:none" />
+                  </label>
+                </div>
+              </div>
+            </details>
+
+            <details class="kv-fold-card" data-storage-fold="database-history">
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">搜索历史</div>
+                  <div id="dbHistoryMeta" class="kv-fold-card-meta">—</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div id="dbSearchHistoryList" class="storage-compact-list"></div>
+              </div>
+            </details>
+
+            <details class="kv-fold-card" data-storage-fold="database-scope">
+              <summary>
+                <div class="kv-fold-card-head">
+                  <div class="kv-fold-card-title">当前范围</div>
+                  <div id="dbCurrentScopeMeta" class="kv-fold-card-meta">—</div>
+                </div>
+                <span class="kv-fold-card-icon">▸</span>
+              </summary>
+              <div class="kv-fold-card-body">
+                <div id="dbCurrentScopeList" class="storage-compact-list"></div>
+              </div>
+            </details>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalContainer"></div>
+
+  <script>
+    'use strict';
+
+    /* ═══════════════════════════════════════════════
+       Shared utils
+       ═══════════════════════════════════════════════ */
+    const ui = window.StorageUI;
+    const icons = window.StorageIcons;
+    const store = ui.persist('storage:kv');
+    const abortHub = ui.createAbortHub();
+    const keyTracker = ui.createLatestTracker();
+    const detailTracker = ui.createLatestTracker();
+
+    function $(id) { return document.getElementById(id); }
+    function esc(v) { return ui.escapeHtml(v); }
+    function escAttr(v) { return esc(v).replace(/'/g, '&#39;'); }
+    function setLoading(id, on) { $(id).classList.toggle('show', !!on); }
+
+    /* ═══════════════════════════════════════════════
+       State
+       ═══════════════════════════════════════════════ */
+    const state = {
+      clients: [],
+      client: store.get('client', 'default') || 'default',
+      config: null,
+      summary: null,
+      allItems: [],
+      checkedKeys: new Set(),
+      selectedKey: null,
+      totalKeys: 0,
+      totalPages: 1,
+      currentPage: 1,
+      currentPageSize: 50,
+      viewMode: store.get('viewMode', 'list') || 'list',
+      workspaceSection: store.get('workspace-section', 'data') || 'data',
+      editorTab: 'preview',
+      detailEditMode: false,
+      detailEditable: false,
+      detailStructuredAvailable: false,
+      treeOpenNodes: new Set(Array.isArray(store.get('treeOpenNodes', [])) ? store.get('treeOpenNodes', []).map((item) => String(item || '')) : []),
+      autoRefreshMs: 0,
+      autoRefreshTimer: null,
+      ttlDistributionChart: null,
+      namespaceChart: null,
+      keyLengthChart: null,
+      valueTypeChart: null,
+      expiryMixChart: null,
+      sortField: 'name',
+      sortDir: 'asc',
+      treeDelimiter: String(store.get('treeDelimiter', ':') || ':').trim() || ':',
+      searchFiltersOpen: false,
+      searchFilters: { q: '', wildcard: true, valueKind: '', ttlState: '', minTTL: '', maxTTL: '' },
+      lastLatency: null,
+      keyListFocusIdx: -1,
+    };
+
+    const HISTORY_KEY = 'kv-search-history';
+    const MAX_HISTORY = 20;
+    const TREE_FETCH_PAGE_SIZE = 500;
+    const KEY_BROWSER_WIDTH_KEY = 'kv-browser-width';
+
+    function saveTreeOpenNodes() {
+      store.set('treeOpenNodes', Array.from(state.treeOpenNodes));
+    }
+
+    /* ═══════════════════════════════════════════════
+       Client param helpers
+       ═══════════════════════════════════════════════ */
+    function qClient(p) {
+      if (!p) p = new URLSearchParams();
+      if (state.client) p.set('client', state.client);
+      return p;
+    }
+    function clientUrl(url) {
+      if (!state.client) return url;
+      return url + (url.indexOf('?') === -1 ? '?' : '&') + 'client=' + encodeURIComponent(state.client);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Utilities
+       ═══════════════════════════════════════════════ */
+    function ttlText(it) {
+      if (it.ttl_state === 'persistent') return '永久';
+      if (it.ttl_seconds == null) return '—';
+      const s = Math.round(it.ttl_seconds);
+      if (s >= 86400) return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
+      if (s >= 3600) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+      if (s >= 60) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+      return s + 's';
+    }
+    function ttlPill(it) {
+      if (it.ttl_state === 'persistent') return 'pill-slate';
+      if (it.ttl_seconds == null) return 'pill-slate';
+      if (it.ttl_seconds <= 60) return 'pill-rose';
+      if (it.ttl_seconds <= 300) return 'pill-amber';
+      return 'pill-sky';
+    }
+    function fmtB(b) {
+      if (b == null) return '—';
+      const value = Number(b);
+      if (!Number.isFinite(value)) return '—';
+      const trim = (text) => text.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+      if (value < 1024) return trim(value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)) + ' B';
+      if (value < 1048576) return trim((value / 1024).toFixed(1)) + ' KB';
+      if (value < 1073741824) return trim((value / 1048576).toFixed(2)) + ' MB';
+      return trim((value / 1073741824).toFixed(2)) + ' GB';
+    }
+    function dlBlob(blob, name) { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = name; a.click(); URL.revokeObjectURL(u); }
+    function dlJSON(data, name) { dlBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), name); }
+    function safeFn(n) { return (n || 'value').replace(/[^a-zA-Z0-9_.\-]/g, '_').slice(0, 80); }
+    function wildcardToRegExp(pattern) {
+      const escaped = String(pattern || '').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+      return new RegExp('^' + escaped + '$', 'i');
+    }
+    function hasWildcardChars(text) { return /[*?]/.test(String(text || '')); }
+    function updateCharCount() {
+      const v = $('valueEditor').value;
+      $('charCount').textContent = v.length + ' 字符 · ' + new Blob([v]).size + ' 字节';
+    }
+    function setText(id, value) {
+      const node = $(id);
+      if (node) node.textContent = value;
+    }
+    function setClick(id, handler) {
+      const node = $(id);
+      if (!node) return;
+      node.onclick = handler;
+    }
+    function keySizeText(key) {
+      return fmtB(new Blob([String(key || '')]).size);
+    }
+    function currentPrefix() { return $('prefixInput') ? $('prefixInput').value.trim() : ''; }
+    function currentScopeLabel() { return currentPrefix() || '/'; }
+    function treeDelimiterToken() {
+      return String(state.treeDelimiter || ':').trim() || ':';
+    }
+    function splitTreeKey(key) {
+      const text = String(key || '');
+      const delimiter = treeDelimiterToken();
+      if (!text) return [];
+      if (!delimiter) return [text];
+      const parts = [];
+      let cursor = 0;
+      while (cursor < text.length) {
+        const index = text.indexOf(delimiter, cursor);
+        if (index === -1) {
+          parts.push(text.slice(cursor));
+          break;
+        }
+        const end = index + delimiter.length;
+        parts.push(text.slice(cursor, end));
+        cursor = end;
+      }
+      return parts.filter(Boolean);
+    }
+    function updateTreeDelimiterButton() {
+      const button = $('treeDelimiterBtn');
+      if (!button) return;
+      button.style.display = state.viewMode === 'tree' ? '' : 'none';
+      button.innerHTML = '<span>' + esc(treeDelimiterToken()) + '</span>';
+      button.title = '自定义树分隔符，当前为 ' + treeDelimiterToken();
+    }
+    function openTreeDelimiterModal() {
+      const html =
+        '<h3 class="text-sm font-black mb-3">树分隔符</h3>' +
+        '<div class="text-xs mb-3" style="color:var(--muted)">输入树视图按什么字符切段，例如 <strong>:</strong>、<strong>/</strong>、<strong>::</strong>。</div>' +
+        '<div><label class="storage-section-title">分隔符</label><input id="treeDelimiterInput" class="input mono" value="' + esc(treeDelimiterToken()) + '" placeholder=":" style="margin-top:4px" /></div>' +
+        '<div class="flex justify-end gap-2 mt-4">' +
+          '<button class="btn btn-secondary _mc">取消</button>' +
+          '<button class="btn btn-primary _mo">应用</button>' +
+        '</div>';
+      const overlay = showModal(html);
+      const input = overlay.querySelector('#treeDelimiterInput');
+      overlay.querySelector('._mc').onclick = () => overlay.remove();
+      overlay.querySelector('._mo').onclick = () => {
+        const next = String(input?.value || '').trim();
+        if (!next) return ui.showToast('请输入树分隔符', 'warn');
+        state.treeDelimiter = next;
+        store.set('treeDelimiter', next);
+        overlay.remove();
+        updateTreeDelimiterButton();
+        renderKeyList();
+      };
+      setTimeout(() => {
+        if (!input) return;
+        input.focus();
+        input.select();
+      }, 40);
+    }
+
+    function syncKeyBrowserViewMode() {
+      const treeMode = state.viewMode === 'tree';
+      const pager = $('keyListPager');
+      if (pager) pager.style.display = treeMode ? 'none' : '';
+      if (treeMode && $('pageInfo')) $('pageInfo').textContent = '';
+    }
+    function effectiveWildcardPattern() {
+      const q = String(state.searchFilters.q || '').trim();
+      if (!q || !state.searchFilters.wildcard) return '';
+      return hasWildcardChars(q) ? q : ('*' + q + '*');
+    }
+    function valueKindLabel(value) {
+      return {
+        object: 'Object', array: 'Array', string: 'String', bytes: 'Bytes', null: 'Null',
+        bool: 'Boolean', int: 'Integer', float: 'Float'
+      }[value] || value || '全部';
+    }
+    function ttlStateLabel(value) {
+      return { persistent: '永久', expiring: '有 TTL' }[value] || value || '全部';
+    }
+    function describeQueryMode() {
+      const q = String(state.searchFilters.q || '').trim();
+      if (!q) return '';
+      if (!state.searchFilters.wildcard) return '包含匹配';
+      const pattern = effectiveWildcardPattern();
+      return pattern;
+    }
+    function activeAdvancedFilterCount() {
+      const f = state.searchFilters;
+      return [currentPrefix(), f.q && f.wildcard ? 'wildcard' : '', f.valueKind, f.ttlState, f.minTTL !== '' ? 'min' : '', f.maxTTL !== '' ? 'max' : ''].filter(Boolean).length;
+    }
+    function currentFilterSummary() {
+      const parts = [];
+      if (currentPrefix()) parts.push('prefix ' + currentPrefix());
+      if (state.searchFilters.q) parts.push(state.searchFilters.wildcard ? ('通配匹配 ' + effectiveWildcardPattern()) : ('包含 ' + state.searchFilters.q));
+      if (state.searchFilters.valueKind) parts.push('值类型 ' + valueKindLabel(state.searchFilters.valueKind));
+      if (state.searchFilters.ttlState) parts.push('TTL 状态 ' + ttlStateLabel(state.searchFilters.ttlState));
+      if (state.searchFilters.minTTL !== '') parts.push('TTL ≥ ' + state.searchFilters.minTTL + 's');
+      if (state.searchFilters.maxTTL !== '') parts.push('TTL ≤ ' + state.searchFilters.maxTTL + 's');
+      return parts.length ? parts.join(' · ') : '未设置额外过滤条件';
+    }
+    function analysisSummaryChip(label, value) {
+      return '<span class="kv-filter-chip"><strong>' + esc(label) + '</strong><span>' + esc(String(value)) + '</span></span>';
+    }
+    function renderAnalysisSummary() {
+      const node = $('analysisSummary');
+      const clearBtn = $('analysisClearFiltersBtn');
+      if (!node) return;
+      const chips = [];
+      if (currentPrefix()) chips.push(analysisSummaryChip('Prefix', currentPrefix()));
+      if (state.searchFilters.q) chips.push(analysisSummaryChip('关键词', state.searchFilters.wildcard ? effectiveWildcardPattern() : state.searchFilters.q));
+      if (state.searchFilters.valueKind) chips.push(analysisSummaryChip('值类型', valueKindLabel(state.searchFilters.valueKind)));
+      if (state.searchFilters.ttlState) chips.push(analysisSummaryChip('TTL', ttlStateLabel(state.searchFilters.ttlState)));
+      if (state.searchFilters.minTTL !== '') chips.push(analysisSummaryChip('TTL ≥', state.searchFilters.minTTL + 's'));
+      if (state.searchFilters.maxTTL !== '') chips.push(analysisSummaryChip('TTL ≤', state.searchFilters.maxTTL + 's'));
+      node.innerHTML = chips.join('');
+      node.hidden = chips.length === 0;
+      if (clearBtn) clearBtn.hidden = chips.length === 0;
+    }
+    function emptySummary() {
+      return {
+        matched_total: 0,
+        persistent_count: 0,
+        expiring_count: 0,
+        ttl_stats: { min_ttl: null, max_ttl: null, avg_ttl: null },
+        ttl_buckets: [],
+        key_length_buckets: [],
+        top_namespaces: [],
+        soonest_expiring: [],
+        sample_items: [],
+        truncated: false,
+        sampled_count: 0,
+        scanned_total: 0,
+        value_sampled_count: 0,
+        value_metrics_truncated: false,
+        sampled_value_bytes: null,
+        sampled_avg_value_bytes: null,
+        type_counts: [],
+        largest_items: [],
+      };
+    }
+    function activeSummary() { return state.summary || emptySummary(); }
+    function soonCount(summary) {
+      return (summary.ttl_buckets || []).filter((item) => item.key === 'lt_1m' || item.key === 'lt_1h').reduce((acc, item) => acc + Number(item.count || 0), 0);
+    }
+    function destroyChart(instance) {
+      if (instance && typeof instance.destroy === 'function') instance.destroy();
+      return null;
+    }
+    function chartPalette(alpha) {
+      const dark = document.documentElement.classList.contains('dark');
+      return [
+        `rgba(99,102,241,${alpha})`,
+        `rgba(16,185,129,${alpha})`,
+        `rgba(249,115,22,${alpha})`,
+        `rgba(244,63,94,${alpha})`,
+        `rgba(14,165,233,${alpha})`,
+        `rgba(168,85,247,${alpha})`,
+      ].map((color, index) => dark && index === 0 ? `rgba(129,140,248,${alpha})` : color);
+    }
+    function chartTickColor() { return document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b'; }
+    function chartGridColor() { return document.documentElement.classList.contains('dark') ? '#334155' : '#e2e8f0'; }
+    function metaChip(label, value) {
+      return '<span class="kv-meta-chip"><span class="kv-meta-chip-label">' + esc(label) + '</span><span class="kv-meta-chip-value">' + value + '</span></span>';
+    }
+    function titleCaseMetadataKey(key) {
+      return String(key || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    }
+    function clientMetadataRows(metadata, skipKeys) {
+      const skip = new Set(skipKeys || []);
+      return Object.entries(metadata || {})
+        .filter(([key, value]) => !skip.has(key) && value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => ({ label: 'Client · ' + titleCaseMetadataKey(key), value: Array.isArray(value) || (value && typeof value === 'object') ? JSON.stringify(value) : String(value) }));
+    }
+    function renderCompactList(entries, emptyMessage, metaBuilder) {
+      if (!entries || !entries.length) return '<div class="kv-empty-block">' + esc(emptyMessage) + '</div>';
+      return entries.map((entry) => '<div class="storage-compact-item"><div class="storage-compact-item-head"><div class="storage-compact-item-title">' + esc(entry.label || entry.key || entry.name || '—') + '</div></div><div class="storage-compact-item-meta">' + metaBuilder(entry) + '</div></div>').join('');
+    }
+    function renderMetaList(targetId, rows, emptyMessage) {
+      const node = $(targetId);
+      if (!node) return;
+      if (!rows || !rows.length) {
+        node.innerHTML = '<div class="kv-empty-block">' + esc(emptyMessage) + '</div>';
+        return;
+      }
+      node.innerHTML = rows.map((row) => '<div class="storage-meta-row"><strong>' + esc(row.label) + '</strong><span>' + esc(row.value) + '</span></div>').join('');
+    }
+    function setWorkspaceSection(section, skipSave) {
+      const next = ['data', 'analysis', 'database'].includes(section) ? section : 'data';
+      state.workspaceSection = next;
+      if (!skipSave) store.set('workspace-section', next);
+      document.querySelectorAll('[data-workspace-section]').forEach((node) => {
+        node.classList.toggle('active', node.getAttribute('data-workspace-section') === next);
+      });
+      document.querySelectorAll('[data-workspace-panel]').forEach((node) => {
+        node.classList.toggle('active', node.getAttribute('data-workspace-panel') === next);
+      });
+      if (next === 'analysis') {
+        requestAnimationFrame(() => {
+          try { renderAnalysisWorkspace(); } catch (_e) {}
+        });
+      } else if (next === 'database') {
+        requestAnimationFrame(() => {
+          try { renderDatabaseWorkspace && renderDatabaseWorkspace(); } catch (_e) {}
+        });
+      }
+    }
+    function syncSearchInputs() {
+      if ($('qFilterInput')) $('qFilterInput').value = state.searchFilters.q || '';
+      updateAdvancedQueryHint();
+    }
+    function syncAdvancedSearchForm() {
+      if ($('advPrefix')) $('advPrefix').value = currentPrefix();
+      if ($('advWildcard')) $('advWildcard').checked = !!state.searchFilters.wildcard;
+      if ($('advValueKind')) $('advValueKind').value = state.searchFilters.valueKind || '';
+      if ($('advTTLState')) $('advTTLState').value = state.searchFilters.ttlState || '';
+      if ($('advMinTTL')) $('advMinTTL').value = state.searchFilters.minTTL || '';
+      if ($('advMaxTTL')) $('advMaxTTL').value = state.searchFilters.maxTTL || '';
+      setText('advScopeLabel', currentScopeLabel());
+      updateAdvancedQueryHint();
+    }
+    function updateAdvancedQueryHint() {
+      setText('advQueryModeHint', describeQueryMode());
+    }
+    function updateFilterToggle() {
+      const badge = $('filterCountBadge');
+      const count = activeAdvancedFilterCount();
+      if (badge) {
+        badge.textContent = String(count);
+        badge.style.display = count ? 'inline-flex' : 'none';
+      }
+      if ($('openFilterBtn')) $('openFilterBtn').setAttribute('aria-expanded', state.searchFiltersOpen ? 'true' : 'false');
+    }
+    function setAdvancedSearchOpen(open) {
+      state.searchFiltersOpen = !!open;
+      if ($('kvAdvancedSearchPanel')) $('kvAdvancedSearchPanel').classList.toggle('is-open', state.searchFiltersOpen);
+      if (state.searchFiltersOpen) syncAdvancedSearchForm();
+      updateFilterToggle();
+    }
+    function applyInlineFilters(resetPage) {
+      state.searchFilters.q = $('qFilterInput')?.value.trim() || '';
+      if (resetPage) $('pageInput').value = 1;
+      renderFilterSummary();
+      loadKeys();
+    }
+    function clearInlineFilters() {
+      resetAdvancedSearch(true);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Modal helper (for custom modals)
+       ═══════════════════════════════════════════════ */
+    function showModal(html, wide) {
+      const ov = document.createElement('div');
+      ov.className = 'modal-overlay';
+      ov.innerHTML = '<div class="modal-box' + (wide ? ' wide' : '') + '">' + html + '</div>';
+      ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      $('modalContainer').appendChild(ov);
+      return ov;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Search history
+       ═══════════════════════════════════════════════ */
+    function getHist() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
+    function addHist(t) {
+      if (!t || !t.trim()) return;
+      t = t.trim();
+      let h = getHist().filter((x) => x !== t);
+      h.unshift(t);
+      if (h.length > MAX_HISTORY) h = h.slice(0, MAX_HISTORY);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+    }
+    function rmHist(t) { localStorage.setItem(HISTORY_KEY, JSON.stringify(getHist().filter((x) => x !== t))); }
+    function showHist() {
+      const dd = $('searchHistoryDD');
+      const h = getHist();
+      if (!h.length) { dd.style.display = 'none'; return; }
+      dd.innerHTML = h.map((x) =>
+        '<div class="sh-item">' +
+          '<span class="mono" style="min-width:0;flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis" data-hist="' + esc(x) + '">' + esc(x) + '</span>' +
+          '<span class="sh-remove" data-hist-rm="' + esc(x) + '">' + icons.icon('close', 12) + '</span>' +
+        '</div>'
+      ).join('');
+      dd.querySelectorAll('[data-hist]').forEach((el) => el.onclick = () => { $('prefixInput').value = el.getAttribute('data-hist'); dd.style.display = 'none'; $('pageInput').value = 1; loadKeys(); });
+      dd.querySelectorAll('[data-hist-rm]').forEach((el) => el.onclick = (e) => { e.stopPropagation(); rmHist(el.getAttribute('data-hist-rm')); showHist(); });
+      dd.style.display = 'block';
+    }
+    function hideHist() { setTimeout(() => { $('searchHistoryDD').style.display = 'none'; }, 180); }
+
+    /* ═══════════════════════════════════════════════
+       Client management
+       ═══════════════════════════════════════════════ */
+    function renderClientShell() {
+      ui.renderClientShell({
+        clients: state.clients,
+        current: state.client,
+        tabsEl: $('clientTabs'),
+        selectEl: $('clientSelector'),
+        onChange: (value) => {
+          if (!value || value === state.client) return;
+          state.client = value;
+          store.set('client', value);
+          reloadClient();
+        },
+      });
+    }
+
+    async function loadClients() {
+      try {
+        const d = await ui.request('/admin/api/storage/kv/clients', {}, abortHub, 'clients');
+        state.clients = d.clients || [];
+        const saved = store.get('client', 'default');
+        const def = state.clients.find((c) => c.is_default)?.name || state.clients[0]?.name || 'default';
+        state.client = state.clients.some((c) => c.name === saved) ? saved : def;
+        renderClientShell();
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        ui.showToast('加载客户端列表失败', 'error');
+      }
+    }
+
+    async function loadConfig() {
+      try {
+        const d = await ui.request(clientUrl('/admin/api/storage/kv/config'), {}, abortHub, 'config');
+        state.config = d;
+        $('clientMeta').innerHTML = '<strong>' + esc(state.client || 'default') + '</strong><span class="storage-db-badge">' + esc(d.backend || '—') + '</span>';
+      } catch {
+        $('clientMeta').textContent = '—';
+      }
+      renderDatabaseWorkspace();
+    }
+
+    async function reloadClient() {
+      state.checkedKeys.clear();
+      state.selectedKey = null;
+      state.summary = null;
+      $('summarySelected').textContent = '0';
+      resetDetail();
+      renderClientShell();
+      await loadConfig();
+      await loadKeys();
+    }
+
+    function escapeRegExp(text) { return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+    function buildQueryParams(includePaging) {
+      const p = qClient(new URLSearchParams());
+      const prefix = currentPrefix();
+      if (includePaging) {
+        p.set('page', String(parseInt($('pageInput').value) || 1));
+        p.set('page_size', String(parseInt($('pageSizeInput').value) || 50));
+      }
+      if (prefix) p.set('prefix', prefix);
+      if (state.searchFilters.q) {
+        if (state.searchFilters.wildcard) p.set('pattern', effectiveWildcardPattern());
+        else p.set('q', state.searchFilters.q);
+      }
+      if (state.searchFilters.valueKind) p.set('value_kind', state.searchFilters.valueKind);
+      if (state.searchFilters.ttlState) p.set('ttl_state', state.searchFilters.ttlState);
+      if (state.searchFilters.minTTL !== '') p.set('min_ttl', state.searchFilters.minTTL);
+      if (state.searchFilters.maxTTL !== '') p.set('max_ttl', state.searchFilters.maxTTL);
+      return p;
+    }
+    function renderHeaderSummary() {
+      const summary = activeSummary();
+      setText('summaryPage', currentScopeLabel());
+      setText('summarySelected', String(state.checkedKeys.size));
+      setText('summaryLatency', state.lastLatency != null ? state.lastLatency + ' ms' : '—');
+    }
+    function renderDataWorkspace() {
+      const summary = activeSummary();
+      setText('dataMatchedCount', String(summary.matched_total || 0));
+      setText('dataPersistentCount', String(summary.persistent_count || 0));
+      setText('dataNamespaceCount', String((summary.top_namespaces || []).length));
+      setText('dataSoonestTTL', summary.soonest_expiring?.length ? ttlText(summary.soonest_expiring[0]) : '—');
+    }
+    function guessNamespacePrefix(label) {
+      const base = currentPrefix();
+      const summary = activeSummary();
+      const sample = (summary.sample_items || []).find((item) => {
+        const key = String(item.key || '');
+        if (base && !key.startsWith(base)) return false;
+        return key.slice(base.length).startsWith(label);
+      });
+      if (!sample) return base ? base + label : label;
+      const rest = String(sample.key || '').slice(base.length);
+      const match = rest.match(new RegExp('^' + escapeRegExp(label) + '[:/]?'));
+      return base + (match ? match[0] : label);
+    }
+    function applyPrefix(prefix) {
+      $('prefixInput').value = prefix || '';
+      $('pageInput').value = 1;
+      loadKeys();
+    }
+    function renderNamespaceExplorer() {
+      const node = $('namespaceTree');
+      const meta = $('namespaceTreeMeta');
+      if (!node || !meta) return;
+      const summary = activeSummary();
+      const sampleItems = summary.sample_items || [];
+      const basePrefix = currentPrefix();
+      if (!sampleItems.length) {
+        meta.textContent = '无前缀树';
+        node.innerHTML = '<div class="kv-empty-block">当前无匹配 key</div>';
+        return;
+      }
+      meta.textContent = `${summary.sampled_count || 0} 样本 · ${treeDelimiterToken()}${summary.truncated ? ' · 已截断' : ''}`;
+      const treeItems = sampleItems.map((item) => {
+        const fullKey = String(item.key || '');
+        const relativeKey = basePrefix && fullKey.startsWith(basePrefix) ? (fullKey.slice(basePrefix.length) || fullKey) : fullKey;
+        return { ...item, key: relativeKey, fullKey };
+      });
+      const tree = buildNsTree(treeItems);
+      const root = document.createElement('div');
+      root.className = 'ns-tree-shell';
+
+      const walk = (obj, depth, accPrefix) => {
+        const frag = document.createDocumentFragment();
+        Object.keys(obj).forEach((label) => {
+          const entry = obj[label];
+          const branchPrefix = accPrefix + label;
+          const hasChildren = Object.keys(entry._c).length > 0;
+          const wrap = document.createElement('div');
+          const row = document.createElement('div');
+          row.className = 'ns-node-row';
+          row.style.paddingLeft = (depth * 14) + 'px';
+
+          const toggle = document.createElement('span');
+          toggle.className = 'ns-toggle';
+          toggle.textContent = hasChildren ? '▾' : '•';
+          row.appendChild(toggle);
+
+          const labelBtn = document.createElement('button');
+          labelBtn.type = 'button';
+          labelBtn.className = 'ns-label-btn';
+          labelBtn.textContent = label;
+          labelBtn.onclick = () => applyPrefix(basePrefix + branchPrefix);
+          row.appendChild(labelBtn);
+
+          const count = document.createElement('span');
+          count.className = 'ns-count';
+          count.textContent = String(entry._items.length + Object.keys(entry._c).length);
+          row.appendChild(count);
+
+          wrap.appendChild(row);
+
+          const children = document.createElement('div');
+          children.className = 'ns-children';
+          if (hasChildren) children.appendChild(walk(entry._c, depth + 1, branchPrefix));
+          entry._items.slice(0, 12).forEach((item) => {
+            const leaf = document.createElement('div');
+            leaf.className = 'ns-leaf-row' + (state.selectedKey === (item.fullKey || item.key) ? ' active' : '');
+            leaf.style.paddingLeft = ((depth + 1) * 14) + 'px';
+            leaf.innerHTML = '<span class="ns-leaf-key">' + esc(item.key) + '</span><span class="ns-leaf-meta">' + esc(ttlText(item)) + '</span>';
+            leaf.onclick = () => selectKey(item.fullKey || item.key);
+            children.appendChild(leaf);
+          });
+
+          if (hasChildren) {
+            toggle.onclick = () => {
+              const open = children.style.display !== 'none';
+              children.style.display = open ? 'none' : '';
+              toggle.textContent = open ? '▸' : '▾';
+            };
+          }
+          wrap.appendChild(children);
+          frag.appendChild(wrap);
+        });
+        return frag;
+      };
+
+      root.appendChild(walk(tree, 0, ''));
+      node.innerHTML = '';
+      node.appendChild(root);
+    }
+    function renderSimpleBarChart(canvasId, stateKey, labels, data, datasetLabel, horizontal) {
+      const canvas = $(canvasId);
+      if (!canvas) return;
+      state[stateKey] = destroyChart(state[stateKey]);
+      if (!labels.length || !data.some((value) => Number(value || 0) > 0)) return;
+      state[stateKey] = new Chart(canvas, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: datasetLabel, data, backgroundColor: chartPalette(.62), borderRadius: 6 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: horizontal ? 'y' : 'x',
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: chartTickColor() }, grid: { color: chartGridColor() } },
+            y: { ticks: { color: chartTickColor() }, grid: { color: horizontal ? 'transparent' : chartGridColor() } },
+          },
+        },
+      });
+    }
+    function renderAnalysisWorkspace() {
+      const summary = activeSummary();
+      renderAnalysisSummary();
+      setText('analysisMatchedCount', String(summary.matched_total || 0));
+      setText('analysisScannedCount', String(summary.scanned_total || 0));
+      setText('analysisPersistentCount', String(summary.persistent_count || 0));
+      setText('analysisExpiringCount', String(summary.expiring_count || 0));
+      setText('analysisSoonCount', String(soonCount(summary)));
+      setText('analysisAvgTTL', summary.ttl_stats?.avg_ttl != null ? ttlText({ ttl_seconds: summary.ttl_stats.avg_ttl, ttl_state: 'expiring' }) : '—');
+      setText('analysisSampledBytes', summary.sampled_value_bytes != null ? fmtB(summary.sampled_value_bytes) : '—');
+      setText('analysisAvgValueBytes', summary.sampled_avg_value_bytes != null ? fmtB(summary.sampled_avg_value_bytes) : '—');
+      setText('analysisSampledBytesMeta', '');
+      setText('analysisAvgValueBytesMeta', '');
+      setText('ttlBucketMeta', '');
+      setText('namespaceBreakdownMeta', '');
+      setText('keyLengthMeta', '');
+      setText('valueTypeMeta', '');
+      setText('soonestExpiringMeta', '');
+      setText('largestKeysMeta', '');
+      $('ttlBucketList').innerHTML = renderCompactList(summary.ttl_buckets || [], '当前没有 TTL 区间数据。', (entry) => metaChip('数量', esc(String(entry.count || 0))));
+      $('namespaceList').innerHTML = renderCompactList(summary.top_namespaces || [], '当前没有 namespace 数据。', (entry) => metaChip('条目', esc(String(entry.count || 0))));
+      $('valueTypeList').innerHTML = renderCompactList(summary.type_counts || [], '当前没有值类型样本。', (entry) => metaChip('数量', esc(String(entry.count || 0))));
+      $('soonestExpiringList').innerHTML = renderCompactList(summary.soonest_expiring || [], '当前没有存在 TTL 的 key。', (entry) => metaChip('TTL', esc(ttlText(entry))) + (entry.expire_at ? metaChip('到期', esc(entry.expire_at)) : ''));
+      $('largestKeysList').innerHTML = renderCompactList(summary.largest_items || [], '当前没有 value size 样本。', (entry) => metaChip('大小', esc(fmtB(entry.size_bytes_estimate))) + metaChip('类型', esc(entry.value_kind || '—')) + metaChip('TTL', esc(ttlText(entry))));
+      renderSimpleBarChart('ttlDistributionChart', 'ttlDistributionChart', (summary.ttl_buckets || []).map((item) => item.label), (summary.ttl_buckets || []).map((item) => item.count), 'TTL 分布', false);
+      renderSimpleBarChart('namespaceChart', 'namespaceChart', (summary.top_namespaces || []).map((item) => item.label), (summary.top_namespaces || []).map((item) => item.count), 'Namespace', true);
+      renderSimpleBarChart('keyLengthChart', 'keyLengthChart', (summary.key_length_buckets || []).map((item) => item.label), (summary.key_length_buckets || []).map((item) => item.count), 'Key 长度', false);
+      renderSimpleBarChart('valueTypeChart', 'valueTypeChart', (summary.type_counts || []).map((item) => item.label), (summary.type_counts || []).map((item) => item.count), 'Value 类型', true);
+      state.expiryMixChart = destroyChart(state.expiryMixChart);
+      if ($('expiryMixChart')) {
+        const persistent = Number(summary.persistent_count || 0);
+        const soon = Number(soonCount(summary) || 0);
+        const expiring = Math.max(0, Number(summary.expiring_count || 0) - soon);
+        state.expiryMixChart = new Chart($('expiryMixChart'), {
+          type: 'doughnut',
+          data: {
+            labels: ['永久', '1h 内过期', '其他 TTL'],
+            datasets: [{
+              data: [persistent, soon, expiring],
+              backgroundColor: chartPalette(.78).slice(0, 3),
+              borderWidth: 0,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { color: chartTickColor() } } },
+          },
+        });
+      }
+    }
+    function renderSearchHistoryPanel() {
+      const list = $('dbSearchHistoryList');
+      const meta = $('dbHistoryMeta');
+      if (!list || !meta) return;
+      const hist = getHist();
+      meta.textContent = hist.length ? `记录最近 ${hist.length} 条 prefix 搜索。` : '当前还没有 prefix 搜索历史。';
+      if (!hist.length) {
+        list.innerHTML = '<div class="kv-empty-block">前缀搜索历史会出现在这里，便于快速回到某个 namespace。</div>';
+        return;
+      }
+      list.innerHTML = hist.map((value) => '<div class="storage-compact-item"><div class="storage-compact-item-head"><div class="storage-compact-item-title mono">' + esc(value) + '</div></div><div class="storage-compact-item-actions"><button type="button" class="btn btn-secondary btn-sm" data-hist-apply="' + esc(value) + '">应用</button><button type="button" class="btn btn-secondary btn-sm" data-hist-remove="' + esc(value) + '">移除</button></div></div>').join('');
+      list.querySelectorAll('[data-hist-apply]').forEach((button) => { button.onclick = () => applyPrefix(button.getAttribute('data-hist-apply')); });
+      list.querySelectorAll('[data-hist-remove]').forEach((button) => { button.onclick = () => { rmHist(button.getAttribute('data-hist-remove')); renderSearchHistoryPanel(); }; });
+    }
+    function renderDatabaseWorkspace() {
+      const summary = activeSummary();
+      const config = state.config || {};
+      const largestItem = summary.largest_items?.[0] || null;
+      const hottestNamespace = summary.top_namespaces?.[0] || null;
+      setText('dbDetailTitle', `${state.client || 'default'} · ${config.backend || '—'}`);
+      setText('dbDetailMeta', `namespace ${config.namespace || '—'} · ${summary.matched_total || 0} keys in current scope · ${summary.sampled_value_bytes != null ? fmtB(summary.sampled_value_bytes) : '—'} sampled value bytes`);
+      renderMetaList('dbConfigList', [
+        { label: 'Backend', value: config.backend || '—' },
+        { label: 'Namespace', value: config.namespace || '—' },
+        { label: 'Default Expire', value: config.default_expire != null ? String(config.default_expire) + 's' : '永久 / 未设置' },
+        { label: 'Max Size', value: config.max_size != null ? String(config.max_size) : '未设置' },
+        { label: 'List Strategy', value: config.list_strategy || '—' },
+        { label: 'Copy / Rename', value: config.supports_copy && config.supports_rename ? '支持' : '受限' },
+        { label: '当前 Scope', value: currentScopeLabel() },
+        ...clientMetadataRows(config.client_metadata || {}, ['name', 'namespace', 'default_expire', 'max_size', 'cleanup_interval', 'auto_start']),
+      ], '当前没有数据库配置详情。');
+      setText('dbMaintenanceMeta', `当前过滤：${currentFilterSummary()}`);
+      setText('dbCurrentScopeMeta', summary.truncated ? '样本 key 已按上限截断。' : '当前 scope 信息基于完整 summary。');
+      $('dbCurrentScopeList').innerHTML = renderCompactList([
+        { label: '匹配 Key', value: summary.matched_total || 0, meta: `扫描 ${summary.scanned_total || 0}` },
+        { label: '永久 TTL', value: summary.persistent_count || 0, meta: `存在 TTL ${summary.expiring_count || 0}` },
+        { label: '平均 TTL', value: summary.ttl_stats?.avg_ttl != null ? ttlText({ ttl_seconds: summary.ttl_stats.avg_ttl, ttl_state: 'expiring' }) : '—', meta: 'TTL 分布样本' },
+        { label: '采样值总量', value: summary.sampled_value_bytes != null ? fmtB(summary.sampled_value_bytes) : '—', meta: '当前结果样本' },
+        { label: '最大项', value: largestItem?.key || '—', meta: largestItem ? `${fmtB(largestItem.value_bytes || 0)} · ${largestItem.ttl_state || 'persistent'}` : '—' },
+        { label: '热点前缀', value: hottestNamespace?.label || '—', meta: hottestNamespace ? `${hottestNamespace.count || 0} keys` : '—' },
+      ], '当前没有范围信息。', (entry) => `${esc(String(entry.value))}<span class="storage-compact-item-submeta">${esc(String(entry.meta || '—'))}</span>`);
+      renderSearchHistoryPanel();
+    }
+    function captureDetailViewState() {
+      return {
+        editorTab: state.editorTab,
+        previewScrollTop: $('previewPanel')?.scrollTop || 0,
+        editorScrollTop: $('valueEditor')?.scrollTop || 0,
+      };
+    }
+    function restoreDetailViewState(snapshot) {
+      if (!snapshot) return;
+      state.editorTab = snapshot.editorTab === 'edit' ? 'edit' : 'preview';
+      setEditorTab(state.editorTab);
+      requestAnimationFrame(() => {
+        if ($('previewPanel')) $('previewPanel').scrollTop = snapshot.previewScrollTop || 0;
+        if ($('valueEditor')) $('valueEditor').scrollTop = snapshot.editorScrollTop || 0;
+      });
+    }
+    async function refreshCurrentSelection(silent) {
+      const selectedKey = state.selectedKey;
+      const detailState = selectedKey ? captureDetailViewState() : null;
+      await loadKeys(!!silent);
+      if (!selectedKey || state.detailEditMode) return;
+      if (!state.allItems.some((item) => item.key === selectedKey)) {
+        resetDetail();
+        return;
+      }
+      await selectKey(selectedKey, !!silent, detailState);
+    }
+    function applyKeyBrowserWidth(width) {
+      const clamped = Math.max(320, Math.min(980, Math.round(width)));
+      document.documentElement.style.setProperty('--kv-key-pane-width', `${clamped}px`);
+      return clamped;
+    }
+    function initKeyBrowserResizer() {
+      const resizer = $('kvBrowserResizer');
+      const layout = resizer?.parentElement;
+      if (!resizer || !layout) return;
+      const stored = Number.parseInt(store.get(KEY_BROWSER_WIDTH_KEY, '') || '', 10);
+      if (!Number.isNaN(stored)) applyKeyBrowserWidth(stored);
+
+      let pointerId = null;
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', endDrag);
+        window.removeEventListener('pointercancel', endDrag);
+        resizer.classList.remove('is-dragging');
+        document.body.style.cursor = '';
+      };
+      const onMove = (event) => {
+        if (event.pointerId !== pointerId) return;
+        const width = event.clientX - layout.getBoundingClientRect().left - 5;
+        applyKeyBrowserWidth(width);
+      };
+      const endDrag = (event) => {
+        if (event.pointerId !== pointerId) return;
+        try { resizer.releasePointerCapture(event.pointerId); } catch {}
+        const width = Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kv-key-pane-width'), 10);
+        if (!Number.isNaN(width)) store.set(KEY_BROWSER_WIDTH_KEY, String(width));
+        pointerId = null;
+        cleanup();
+      };
+
+      resizer.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        pointerId = event.pointerId;
+        resizer.classList.add('is-dragging');
+        resizer.setPointerCapture(event.pointerId);
+        document.body.style.cursor = 'col-resize';
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', endDrag);
+        window.addEventListener('pointercancel', endDrag);
+        onMove(event);
+      });
+      resizer.addEventListener('lostpointercapture', (event) => {
+        if (event.pointerId !== pointerId) return;
+        pointerId = null;
+        cleanup();
+      });
+    }
+    function renderWorkspacePanels() {
+      renderHeaderSummary();
+      renderDataWorkspace();
+      renderAnalysisWorkspace();
+      renderDatabaseWorkspace();
+      icons.mount(document.body);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Auto refresh
+       ═══════════════════════════════════════════════ */
+    function scheduleAutoRefresh() {
+      if (state.autoRefreshTimer) clearInterval(state.autoRefreshTimer);
+      state.autoRefreshTimer = null;
+      if (!state.autoRefreshMs) return;
+      state.autoRefreshTimer = setInterval(async () => {
+        if (document.hidden || state.detailEditMode) return;
+        try {
+          await refreshCurrentSelection(true);
+        } catch {}
+      }, state.autoRefreshMs);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Filter summary
+       ═══════════════════════════════════════════════ */
+    function renderFilterSummary() {
+      const bar = $('filterBar');
+      const summary = $('filterSummary');
+      const chips = [];
+      if (currentPrefix()) chips.push(filterChip('prefix', 'Prefix', currentPrefix()));
+      if (state.searchFilters.q) chips.push(filterChip('query', '关键词', state.searchFilters.q));
+      if (state.searchFilters.q && state.searchFilters.wildcard) chips.push(filterChip('wildcard', 'Wildcard', effectiveWildcardPattern()));
+      if (state.searchFilters.valueKind) chips.push(filterChip('valueKind', '值类型', valueKindLabel(state.searchFilters.valueKind)));
+      if (state.searchFilters.ttlState) chips.push(filterChip('ttlState', 'TTL 状态', ttlStateLabel(state.searchFilters.ttlState)));
+      if (state.searchFilters.minTTL !== '') chips.push(filterChip('minTTL', '最小 TTL', state.searchFilters.minTTL + 's'));
+      if (state.searchFilters.maxTTL !== '') chips.push(filterChip('maxTTL', '最大 TTL', state.searchFilters.maxTTL + 's'));
+      if (!chips.length) { bar.style.display = 'none'; summary.innerHTML = ''; updateFilterToggle(); return; }
+      bar.style.display = '';
+      summary.innerHTML = chips.join('') + '<button class="btn btn-secondary btn-sm" id="clearFiltersBtn">清空筛选</button>';
+      $('clearFiltersBtn').onclick = () => resetAdvancedSearch();
+      icons.mount(summary);
+      updateFilterToggle();
+    }
+    function filterChip(key, label, value) {
+      return '<span class="kv-filter-chip"><strong>' + esc(label) + '</strong><span>' + esc(String(value)) + '</span><button type="button" class="kv-filter-chip-remove" onclick="removeFilterChip(\'' + escAttr(key) + '\')" aria-label="移除 ' + escAttr(label) + '"><span data-icon="x"></span></button></span>';
+    }
+    function removeFilterChip(key) {
+      switch (key) {
+        case 'prefix':
+          if ($('prefixInput')) $('prefixInput').value = '';
+          break;
+        case 'query':
+          state.searchFilters.q = '';
+          if ($('qFilterInput')) $('qFilterInput').value = '';
+          break;
+        case 'wildcard':
+          state.searchFilters.wildcard = false;
+          break;
+        case 'valueKind':
+          state.searchFilters.valueKind = '';
+          break;
+        case 'ttlState':
+          state.searchFilters.ttlState = '';
+          break;
+        case 'minTTL':
+          state.searchFilters.minTTL = '';
+          break;
+        case 'maxTTL':
+          state.searchFilters.maxTTL = '';
+          break;
+        default:
+          return;
+      }
+      syncSearchInputs();
+      syncAdvancedSearchForm();
+      $('pageInput').value = 1;
+      renderFilterSummary();
+      loadKeys();
+    }
+
+    function setDetailEditMode(editing) {
+      state.detailEditMode = !!editing && !!state.detailEditable;
+      const editor = $('valueEditor');
+      if (editor) editor.readOnly = !state.detailEditMode;
+      $('duplicateBtn').style.display = state.selectedKey && state.detailEditable ? '' : 'none';
+      $('renameBtn').style.display = state.selectedKey && state.detailEditable ? '' : 'none';
+      $('editBtn').style.display = state.selectedKey && state.detailEditable ? (state.detailEditMode ? 'none' : '') : 'none';
+      $('cancelEditBtn').style.display = state.detailEditMode ? '' : 'none';
+      $('saveBtn').style.display = state.detailEditMode ? '' : 'none';
+      if ($('formatJsonBtn')) $('formatJsonBtn').disabled = !state.detailEditMode;
+      if ($('valueModeInput')) $('valueModeInput').disabled = !state.detailEditMode;
+    }
+    function activateDetailEditing(preferredTab) {
+      if (!state.detailEditable) return;
+      setDetailEditMode(true);
+      const nextTab = preferredTab || (state.detailStructuredAvailable ? 'preview' : 'edit');
+      setEditorTab(nextTab);
+      if (nextTab === 'edit') {
+        requestAnimationFrame(() => {
+          const editor = $('valueEditor');
+          if (!editor) return;
+          editor.focus();
+          editor.setSelectionRange(editor.value.length, editor.value.length);
+        });
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Load keys
+       ═══════════════════════════════════════════════ */
+    async function loadKeys(silent) {
+      const page = parseInt($('pageInput').value) || 1;
+      const ps = parseInt($('pageSizeInput').value) || 50;
+      const revision = keyTracker.next();
+      const prefix = currentPrefix();
+      const p = buildQueryParams(state.viewMode !== 'tree');
+      const sp = buildQueryParams(false);
+      if (prefix && !silent) addHist(prefix);
+      if (!silent) setLoading('keyListLoading', true);
+      const started = performance.now();
+      try {
+        const [d, summary] = await Promise.all([
+          (async () => {
+            if (state.viewMode !== 'tree') {
+              return ui.request('/admin/api/storage/kv/keys?' + p.toString(), {}, abortHub, 'keys');
+            }
+            const firstParams = buildQueryParams(false);
+            firstParams.set('page', '1');
+            firstParams.set('page_size', String(TREE_FETCH_PAGE_SIZE));
+            const first = await ui.request('/admin/api/storage/kv/keys?' + firstParams.toString(), {}, abortHub, 'keys-tree-1');
+            const items = [...(first.items || [])];
+            const pageCount = Number(first.page_count || 1);
+            if (pageCount > 1) {
+              const extraPages = [];
+              for (let current = 2; current <= pageCount; current++) {
+                const nextParams = buildQueryParams(false);
+                nextParams.set('page', String(current));
+                nextParams.set('page_size', String(TREE_FETCH_PAGE_SIZE));
+                extraPages.push(ui.request('/admin/api/storage/kv/keys?' + nextParams.toString(), {}, abortHub, 'keys-tree-' + current));
+              }
+              const rest = await Promise.all(extraPages);
+              rest.forEach((payload) => items.push(...(payload.items || [])));
+            }
+            return {
+              ...first,
+              items,
+              page: 1,
+              page_count: 1,
+              page_size: items.length || TREE_FETCH_PAGE_SIZE,
+            };
+          })(),
+          ui.request('/admin/api/storage/kv/summary?' + sp.toString(), {}, abortHub, 'summary').catch(() => emptySummary()),
+        ]);
+        if (!keyTracker.isCurrent(revision)) return;
+        state.summary = summary || emptySummary();
+        state.allItems = d.items || [];
+        state.totalKeys = d.total || 0;
+        state.currentPage = d.page || 1;
+        state.currentPageSize = d.page_size || ps;
+        state.totalPages = d.page_count || Math.ceil(state.totalKeys / state.currentPageSize) || 1;
+        state.lastLatency = Math.round(performance.now() - started);
+        setText('keyListMeta', state.viewMode === 'tree'
+          ? '共 ' + state.totalKeys + ' 项 · 树状模式'
+          : '共 ' + state.totalKeys + ' 项 · 第 ' + state.currentPage + '/' + state.totalPages + ' 页');
+        $('pageInput').value = state.currentPage;
+        updatePagination();
+        renderFilterSummary();
+        renderKeyList();
+        if (!silent) updateBatchBar();
+        renderWorkspacePanels();
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        ui.showToast('加载 Key 列表失败', 'error');
+      } finally {
+        if (!silent) setLoading('keyListLoading', false);
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Pagination
+       ═══════════════════════════════════════════════ */
+    function updatePagination() {
+      if (state.viewMode === 'tree') {
+        $('pageInfo').textContent = '';
+        $('prevPageBtn').disabled = true;
+        $('nextPageBtn').disabled = true;
+        return;
+      }
+      $('pageInfo').textContent = '第 ' + state.currentPage + ' / ' + state.totalPages + ' 页 · 共 ' + state.totalKeys + ' 条';
+      $('prevPageBtn').disabled = state.currentPage <= 1;
+      $('nextPageBtn').disabled = state.currentPage >= state.totalPages;
+    }
+    function goPage(delta) {
+      let pg = parseInt($('pageInput').value) || 1;
+      pg += delta;
+      if (pg < 1) pg = 1;
+      if (pg > state.totalPages) pg = state.totalPages;
+      $('pageInput').value = pg;
+      loadKeys();
+    }
+
+    /* ═══════════════════════════════════════════════
+       Sorting
+       ═══════════════════════════════════════════════ */
+    function toggleSort(f) {
+      if (state.sortField === f) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortField = f; state.sortDir = 'asc'; }
+      updateSortUI();
+      renderKeyList();
+    }
+    function updateSortUI() {
+      document.querySelectorAll('.sort-btn').forEach((el) => el.classList.toggle('active-sort', el.dataset.sort === state.sortField));
+      const a = { asc: '↑', desc: '↓' };
+      $('sortNameArr').textContent = state.sortField === 'name' ? a[state.sortDir] : '↕';
+      $('sortTtlArr').textContent = state.sortField === 'ttl' ? a[state.sortDir] : '↕';
+    }
+    function sortedFiltered() {
+      const items = state.allItems.slice();
+      const d = state.sortDir === 'asc' ? 1 : -1;
+      items.sort((a, b) => {
+        if (state.sortField === 'name') return a.key.localeCompare(b.key) * d;
+        const at = a.ttl_seconds == null ? Infinity : a.ttl_seconds;
+        const bt = b.ttl_seconds == null ? Infinity : b.ttl_seconds;
+        return (at - bt) * d;
+      });
+      return items;
+    }
+
+    /* ═══════════════════════════════════════════════
+       View mode
+       ═══════════════════════════════════════════════ */
+    function setViewMode(m) {
+      state.viewMode = m;
+      store.set('viewMode', m);
+      $('viewListBtn').classList.toggle('active-view', m === 'list');
+      $('viewTreeBtn').classList.toggle('active-view', m === 'tree');
+      syncKeyBrowserViewMode();
+      updateTreeDelimiterButton();
+      renderKeyList();
+    }
+
+    /* ═══════════════════════════════════════════════
+       Render key list
+       ═══════════════════════════════════════════════ */
+    function renderKeyList() {
+      const items = sortedFiltered();
+      const root = $('keyList');
+
+      if (state.viewMode === 'tree') { root.innerHTML = ''; root.appendChild(buildNamespaceTree(items)); return; }
+
+      if (!items.length) {
+        root.innerHTML = '<div class="empty-state"><p>当前无匹配 Key</p><p class="text-xs" style="color:var(--muted);margin-top:4px">尝试更改前缀或新建 Key</p></div>';
+        return;
+      }
+
+      let h = '';
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const act = state.selectedKey === it.key ? ' active' : '';
+        const chk = state.checkedKeys.has(it.key) ? ' checked' : '';
+        const pc = ttlPill(it);
+        const keyAttr = esc(it.key);
+        h += '<div class="key-row flex items-center gap-2 px-3 py-2' + act + '" data-key="' + keyAttr + '">' +
+          '<input type="checkbox" class="check"' + chk + ' data-role="check" data-key="' + keyAttr + '" />' +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="mono text-sm break-all">' + esc(it.key) + '</div>' +
+            '<div class="flex items-center gap-2" style="margin-top:2px">' +
+              '<span class="text-xs" style="color:var(--muted)">' + esc(it.ttl_state || '') + '</span>' +
+              (it.expire_at ? '<span class="text-xs" style="color:var(--muted)">→ ' + esc(it.expire_at) + '</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<span class="pill ' + pc + ' flex-shrink-0">' + ttlText(it) + '</span>' +
+        '</div>';
+      }
+      root.innerHTML = h;
+
+      // Bind click events
+      root.querySelectorAll('.key-row').forEach((row) => {
+        const key = row.getAttribute('data-key');
+        row.onclick = (e) => { if (e.target.type !== 'checkbox') selectKey(key); };
+      });
+      root.querySelectorAll('[data-role="check"]').forEach((cb) => {
+        cb.onclick = (e) => e.stopPropagation();
+        cb.onchange = () => { toggleCheck(cb.getAttribute('data-key'), cb.checked); };
+      });
+    }
+
+    /* ═══════════════════════════════════════════════
+       Namespace tree (key list view)
+       ═══════════════════════════════════════════════ */
+    function buildNsTree(items) {
+      const tree = {};
+      items.forEach((it) => {
+        const parts = splitTreeKey(it.key);
+        let node = tree;
+        for (let i = 0; i < parts.length; i++) {
+          if (!node[parts[i]]) node[parts[i]] = { _c: {}, _items: [] };
+          if (i === parts.length - 1) node[parts[i]]._items.push(it);
+          node = node[parts[i]]._c;
+        }
+      });
+      return tree;
+    }
+
+    function buildNamespaceTree(items) {
+      const tree = buildNsTree(items);
+      const con = document.createElement('div');
+      con.style.padding = '4px 0';
+
+      function branch(obj, depth, prefix) {
+        const frag = document.createDocumentFragment();
+        Object.keys(obj).forEach((label) => {
+          const v = obj[label];
+          const ck = Object.keys(v._c);
+          const branchPath = prefix + label;
+          if (ck.length > 0) {
+            const w = document.createElement('div');
+            const hd = document.createElement('div');
+            hd.className = 'ns-node flex items-center gap-1 px-3 py-1.5 text-sm';
+            hd.style.paddingLeft = (12 + depth * 16) + 'px';
+            let open = state.treeOpenNodes.has(branchPath);
+            const ic = document.createElement('span'); ic.className = 'ns-icon'; ic.innerHTML = icons.icon('chevronRight', 12);
+            const lb = document.createElement('span'); lb.className = 'mono'; lb.style.color = 'var(--muted)'; lb.textContent = label;
+            const cnt = document.createElement('span'); cnt.className = 'text-xs'; cnt.style.color = 'var(--muted)';
+            cnt.textContent = ' (' + (v._items.length + ck.length) + ')';
+            hd.appendChild(ic); hd.appendChild(lb); hd.appendChild(cnt);
+            const cd = document.createElement('div'); cd.className = 'ns-children';
+            cd.style.display = open ? '' : 'none';
+            ic.innerHTML = open ? icons.icon('chevronDown', 12) : icons.icon('chevronRight', 12);
+            cd.appendChild(branch(v._c, depth + 1, branchPath));
+            v._items.forEach((it) => cd.appendChild(leafNode(it, depth + 1)));
+            hd.onclick = () => {
+              open = !open;
+              cd.style.display = open ? '' : 'none';
+              ic.innerHTML = open ? icons.icon('chevronDown', 12) : icons.icon('chevronRight', 12);
+              if (open) state.treeOpenNodes.add(branchPath);
+              else state.treeOpenNodes.delete(branchPath);
+              saveTreeOpenNodes();
+            };
+            w.appendChild(hd); w.appendChild(cd); frag.appendChild(w);
+          } else {
+            v._items.forEach((it) => frag.appendChild(leafNode(it, depth)));
+          }
+        });
+        return frag;
+      }
+
+      function leafNode(it, depth) {
+        const div = document.createElement('div');
+        div.className = 'key-row flex items-center gap-2 px-3 py-2' + (state.selectedKey === it.key ? ' active' : '');
+        div.style.paddingLeft = (12 + depth * 16) + 'px';
+        div.title = it.key;
+        const parts = splitTreeKey(it.key);
+        const leafLabel = parts.length ? parts[parts.length - 1] : it.key;
+        div.innerHTML =
+          '<input type="checkbox" class="check"' + (state.checkedKeys.has(it.key) ? ' checked' : '') + ' />' +
+          '<div class="min-w-0 flex-1"><div class="mono text-sm break-all">' + esc(leafLabel) + '</div></div>' +
+          '<span class="pill ' + ttlPill(it) + ' flex-shrink-0">' + ttlText(it) + '</span>';
+        const cb = div.querySelector('input');
+        cb.onclick = (e) => e.stopPropagation();
+        cb.onchange = () => toggleCheck(it.key, cb.checked);
+        div.onclick = (e) => { if (e.target.type !== 'checkbox') selectKey(it.key); };
+        return div;
+      }
+
+      con.appendChild(branch(tree, 0, ''));
+      if (!items.length) con.innerHTML = '<div class="empty-state"><p>当前无匹配 Key</p></div>';
+      return con;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Batch operations
+       ═══════════════════════════════════════════════ */
+    function toggleCheck(k, v) { v ? state.checkedKeys.add(k) : state.checkedKeys.delete(k); updateBatchBar(); }
+    function updateBatchBar() {
+      const bar = $('batchBar');
+      if (state.checkedKeys.size) { bar.style.display = ''; $('batchCount').textContent = '已选 ' + state.checkedKeys.size + ' 项'; $('summarySelected').textContent = String(state.checkedKeys.size); }
+      else { bar.style.display = 'none'; $('summarySelected').textContent = '0'; }
+      renderHeaderSummary();
+      renderDataWorkspace();
+    }
+    function selectAllKeys() { sortedFiltered().forEach((it) => state.checkedKeys.add(it.key)); renderKeyList(); updateBatchBar(); }
+    function deselectAllKeys() { state.checkedKeys.clear(); renderKeyList(); updateBatchBar(); }
+
+    async function batchDelete() {
+      if (!state.checkedKeys.size) return;
+      const ok = await ui.confirmDialog({ title: '批量删除', text: '确认删除选中的 ' + state.checkedKeys.size + ' 个 Key？此操作不可撤销。', okText: '批量删除', tone: 'danger' });
+      if (!ok) return;
+      const keys = Array.from(state.checkedKeys);
+      ui.showToast('正在删除 ' + keys.length + ' 个 Key…', 'info');
+      try {
+        const d = await ui.request(clientUrl('/admin/api/storage/kv/delete-many'), { method: 'POST', body: JSON.stringify({ keys }) }, abortHub, 'batch-delete');
+        const del = d.removed || 0;
+        const fail = Math.max(0, keys.length - del);
+        state.checkedKeys.clear();
+        ui.showToast('批量删除完成: 成功 ' + del + ', 失败 ' + fail, fail ? 'warn' : 'success');
+        resetDetail();
+        await loadKeys();
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('批量删除失败: ' + e.message, 'error');
+      }
+    }
+
+    function openBatchTTLModal() {
+      if (!state.checkedKeys.size) return;
+      const html =
+        '<h3 class="text-sm font-black mb-3">批量 TTL</h3>' +
+        '<div class="text-xs mb-3" style="color:var(--muted)">将更新 <strong>' + state.checkedKeys.size + '</strong> 个 Key 的过期时间。</div>' +
+        '<div><label class="storage-section-title">TTL 秒数（留空或 0 表示永久）</label><input id="batchTTLInput" type="number" min="0" class="input" placeholder="例如 3600" style="margin-top:4px" /></div>' +
+        '<div class="flex justify-end gap-2 mt-4">' +
+          '<button class="btn btn-secondary _mc">取消</button>' +
+          '<button class="btn btn-primary _mo">应用</button>' +
+        '</div>';
+      const ov = showModal(html);
+      ov.querySelector('._mc').onclick = () => ov.remove();
+      ov.querySelector('._mo').onclick = () => applyBatchTTL(ov);
+    }
+
+    async function applyBatchTTL(overlay) {
+      const raw = $('batchTTLInput').value.trim();
+      const expire = raw ? Number(raw) : null;
+      const keys = Array.from(state.checkedKeys);
+      try {
+        const d = await ui.request(clientUrl('/admin/api/storage/kv/items/ttl'), {
+          method: 'PATCH', body: JSON.stringify({ keys, expire_seconds: expire && expire > 0 ? expire : null }),
+        }, abortHub, 'batch-ttl');
+        ui.showToast('批量 TTL 更新完成: ' + (d.updated || 0) + ' / ' + (d.count || keys.length), (d.updated || 0) < keys.length ? 'warn' : 'success');
+        overlay.remove();
+        await loadKeys(true);
+        if (state.selectedKey) await selectKey(state.selectedKey, true);
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('批量 TTL 更新失败: ' + e.message, 'error');
+      }
+    }
+
+    async function batchExport() {
+      if (!state.checkedKeys.size) return;
+      const result = {}; const keys = Array.from(state.checkedKeys);
+      ui.showToast('正在导出 ' + keys.length + ' 个 Key…', 'info');
+      for (let i = 0; i < keys.length; i++) {
+        try {
+          const d = await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(keys[i])), {}, abortHub, 'export-' + i);
+          let val; if (d.display_mode === 'json') { try { val = JSON.parse(d.pretty_json || d.value || 'null'); } catch { val = d.value; } } else val = d.value;
+          result[keys[i]] = { value: val, mode: d.display_mode || d.value_kind, ttl_seconds: d.ttl_seconds };
+        } catch {}
+      }
+      doExport(result, 'kv-batch-' + Date.now());
+    }
+
+    /* ═══════════════════════════════════════════════
+       Export / Import
+       ═══════════════════════════════════════════════ */
+    function doExport(result, baseName) {
+      const format = $('exportFormatSelect').value || 'json';
+      const rows = Object.keys(result).map((key) => ({ key, mode: result[key].mode, ttl_seconds: result[key].ttl_seconds, value: result[key].value }));
+      if (format === 'csv') ui.downloadCSV(baseName + '.csv', rows);
+      else if (format === 'excel') ui.downloadExcel(baseName + '.xls', rows, 'KV');
+      else dlJSON(result, baseName + '.json');
+      ui.showToast('已导出 ' + Object.keys(result).length + ' 个 Key', 'success');
+    }
+
+    async function exportVisibleKeys() {
+      const items = sortedFiltered();
+      if (!items.length) return ui.showToast('没有可导出的 Key', 'warn');
+      ui.showToast('正在导出 ' + items.length + ' 个 Key…', 'info');
+      const result = {};
+      for (let i = 0; i < items.length; i++) {
+        try {
+          const d = await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(items[i].key)), {}, abortHub, 'export-v-' + i);
+          let val; if (d.display_mode === 'json') { try { val = JSON.parse(d.pretty_json || d.value || 'null'); } catch { val = d.value; } } else val = d.value;
+          result[items[i].key] = { value: val, mode: d.display_mode || d.value_kind, ttl_seconds: d.ttl_seconds };
+        } catch {}
+      }
+      doExport(result, 'kv-export-' + Date.now());
+    }
+
+    async function importKeys(file) {
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (typeof data !== 'object' || data === null) throw new Error('JSON 格式无效');
+        const entries = Object.entries(data);
+        const ok = await ui.confirmDialog({ title: '导入确认', text: '将导入 ' + entries.length + ' 个 Key，已存在会被覆盖。继续？', okText: '开始导入', tone: 'primary' });
+        if (!ok) return;
+        let s = 0, f = 0;
+        ui.showToast('正在导入…', 'info');
+        for (let i = 0; i < entries.length; i++) {
+          const [key, v] = entries[i];
+          try {
+            const mode = (v && v.mode) || 'json';
+            const body = { mode, value: v.value, expire_seconds: v.ttl_seconds != null ? v.ttl_seconds : null };
+            await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(key)), { method: 'PUT', body: JSON.stringify(body) }, abortHub, 'import-' + i);
+            s++;
+          } catch { f++; }
+        }
+        ui.showToast('导入完成: 成功 ' + s + ', 失败 ' + f, f ? 'warn' : 'success');
+        await loadKeys();
+      } catch (e) {
+        ui.showToast('导入失败: ' + e.message, 'error');
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Copy / rename key
+       ═══════════════════════════════════════════════ */
+    function suggestCopiedKey(key) {
+      const text = String(key || '').trim();
+      if (!text) return 'new:key';
+      if (/:copy$/.test(text)) return text + ':1';
+      const numbered = text.match(/^(.*?)(\d+)$/);
+      if (numbered) return numbered[1] + String(Number(numbered[2]) + 1);
+      return text + ':copy';
+    }
+
+    function openKeyTransferModal(action) {
+      const sourceKey = state.selectedKey || $('keyNameInput').value.trim();
+      if (!sourceKey) return ui.showToast('请选择 Key', 'warn');
+      const isCopy = action === 'copy';
+      const title = isCopy ? '复制 Key' : '重命名 Key';
+      const targetValue = isCopy ? suggestCopiedKey(sourceKey) : sourceKey.replace(/([^:/]+)$/, '$1-copy');
+      const html =
+        '<h3 class="text-sm font-black mb-3">' + esc(title) + '</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="storage-section-title">来源 Key</label><div class="input mono" style="margin-top:4px;display:flex;align-items:center;min-height:40px">' + esc(sourceKey) + '</div></div>' +
+          '<div><label class="storage-section-title">目标 Key</label><input id="transferTargetInput" class="input mono" value="' + esc(targetValue) + '" placeholder="输入新的 key 名称" style="margin-top:4px" /></div>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><input id="transferPreserveTTL" type="checkbox" checked />保留 TTL</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><input id="transferOverwrite" type="checkbox" />允许覆盖目标 Key</label>' +
+          '<div class="flex justify-end gap-2 mt-4">' +
+            '<button class="btn btn-secondary _mc">取消</button>' +
+            '<button class="btn btn-primary _mo">' + esc(isCopy ? '复制' : '重命名') + '</button>' +
+          '</div>' +
+        '</div>';
+      const ov = showModal(html, true);
+      ov.querySelector('._mc').onclick = () => ov.remove();
+      ov.querySelector('._mo').onclick = () => submitKeyTransfer(action, sourceKey, ov);
+      setTimeout(() => {
+        const input = ov.querySelector('#transferTargetInput');
+        if (!input) return;
+        input.focus();
+        input.select();
+      }, 60);
+    }
+
+    async function submitKeyTransfer(action, sourceKey, overlay) {
+      const targetInput = overlay.querySelector('#transferTargetInput');
+      const targetKey = targetInput?.value.trim() || '';
+      if (!targetKey) return ui.showToast('请输入目标 Key', 'error');
+      if (targetKey === sourceKey) return ui.showToast('目标 Key 不能与来源相同', 'warn');
+      const endpoint = action === 'copy' ? '/admin/api/storage/kv/item/copy' : '/admin/api/storage/kv/item/rename';
+      try {
+        const result = await ui.request(clientUrl(endpoint), {
+          method: 'POST',
+          body: JSON.stringify({
+            source_key: sourceKey,
+            target_key: targetKey,
+            overwrite: !!overlay.querySelector('#transferOverwrite')?.checked,
+            preserve_ttl: !!overlay.querySelector('#transferPreserveTTL')?.checked,
+          }),
+        }, abortHub, 'transfer');
+        overlay.remove();
+        if (action === 'rename') {
+          state.checkedKeys.delete(sourceKey);
+        }
+        ui.showToast(action === 'copy' ? ('已复制到 ' + result.target_key) : ('已重命名为 ' + result.target_key), result.overwritten ? 'warn' : 'success');
+        await loadKeys(true);
+        await selectKey(result.target_key);
+      } catch (error) {
+        ui.showToast((action === 'copy' ? '复制失败: ' : '重命名失败: ') + error.message, 'error');
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Select key (load detail)
+       ═══════════════════════════════════════════════ */
+    async function selectKey(key, silentRefresh, preservedViewState) {
+      const revision = detailTracker.next();
+      state.selectedKey = key;
+      state.keyListFocusIdx = state.allItems.findIndex((it) => it.key === key);
+      renderKeyList();
+      if (!silentRefresh) setLoading('detailLoading', true);
+      try {
+        const d = await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(key)), {}, abortHub, 'detail');
+        if (!detailTracker.isCurrent(revision)) return;
+
+        $('detailKey').textContent = d.key;
+        $('keyNameInput').value = d.key;
+        $('keyNameInput').readOnly = true;
+        $('keyNameInput').title = '现有 Key 不支持直接改名';
+        $('ttlInput').value = d.ttl_seconds != null ? Math.round(d.ttl_seconds) : '';
+
+        // TTL badge
+        const tb = $('ttlBadge');
+        tb.textContent = 'TTL: ' + ttlText(d);
+        tb.className = 'pill ' + ttlPill(d);
+
+        // Type
+        $('typeBadge').textContent = '类型: ' + (d.value_kind || '—');
+
+        // Mode
+        const dm = d.display_mode || 'text';
+        $('valueModeInput').value = dm === 'json' ? 'json' : dm === 'base64' ? 'base64' : 'text';
+
+        // Value
+        let val = dm === 'json' ? (d.pretty_json || d.value || '') : (d.value || '');
+        if (typeof val !== 'string') val = JSON.stringify(val, null, 2);
+        $('valueEditor').value = val;
+        updateCharCount();
+
+        const valueSize = d.size_bytes_estimate || new Blob([val]).size;
+        $('keySizeBadge').textContent = 'Key Size: ' + keySizeText(d.key);
+        $('valueSizeBadge').textContent = 'Value Size: ' + fmtB(valueSize);
+
+        // Editable
+        state.detailEditable = d.editable !== false;
+        state.detailStructuredAvailable = false;
+        if (dm === 'json') {
+          try {
+            const parsed = JSON.parse(val || 'null');
+            state.detailStructuredAvailable = parsed !== null && typeof parsed === 'object';
+          } catch {}
+        }
+
+        // Stats
+        updateStats(d.key, val, d.value_kind, valueSize, d);
+        setDetailEditMode(false);
+
+        // Keep the current detail tab instead of forcing a mode-specific jump.
+        if (preservedViewState) restoreDetailViewState(preservedViewState);
+        else setEditorTab(state.detailStructuredAvailable ? 'preview' : 'edit');
+        renderWorkspacePanels();
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        if (!silentRefresh) ui.showToast('读取 key 失败: ' + e.message, 'error');
+      } finally {
+        if (!silentRefresh) setLoading('detailLoading', false);
+      }
+
+      setTimeout(() => {
+        const a = document.querySelector('.key-row.active');
+        if (a) a.scrollIntoView({ block: 'nearest' });
+      }, 50);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Reset detail
+       ═══════════════════════════════════════════════ */
+    function resetDetail() {
+      state.selectedKey = null;
+      state.keyListFocusIdx = -1;
+      $('detailKey').textContent = '未选择';
+      $('keyNameInput').value = '';
+      $('keyNameInput').readOnly = false;
+      $('keyNameInput').title = '';
+      $('ttlInput').value = '';
+      $('ttlBadge').textContent = 'TTL: —'; $('ttlBadge').className = 'pill pill-slate';
+      $('typeBadge').textContent = '类型: —';
+      $('keySizeBadge').textContent = 'Key Size: —';
+      $('valueSizeBadge').textContent = 'Value Size: —';
+      state.detailEditable = false;
+      state.detailStructuredAvailable = false;
+      $('valueModeInput').value = 'json';
+      $('valueEditor').value = '';
+      if ($('treeContent')) $('treeContent').innerHTML = '<div class="empty-state">选择 key 后可直接查看或编辑 value。</div>';
+      $('charCount').textContent = '';
+      if ($('previewPanel')) $('previewPanel').scrollTop = 0;
+      if ($('valueEditor')) $('valueEditor').scrollTop = 0;
+      setDetailEditMode(false);
+      setEditorTab('edit');
+      renderKeyList();
+      renderWorkspacePanels();
+    }
+
+    /* ═══════════════════════════════════════════════
+       Editor tabs (edit / preview)
+       ═══════════════════════════════════════════════ */
+    function setEditorTab(tab) {
+      const allowStructured = state.detailStructuredAvailable;
+      state.editorTab = tab === 'edit' || !allowStructured ? 'edit' : 'preview';
+      $('tabPreview').style.display = allowStructured ? '' : 'none';
+      $('tabEdit').classList.toggle('active', state.editorTab === 'edit');
+      $('tabPreview').classList.toggle('active', state.editorTab === 'preview');
+      $('editorPanel').style.display = state.editorTab === 'edit' ? '' : 'none';
+      $('previewPanel').style.display = state.editorTab === 'preview' ? '' : 'none';
+      if (state.editorTab === 'preview') renderValueTree();
+    }
+
+    /* ═══════════════════════════════════════════════
+       JSON tree view (Redis Insight style)
+       ═══════════════════════════════════════════════ */
+    function renderValueTree() {
+      const container = $('treeContent');
+      container.innerHTML = '';
+      const raw = $('valueEditor').value.trim();
+      if (!raw) { container.innerHTML = '<div class="empty-state">暂无内容</div>'; return; }
+
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch {
+        container.innerHTML = '<div class="empty-state">非 JSON 格式，无法使用字段视图</div>';
+        return;
+      }
+
+      function setValueAtPath(target, path, nextValue) {
+        const cursor = path.slice(0, -1).reduce((acc, key) => acc?.[key], target);
+        if (cursor == null) return;
+        cursor[path[path.length - 1]] = nextValue;
+      }
+      function parseEditedValue(rawValue, originalValue) {
+        if (originalValue === null) return rawValue === 'null' ? null : rawValue;
+        if (typeof originalValue === 'number') {
+          const numeric = Number(rawValue);
+          return Number.isFinite(numeric) ? numeric : originalValue;
+        }
+        if (typeof originalValue === 'boolean') return String(rawValue) === 'true';
+        return rawValue;
+      }
+      function applyJsonFieldChange(path, rawValue, originalValue) {
+        try {
+          const current = JSON.parse($('valueEditor').value || 'null');
+          setValueAtPath(current, path, parseEditedValue(rawValue, originalValue));
+          $('valueEditor').value = JSON.stringify(current, null, 2);
+          updateCharCount();
+          if (state.editorTab === 'preview') setEditorTab('preview');
+          if (state.editorTab === 'tree') renderValueTree();
+        } catch (error) {
+          ui.showToast('字段更新失败: ' + error.message, 'error');
+        }
+      }
+      function primitiveEditor(path, key, value) {
+        const row = document.createElement('div');
+        row.className = 'kv-json-field';
+        const valueLabel = renderPrimitive(key, value);
+        if (!state.detailEditMode) {
+          row.classList.add('is-clickable');
+          row.innerHTML = '<div class="kv-json-field-key">' + esc(key) + '</div><div class="kv-json-field-value">' + valueLabel + '</div><div class="storage-db-badge">' + esc(Array.isArray(value) ? 'array' : (value === null ? 'null' : typeof value)) + '</div>';
+          row.onclick = () => activateDetailEditing('preview');
+          return row;
+        }
+        const keyNode = document.createElement('div');
+        keyNode.className = 'kv-json-field-key';
+        keyNode.textContent = key;
+        row.appendChild(keyNode);
+        const editorWrap = document.createElement('div');
+        const typeLabel = document.createElement('div');
+        typeLabel.className = 'kv-json-field-value';
+        typeLabel.style.marginBottom = '6px';
+        typeLabel.textContent = Array.isArray(value) ? 'array' : (value === null ? 'null' : typeof value);
+        editorWrap.appendChild(typeLabel);
+        let input;
+        if (typeof value === 'boolean') {
+          input = document.createElement('select');
+          input.className = 'select';
+          input.innerHTML = '<option value="true">true</option><option value="false">false</option>';
+          input.value = value ? 'true' : 'false';
+        } else if (typeof value === 'string' && value.length > 80) {
+          input = document.createElement('textarea');
+          input.className = 'textarea mono';
+          input.value = value;
+        } else {
+          input = document.createElement('input');
+          input.className = 'input mono';
+          input.value = value === null ? 'null' : String(value ?? '');
+        }
+        input.addEventListener('change', () => applyJsonFieldChange(path, input.value, value));
+        if (input.tagName === 'INPUT') input.addEventListener('keydown', (event) => { if (event.key === 'Enter') applyJsonFieldChange(path, input.value, value); });
+        editorWrap.appendChild(input);
+        row.appendChild(editorWrap);
+        const badge = document.createElement('div');
+        badge.className = 'storage-db-badge';
+        badge.textContent = '编辑中';
+        row.appendChild(badge);
+        return row;
+      }
+      function branchEditor(value, path, label) {
+        const details = document.createElement('details');
+        details.className = 'kv-json-node';
+        details.open = true;
+        const summary = document.createElement('summary');
+        const kind = Array.isArray(value) ? 'Array' : 'Object';
+        const size = Array.isArray(value) ? value.length : Object.keys(value || {}).length;
+        summary.innerHTML = icons.icon('chevronDown', 12) + '<span>' + esc(label) + '</span><span class="storage-db-badge">' + kind + ' · ' + size + '</span>';
+        details.appendChild(summary);
+        const group = document.createElement('div');
+        group.className = 'kv-json-group';
+        const entries = Array.isArray(value) ? value.map((item, index) => [String(index), item]) : Object.entries(value || {});
+        entries.forEach(([childKey, childValue]) => {
+          const childPath = [...path, childKey];
+          if (childValue !== null && typeof childValue === 'object') group.appendChild(branchEditor(childValue, childPath, childKey));
+          else group.appendChild(primitiveEditor(childPath, childKey, childValue));
+        });
+        details.appendChild(group);
+        return details;
+      }
+
+      if (parsed !== null && typeof parsed === 'object') {
+        const rootLabel = Array.isArray(parsed) ? 'root[]' : 'root';
+        container.appendChild(branchEditor(parsed, [], rootLabel));
+      } else {
+        container.innerHTML = '<div class="kv-json-field is-clickable"><div class="kv-json-field-key">value</div><div class="kv-json-field-value">' + renderPrimitive('value', parsed) + '</div><div class="storage-db-badge">' + esc(typeof parsed) + '</div></div>';
+        container.querySelector('.kv-json-field')?.addEventListener('click', () => activateDetailEditing('edit'));
+      }
+    }
+
+    function buildDocTree(obj, isRoot) {
+      const ul = document.createElement('ul');
+      ul.className = isRoot ? 'dtree dtree-root' : 'dtree';
+      const entries = Array.isArray(obj) ? obj.map((v, i) => [String(i), v]) : Object.entries(obj || {});
+      entries.forEach(([key, value]) => {
+        const li = document.createElement('li');
+        if (value !== null && typeof value === 'object') {
+          const isArr = Array.isArray(value);
+          const count = isArr ? value.length : Object.keys(value).length;
+          const label = isArr ? 'Array (' + count + ')' : 'Object (' + count + ')';
+          const row = document.createElement('span');
+          row.className = 'dtree-row dtree-tog';
+          row.innerHTML = '<span class="dtree-exp">▸</span>' +
+            '<span class="dtree-k">' + esc(key) + '</span>' +
+            '<span class="dtree-c">:</span> ' +
+            '<span class="dtree-meta">' + label + '</span>';
+          li.appendChild(row);
+          const childTree = buildDocTree(value, false);
+          childTree.style.display = 'none';
+          li.appendChild(childTree);
+          row.onclick = () => {
+            const exp = row.querySelector('.dtree-exp');
+            if (childTree.style.display === 'none') { childTree.style.display = ''; exp.textContent = '▾'; }
+            else { childTree.style.display = 'none'; exp.textContent = '▸'; }
+          };
+        } else {
+          const row = document.createElement('span');
+          row.className = 'dtree-row';
+          row.innerHTML = '<span class="dtree-exp"> </span>' +
+            '<span class="dtree-k">' + esc(key) + '</span>' +
+            '<span class="dtree-c">:</span> ' +
+            renderPrimitive(key, value);
+          li.appendChild(row);
+        }
+        ul.appendChild(li);
+      });
+      return ul;
+    }
+
+    function renderPrimitive(key, value) {
+      if (value === null || value === undefined) return '<span class="dtree-x">null</span>';
+      if (typeof value === 'boolean') return '<span class="dtree-b">' + value + '</span>';
+      if (typeof value === 'number') return '<span class="dtree-n">' + value + '</span>';
+      if (typeof value === 'string' && /^[0-9a-f]{24}$/i.test(value)) return '<span class="dtree-oid">ObjectId("' + esc(value) + '")</span>';
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return '<span class="dtree-date">' + esc(value) + '</span>';
+      const display = String(value).length > 200 ? String(value).slice(0, 197) + '…' : String(value);
+      return '<span class="dtree-s">"' + esc(display) + '"</span>';
+    }
+
+    /* ═══════════════════════════════════════════════
+       Stats + chart
+       ═══════════════════════════════════════════════ */
+    function updateStats(key, val, kind, sb, detail) {
+      setText('statKeySize', keySizeText(key));
+      setText('statSize', fmtB(sb));
+      setText('statType', kind || '—');
+      setText('statMem', fmtB(sb * 2));
+      setText('statKeyCount', String(activeSummary().matched_total || state.totalKeys || 0));
+      setText('statTTL', ttlText(detail || {}));
+    }
+
+    /* ═══════════════════════════════════════════════
+       CRUD operations
+       ═══════════════════════════════════════════════ */
+    async function saveItem() {
+      const key = $('keyNameInput').value.trim();
+      if (!key) return ui.showToast('请输入 Key 名称', 'error');
+      if (state.selectedKey && key !== state.selectedKey) {
+        ui.showToast('当前详情不支持直接改名。请新建目标 key。', 'warn');
+        $('keyNameInput').value = state.selectedKey;
+        return;
+      }
+      const mode = $('valueModeInput').value;
+      const raw = $('valueEditor').value;
+      let value = raw;
+      if (mode === 'json') { try { value = JSON.parse(raw || 'null'); } catch (e) { return ui.showToast('JSON 解析失败: ' + e.message, 'error'); } }
+      const ttl = $('ttlInput').value.trim();
+      setLoading('detailLoading', true);
+      try {
+        await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(key)), {
+          method: 'PUT', body: JSON.stringify({ mode, value, expire_seconds: ttl ? Number(ttl) : null }),
+        }, abortHub, 'save');
+        ui.showToast('已保存 ' + key, 'success');
+        state.selectedKey = key;
+        await loadKeys(true);
+        await selectKey(key);
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('保存失败: ' + e.message, 'error');
+      } finally {
+        setLoading('detailLoading', false);
+      }
+    }
+
+    async function updateTTLOnly() {
+      const key = $('keyNameInput').value.trim();
+      if (!key) return ui.showToast('请选择或输入 Key', 'error');
+      const ttl = $('ttlInput').value.trim();
+      try {
+        await ui.request(clientUrl('/admin/api/storage/kv/item/ttl?key=' + encodeURIComponent(key)), {
+          method: 'PATCH', body: JSON.stringify({ expire_seconds: ttl ? Number(ttl) : null }),
+        }, abortHub, 'ttl');
+        ui.showToast('已更新 ' + key + ' 的 TTL', 'success');
+        await loadKeys(true);
+        await selectKey(key);
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('更新 TTL 失败: ' + e.message, 'error');
+      }
+    }
+
+    async function confirmDeleteCurrent() {
+      const key = $('keyNameInput').value.trim();
+      if (!key) return ui.showToast('请选择 Key', 'error');
+      const ok = await ui.confirmDialog({ title: '删除确认', text: '确认删除 Key「' + key + '」吗？此操作不可撤销。', okText: '删除', tone: 'danger' });
+      if (!ok) return;
+      try {
+        await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(key)), { method: 'DELETE' }, abortHub, 'delete');
+        ui.showToast('已删除 ' + key, 'success');
+        state.checkedKeys.delete(key);
+        resetDetail();
+        await loadKeys();
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('删除失败: ' + e.message, 'error');
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Create key modal
+       ═══════════════════════════════════════════════ */
+    function openCreateModal() {
+      const html =
+        '<h3 class="text-sm font-black mb-3">新建 Key</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="storage-section-title">Key 名称</label><input id="ckName" class="input mono" placeholder="例如 user:1234 或 config/app" style="margin-top:4px" /></div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="storage-section-title">值类型</label><select id="ckMode" class="select" style="margin-top:4px"><option value="json">JSON</option><option value="text">Text</option><option value="base64">Base64</option></select></div>' +
+            '<div><label class="storage-section-title">TTL 秒数</label><input id="ckTTL" type="number" min="0" class="input" placeholder="留空永久" style="margin-top:4px" /></div>' +
+          '</div>' +
+          '<div><label class="storage-section-title">Value</label><textarea id="ckVal" rows="8" class="textarea mono" placeholder="输入值内容…" style="margin-top:4px;min-height:160px"></textarea></div>' +
+          '<div class="flex justify-end gap-2">' +
+            '<button class="btn btn-secondary _mc">取消</button>' +
+            '<button class="btn btn-primary _mo">创建</button>' +
+          '</div>' +
+        '</div>';
+      const ov = showModal(html, true);
+      ov.querySelector('._mc').onclick = () => ov.remove();
+      ov.querySelector('._mo').onclick = async () => {
+        const name = $('ckName').value.trim();
+        if (!name) return ui.showToast('请输入 Key 名称', 'error');
+        const mode = $('ckMode').value;
+        const raw = $('ckVal').value;
+        const ttl = $('ckTTL').value.trim();
+        let value = raw;
+        if (mode === 'json') { try { value = JSON.parse(raw || 'null'); } catch (e) { return ui.showToast('JSON 解析失败: ' + e.message, 'error'); } }
+        try {
+          await ui.request(clientUrl('/admin/api/storage/kv/item?key=' + encodeURIComponent(name)), {
+            method: 'PUT', body: JSON.stringify({ mode, value, expire_seconds: ttl ? Number(ttl) : null }),
+          }, abortHub, 'create');
+          ui.showToast('已创建 ' + name, 'success');
+          ov.remove();
+          state.selectedKey = name;
+          await loadKeys();
+          await selectKey(name);
+        } catch (e) {
+          if (e?.name !== 'AbortError') ui.showToast('创建失败: ' + e.message, 'error');
+        }
+      };
+      setTimeout(() => { const inp = ov.querySelector('#ckName'); if (inp) inp.focus(); }, 100);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Advanced search
+       ═══════════════════════════════════════════════ */
+    function applyAdvancedSearch() {
+      if ($('prefixInput')) $('prefixInput').value = $('advPrefix')?.value.trim() || '';
+      state.searchFilters.wildcard = !!$('advWildcard')?.checked;
+      state.searchFilters.valueKind = $('advValueKind')?.value || '';
+      state.searchFilters.ttlState = $('advTTLState')?.value || '';
+      state.searchFilters.minTTL = $('advMinTTL')?.value.trim() || '';
+      state.searchFilters.maxTTL = $('advMaxTTL')?.value.trim() || '';
+      syncSearchInputs();
+      $('pageInput').value = 1;
+      renderFilterSummary();
+      setAdvancedSearchOpen(false);
+      loadKeys();
+    }
+
+    function resetAdvancedSearch(closePanel) {
+      if ($('prefixInput')) $('prefixInput').value = '';
+      state.searchFilters = { q: '', wildcard: true, valueKind: '', ttlState: '', minTTL: '', maxTTL: '' };
+      syncSearchInputs();
+      syncAdvancedSearchForm();
+      if (closePanel) setAdvancedSearchOpen(false);
+      $('pageInput').value = 1;
+      renderFilterSummary();
+      loadKeys();
+    }
+
+    /* ═══════════════════════════════════════════════
+       Prefix delete
+       ═══════════════════════════════════════════════ */
+    async function doPrefixDelete(dryRun) {
+      const prefix = $('prefixInput').value.trim();
+      if (dryRun) {
+        try {
+          const d = await ui.request(clientUrl('/admin/api/storage/kv/delete-by-prefix'), {
+            method: 'POST', body: JSON.stringify({ prefix, dry_run: true, limit: 200 }),
+          }, abortHub, 'dry-delete');
+          let list = '';
+          if (d.keys && d.keys.length) {
+            list = '<div class="dry-list">' + d.keys.map((k) => '<div>' + esc(k) + '</div>').join('') + '</div>';
+          }
+          const totalMatched = d.matched_total != null ? d.matched_total : (d.matched || 0);
+          const truncatedText = d.truncated ? '<div class="text-xs mt-2" style="color:var(--muted)">结果已按 limit 截断。</div>' : '';
+          const extra = '<div class="text-xs" style="color:var(--muted)">前缀「<strong class="mono">' + esc(prefix || '(空)') + '</strong>」共匹配 <strong>' + totalMatched + '</strong> 项</div>' + truncatedText + list;
+          const html =
+            '<h3 class="text-sm font-black mb-3">前缀试删预览</h3>' + extra +
+            '<div class="flex justify-end gap-2 mt-4">' +
+              '<button class="btn btn-secondary _mc">取消</button>' +
+              '<button class="btn btn-danger _mo">确认删除</button>' +
+            '</div>';
+          const ov = showModal(html, true);
+          ov.querySelector('._mc').onclick = () => ov.remove();
+          ov.querySelector('._mo').onclick = async () => { ov.remove(); await execPrefixDelete(prefix); };
+        } catch (e) {
+          if (e?.name !== 'AbortError') ui.showToast('前缀试删失败: ' + e.message, 'error');
+        }
+      } else {
+        const ok = await ui.confirmDialog({ title: '前缀删除', text: '确认删除前缀「' + (prefix || '(空)') + '」下的所有 Key 吗？此操作不可撤销。', okText: '前缀删除', tone: 'danger' });
+        if (ok) await execPrefixDelete(prefix);
+      }
+    }
+
+    async function execPrefixDelete(prefix) {
+      try {
+        const d = await ui.request(clientUrl('/admin/api/storage/kv/delete-by-prefix'), {
+          method: 'POST', body: JSON.stringify({ prefix, dry_run: false }),
+        }, abortHub, 'prefix-delete');
+        ui.showToast('已删除 ' + (d.deleted || 0) + ' / ' + ((d.matched_total != null ? d.matched_total : d.matched) || 0) + ' 项', d.truncated ? 'warn' : 'success');
+        resetDetail();
+        await loadKeys();
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('前缀删除失败: ' + e.message, 'error');
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Cleanup expired
+       ═══════════════════════════════════════════════ */
+    async function cleanupExpired() {
+      const ok = await ui.confirmDialog({ title: '清理过期数据', text: '确认对当前 KV client 执行 cleanup 吗？', okText: '清理', tone: 'primary' });
+      if (!ok) return;
+      try {
+        const d = await ui.request(clientUrl('/admin/api/storage/kv/cleanup'), { method: 'POST' }, abortHub, 'cleanup');
+        ui.showToast('已清理 ' + (d.removed || 0) + ' 项过期记录', 'success');
+        await loadKeys();
+      } catch (e) {
+        if (e?.name !== 'AbortError') ui.showToast('清理失败: ' + e.message, 'error');
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Format / Copy / Download
+       ═══════════════════════════════════════════════ */
+    function formatJson() {
+      if ($('valueModeInput').value !== 'json') return ui.showToast('仅 JSON 模式支持格式化', 'warn');
+      try {
+        const obj = JSON.parse($('valueEditor').value || 'null');
+        $('valueEditor').value = JSON.stringify(obj, null, 2);
+        updateCharCount();
+        ui.showToast('JSON 已格式化', 'success');
+      } catch (e) {
+        ui.showToast('JSON 格式化失败: ' + e.message, 'error');
+      }
+    }
+
+    async function copyValue() {
+      const val = $('valueEditor').value;
+      if (!val) return ui.showToast('当前没有内容可复制', 'warn');
+      try { await navigator.clipboard.writeText(val); ui.showToast('已复制到剪贴板', 'success'); }
+      catch { ui.showToast('复制失败', 'error'); }
+    }
+
+    function downloadValue() {
+      const val = $('valueEditor').value;
+      if (!val) return ui.showToast('当前没有内容可下载', 'warn');
+      const key = $('keyNameInput').value.trim() || 'value';
+      const mode = $('valueModeInput').value;
+      const ext = mode === 'json' ? '.json' : mode === 'base64' ? '.bin' : '.txt';
+      if (mode === 'base64') {
+        try {
+          const bin = atob(val);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          dlBlob(new Blob([bytes], { type: 'application/octet-stream' }), safeFn(key) + ext);
+        } catch { dlBlob(new Blob([val], { type: 'text/plain' }), safeFn(key) + '.txt'); }
+      } else {
+        dlBlob(new Blob([val], { type: mode === 'json' ? 'application/json' : 'text/plain' }), safeFn(key) + ext);
+      }
+      ui.showToast('已下载', 'success');
+    }
+
+    /* ═══════════════════════════════════════════════
+       Bind events
+       ═══════════════════════════════════════════════ */
+    function bind() {
+      ui.applyTheme('storage:kv:dark');
+      icons.mount(document);
+      syncSearchInputs();
+      ui.initSegmentedTabs(document);
+      document.querySelectorAll('[data-workspace-section]').forEach((node) => {
+        node.addEventListener('click', () => setWorkspaceSection(node.getAttribute('data-workspace-section')));
+      });
+
+      // Header
+      $('autoRefreshSelect').onchange = () => {
+        state.autoRefreshMs = Number($('autoRefreshSelect').value || 0);
+        scheduleAutoRefresh();
+      };
+      setClick('analysisFilterBtn', () => {
+        setWorkspaceSection('data');
+        requestAnimationFrame(() => {
+          setFiltersPanelOpen(true);
+          $('qFilterInput')?.focus();
+        });
+      });
+      setClick('analysisClearFiltersBtn', () => {
+        resetAdvancedSearch(true);
+        requestAnimationFrame(() => renderAnalysisWorkspace());
+      });
+      setClick('refreshAllBtn', () => refreshCurrentSelection(false));
+
+      // Search tools
+      setClick('refreshBtn', () => refreshCurrentSelection(false));
+      setClick('createBtn', openCreateModal);
+      setClick('openFilterBtn', (event) => {
+        event.stopPropagation();
+        setAdvancedSearchOpen(!state.searchFiltersOpen);
+      });
+      setClick('searchApplyBtn', () => applyInlineFilters(true));
+      setClick('clearSearchBtn', clearInlineFilters);
+      setClick('closeFilterPanelBtn', () => setAdvancedSearchOpen(false));
+      setClick('applyFiltersBtn', applyAdvancedSearch);
+      setClick('resetFiltersBtn', () => resetAdvancedSearch(false));
+      setClick('exportBtn', exportVisibleKeys);
+      ['importInput', 'importInputLabelProxy'].forEach((id) => {
+        const node = $(id);
+        if (!node) return;
+        node.onchange = (e) => { importKeys(e.target.files?.[0]); e.target.value = ''; };
+      });
+      setClick('databaseRefreshBtn', () => refreshCurrentSelection(false));
+      setClick('databaseCleanupBtn', cleanupExpired);
+      setClick('cleanupBtn', cleanupExpired);
+      setClick('databaseExportBtn', exportVisibleKeys);
+      setClick('dbCreateBtn', openCreateModal);
+      setClick('dbBatchTtlBtn', openBatchTTLModal);
+      setClick('dbDryDeleteBtn', () => doPrefixDelete(true));
+      setClick('dbPrefixDeleteBtn', () => doPrefixDelete(false));
+
+      // Prefix input
+      const pi = $('prefixInput');
+      let debounceTimer = null;
+      pi.addEventListener('focus', showHist);
+      pi.addEventListener('blur', hideHist);
+      pi.addEventListener('input', () => {
+        showHist();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => { $('pageInput').value = 1; loadKeys(); }, 300);
+      });
+      pi.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { $('searchHistoryDD').style.display = 'none'; $('pageInput').value = 1; loadKeys(); }
+      });
+      $('qFilterInput').addEventListener('input', () => updateAdvancedQueryHint());
+      $('qFilterInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyInlineFilters(true); } });
+      ['advPrefix', 'advMinTTL', 'advMaxTTL'].forEach((id) => {
+        $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyAdvancedSearch(); } });
+      });
+      ['advWildcard', 'advValueKind', 'advTTLState'].forEach((id) => {
+        $(id).addEventListener('change', () => {
+          if (id === 'advWildcard') updateAdvancedQueryHint();
+        });
+      });
+      $('pageInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadKeys(); });
+
+      // Key list
+      $('pageSizeInput').onchange = () => { $('pageInput').value = 1; loadKeys(); };
+
+      // Key list
+      setClick('viewListBtn', () => setViewMode('list'));
+      setClick('viewTreeBtn', () => setViewMode('tree'));
+      setClick('treeDelimiterBtn', openTreeDelimiterModal);
+      setClick('sortNameBtn', () => toggleSort('name'));
+      setClick('sortTtlBtn', () => toggleSort('ttl'));
+      setClick('prevPageBtn', () => goPage(-1));
+      setClick('nextPageBtn', () => goPage(1));
+
+      // Batch
+      setClick('batchDeleteBtn', batchDelete);
+      setClick('batchTTLBtn', openBatchTTLModal);
+      setClick('batchExportBtn', batchExport);
+      setClick('selectAllBtn', selectAllKeys);
+      setClick('deselectAllBtn', deselectAllKeys);
+
+      // Detail
+      setClick('updateTTLBtn', updateTTLOnly);
+      setClick('tabEdit', () => setEditorTab('edit'));
+      setClick('tabPreview', () => setEditorTab('preview'));
+      setClick('duplicateBtn', () => openKeyTransferModal('copy'));
+      setClick('renameBtn', () => openKeyTransferModal('rename'));
+      setClick('editBtn', () => {
+        setDetailEditMode(true);
+        setEditorTab('edit');
+      });
+      setClick('cancelEditBtn', () => {
+        if (state.selectedKey) selectKey(state.selectedKey, true);
+      });
+      setClick('formatJsonBtn', formatJson);
+      setClick('copyBtn', copyValue);
+      setClick('downloadBtn', downloadValue);
+      const refreshPanelsFromEditor = ui.debounce(() => {
+        if (state.editorTab === 'preview') setEditorTab('preview');
+      }, 180);
+      $('previewPanel').addEventListener('click', () => {
+        if (!state.detailEditMode && state.detailEditable) activateDetailEditing(state.detailStructuredAvailable ? 'preview' : 'edit');
+      });
+      $('valueEditor').addEventListener('focus', () => {
+        if (!state.detailEditMode && state.detailEditable) activateDetailEditing('edit');
+      });
+      $('valueEditor').addEventListener('input', () => {
+        updateCharCount();
+        if ($('valueModeInput').value === 'json') refreshPanelsFromEditor();
+      });
+      setClick('saveBtn', saveItem);
+      setClick('deleteBtn', confirmDeleteCurrent);
+
+      // Hide search history on outside click
+      document.addEventListener('click', (e) => {
+        if (!$('prefixWrapper').contains(e.target)) $('searchHistoryDD').style.display = 'none';
+        if (state.searchFiltersOpen && !$('kvSearchShell').contains(e.target)) setAdvancedSearchOpen(false);
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        const tag = document.activeElement?.tagName || '';
+        const inModal = !!document.querySelector('.modal-overlay');
+
+        if (e.key === 'Escape') {
+          if (inModal) { const m = document.querySelector('.modal-overlay'); if (m) m.remove(); return; }
+          $('searchHistoryDD').style.display = 'none';
+          if (state.searchFiltersOpen) setAdvancedSearchOpen(false);
+          return;
+        }
+        if (inModal) return;
+
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveItem(); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); openCreateModal(); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); pi.focus(); pi.select(); return; }
+
+        if (e.key === 'Delete' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) {
+          e.preventDefault();
+          if (state.checkedKeys.size) batchDelete();
+          else if (state.selectedKey) confirmDeleteCurrent();
+          return;
+        }
+        if (e.key === 'F2' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) && state.selectedKey) {
+          e.preventDefault();
+          openKeyTransferModal('rename');
+          return;
+        }
+
+        // Arrow keys in key list
+        const kl = $('keyList');
+        if (document.activeElement === kl || kl.contains(document.activeElement)) {
+          const items = sortedFiltered();
+          if (!items.length) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); state.keyListFocusIdx = Math.min(state.keyListFocusIdx + 1, items.length - 1); selectKey(items[state.keyListFocusIdx].key); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); state.keyListFocusIdx = Math.max(state.keyListFocusIdx - 1, 0); selectKey(items[state.keyListFocusIdx].key); }
+        }
+
+        if (e.key === 'Enter' && !['TEXTAREA'].includes(tag)) { e.preventDefault(); loadKeys(); }
+      });
+    }
+
+    /* ═══════════════════════════════════════════════
+       Init
+       ═══════════════════════════════════════════════ */
+    async function init() {
+      bind();
+      ui.initCollapsibles(document, 'storage:kv:fold');
+      initKeyBrowserResizer();
+      updateSortUI();
+      syncKeyBrowserViewMode();
+      updateTreeDelimiterButton();
+      state.autoRefreshMs = Number($('autoRefreshSelect')?.value || 0);
+      scheduleAutoRefresh();
+      setWorkspaceSection(state.workspaceSection, true);
+      await loadClients();
+      await loadConfig();
+      await loadKeys();
+    }
+
+    init().catch((e) => ui.showToast('初始化失败: ' + e.message, 'error'));
+  </script>
+</body>
+</html>

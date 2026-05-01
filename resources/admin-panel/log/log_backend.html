@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>后端日志分析</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <link rel="stylesheet" href="/html-assets/css/log-shared.css"/>
+  <script src="/vendor/chart/chart.js"></script>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="log-page">
+  <div id="page-banner" class="log-banner info log-hidden"></div>
+
+  <details class="log-fold log-card" open>
+    <summary><div><div class="log-fold-title">分析条件</div></div></summary>
+    <div class="log-fold-body log-filter-grid cols-7">
+          <div>
+            <label class="log-label">时间范围</label>
+            <select id="f-hours" class="log-select">
+              <option value="1">最近 1 小时</option>
+              <option value="6">最近 6 小时</option>
+              <option value="24" selected>最近 24 小时</option>
+              <option value="72">最近 3 天</option>
+              <option value="168">最近 7 天</option>
+            </select>
+          </div>
+          <div>
+            <label class="log-label">时间粒度</label>
+            <select id="f-bucket" class="log-select">
+              <option value="5">5 分钟</option>
+              <option value="15">15 分钟</option>
+              <option value="30">30 分钟</option>
+              <option value="60" selected>1 小时</option>
+              <option value="180">3 小时</option>
+            </select>
+          </div>
+          <div>
+            <label class="log-label">分析模式</label>
+            <select id="f-mode" class="log-select" onchange="refreshAnalytics()">
+              <option value="level" selected>按级别</option>
+              <option value="logger">按日志器</option>
+            </select>
+          </div>
+          <div>
+            <label class="log-label">最小级别</label>
+            <select id="f-level" class="log-select">
+              <option value="">全部</option>
+              <option value="INFO">INFO+</option>
+              <option value="WARNING">WARNING+</option>
+              <option value="ERROR">ERROR+</option>
+              <option value="CRITICAL">CRITICAL</option>
+            </select>
+          </div>
+          <div>
+            <label class="log-label">关键词</label>
+            <input id="f-search" class="log-input" placeholder="消息内容搜索"/>
+          </div>
+          <div>
+            <label class="log-label">日志器</label>
+            <input id="f-name" class="log-input" placeholder="logger 名称筛选"/>
+          </div>
+          <div class="flex items-end gap-2">
+            <button class="log-btn log-btn-primary w-full" onclick="loadLogs()">过滤</button>
+          </div>
+    </div>
+  </details>
+
+  <div id="disabled-card" class="log-card log-hidden" style="padding:16px;color:var(--log-text-muted)">
+    当前环境未启用数据库日志，无法进行后端日志分析。
+  </div>
+
+  <div id="main-panels" class="flex flex-col gap-3">
+    <div id="tab-overview" class="log-tab-panel active flex flex-col gap-3">
+      <details class="log-card log-fold" open>
+        <summary><div><div class="log-fold-title">概览指标</div></div></summary>
+        <div class="log-fold-body">
+          <div class="log-metrics" style="margin:0">
+            <div class="log-card log-metric"><div class="log-metric-title">日志总量</div><div id="m-total" class="log-metric-value">—</div><div id="m-window" class="log-metric-sub">—</div></div>
+            <div class="log-card log-metric"><div class="log-metric-title">24h WARNING</div><div id="m-warning-24h" class="log-metric-value text-amber-600">—</div><div class="log-metric-sub">最近 24 小时</div></div>
+            <div class="log-card log-metric"><div class="log-metric-title">24h ERROR</div><div id="m-error-24h" class="log-metric-value text-red-600">—</div><div class="log-metric-sub">最近 24 小时</div></div>
+            <div class="log-card log-metric"><div class="log-metric-title">WARNING / ERROR</div><div id="m-warning-error" class="log-metric-value text-amber-600">—</div><div id="m-critical" class="log-metric-sub">CRITICAL：—</div></div>
+            <div class="log-card log-metric"><div class="log-metric-title">错误率</div><div id="m-error-rate" class="log-metric-value text-red-600">—</div><div id="m-top-level" class="log-metric-sub">最常见级别：—</div></div>
+            <div class="log-card log-metric"><div class="log-metric-title">主导日志器</div><div id="m-top-logger" class="log-metric-value" style="color:var(--log-text)">—</div><div id="m-logger-count" class="log-metric-sub">—</div></div>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div id="tab-analysis" class="log-tab-panel flex flex-col gap-3">
+      <details class="log-card log-fold">
+        <summary><div><div class="log-fold-title">分析表</div></div></summary>
+        <div class="log-fold-body">
+          <div class="log-scroll-panel log-scroll-panel-lg">
+            <table class="log-table">
+              <thead><tr><th>分组</th><th>数量</th><th>WARNING</th><th>ERROR</th><th>CRITICAL</th><th>最近时间</th></tr></thead>
+              <tbody id="overview-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+      <details class="log-card log-fold" open>
+        <summary><div><div class="log-fold-title">时段统计表</div></div></summary>
+        <div class="log-fold-body">
+          <div class="log-scroll-panel log-scroll-panel-md">
+            <table class="log-table">
+              <thead><tr><th>时段</th><th>总量</th><th>WARNING</th><th>ERROR</th><th>CRITICAL</th></tr></thead>
+              <tbody id="timeline-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+      <details class="log-card log-fold">
+        <summary><div><div class="log-fold-title">分析图表</div></div></summary>
+        <div class="log-fold-body flex flex-col gap-3">
+          <div class="log-chart-grid">
+            <div class="log-card log-chart-card"><div class="log-section-title">级别分布</div><div class="log-chart-wrap"><canvas id="level-chart" height="128"></canvas><div id="level-chart-state" class="log-chart-empty log-hidden"></div></div></div>
+            <div class="log-card log-chart-card"><div class="log-section-title">Top 日志器</div><div class="log-chart-wrap"><canvas id="logger-chart" height="128"></canvas><div id="logger-chart-state" class="log-chart-empty log-hidden"></div></div></div>
+          </div>
+          <div class="log-chart-grid">
+            <div class="log-card log-chart-card"><div class="log-section-title">WARNING / ERROR / CRITICAL 时段走势</div><div class="log-chart-wrap"><canvas id="timeline-chart" height="132"></canvas><div id="timeline-chart-state" class="log-chart-empty log-hidden"></div></div></div>
+            <div class="log-card log-chart-card"><div class="log-section-title">当前分析模式时段对比</div><div class="log-chart-wrap"><canvas id="mode-timeline-chart" height="132"></canvas><div id="mode-timeline-chart-state" class="log-chart-empty log-hidden"></div></div></div>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div id="tab-logs" class="log-tab-panel flex flex-col gap-3">
+      <div class="log-card log-card-toolbar">
+        <div class="flex items-center gap-2" style="font-size:11px;color:var(--log-text-muted)">
+          <span>日志明细</span>
+          <span>·</span>
+          <span>分页大小</span>
+          <select id="logs-page-size" class="log-select" style="width:auto" onchange="loadLogsPage(0)">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+          </select>
+          <span id="logs-page-info">—</span>
+        </div>
+        <div class="flex gap-2">
+          <button id="logs-prev-btn" class="log-pager-btn" onclick="loadLogsPage(pageState.offset - pageState.limit)">上一页</button>
+          <button id="logs-next-btn" class="log-pager-btn" onclick="loadLogsPage(pageState.offset + pageState.limit)">下一页</button>
+        </div>
+      </div>
+      <details class="log-card log-fold" open>
+        <summary><div><div class="log-fold-title">日志明细表</div></div></summary>
+        <div class="log-fold-body">
+          <div class="log-scroll-panel log-scroll-panel-xl">
+            <table id="logs-table" class="log-table log-table-detail log-table-resizable">
+              <colgroup>
+                <col style="width:120px" />
+                <col style="width:64px" />
+                <col style="width:240px" />
+                <col style="width:60px" />
+                <col />
+                <col style="width:48px" />
+              </colgroup>
+              <thead><tr><th>时间</th><th>级别</th><th>日志器</th><th>PID</th><th>消息</th><th>详情</th></tr></thead>
+              <tbody id="logs-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div id="detail-modal" class="log-modal-overlay" onclick="if(event.target===this)closeDetail()">
+    <div class="log-modal-box">
+      <div class="flex items-center justify-between gap-3">
+        <div style="font-size:15px;font-weight:800">日志详情</div>
+        <button class="log-btn log-btn-secondary" onclick="closeDetail()">关闭</button>
+      </div>
+      <div id="detail-body"></div>
+    </div>
+  </div>
+
+<script>
+'use strict';
+
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const COLORS = ['#94a3b8','#3b82f6','#f59e0b','#ef4444','#ec4899','#10b981','#8b5cf6','#14b8a6'];
+const CACHE_PREFIX = 'proj-log-ui';
+const LEVEL_ORDER = ['DEBUG','INFO','WARNING','ERROR','CRITICAL'];
+const LEVEL_COLORS = ['#94a3b8','#3b82f6','#f59e0b','#ef4444','#ec4899'];
+let aggregate = null;
+let detailLogs = [];
+let charts = { level:null, logger:null, timeline:null, modeTimeline:null };
+let dbEnabled = true;
+let serverMeta = null;
+let pageState = { offset:0, limit:100, hasMore:false, returned:0, total:0 };
+
+function setBanner(kind, message) {
+  const el = document.getElementById('page-banner');
+  if (!message) {
+    el.className = 'log-banner info log-hidden';
+    el.textContent = '';
+    return;
+  }
+  el.className = `log-banner ${kind || 'info'}`;
+  el.textContent = message;
+}
+
+function cleanupOldCache(instanceUuid) {
+  const prefix = `${CACHE_PREFIX}:`;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    if (!key.startsWith(`${prefix}${instanceUuid}:`)) localStorage.removeItem(key);
+  }
+}
+
+function cacheKey(name) {
+  if (!serverMeta?.instance_uuid) return null;
+  return `${CACHE_PREFIX}:${serverMeta.instance_uuid}:${name}`;
+}
+
+function readCache(name) {
+  const key = cacheKey(name);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.instance_uuid !== serverMeta.instance_uuid || (parsed.expires_at && parsed.expires_at < Date.now())) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(name, data, ttlMs) {
+  const key = cacheKey(name);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ instance_uuid: serverMeta.instance_uuid, expires_at: Date.now() + ttlMs, data }));
+  } catch {}
+}
+
+async function ensureServerMeta() {
+  if (serverMeta) return serverMeta;
+  const resp = await fetch('/admin/api/logs/config');
+  if (!resp.ok) throw new Error(await resp.text());
+  const cfg = await resp.json();
+  dbEnabled = !!(cfg.db_enabled || cfg.sqlite_enabled);
+  serverMeta = {
+    instance_uuid: cfg.instance_uuid,
+    server_start_time: cfg.server_start_time,
+    worker_pid: cfg.worker_pid,
+    cache_scope: cfg.cache_scope,
+  };
+  cleanupOldCache(serverMeta.instance_uuid);
+  return serverMeta;
+}
+
+function setChartState(canvasId, stateId, message) {
+  const canvas = document.getElementById(canvasId);
+  const state = document.getElementById(stateId);
+  if (message) {
+    canvas.classList.add('log-hidden');
+    state.classList.remove('log-hidden');
+    state.textContent = message;
+  } else {
+    canvas.classList.remove('log-hidden');
+    state.classList.add('log-hidden');
+    state.textContent = '';
+  }
+}
+
+function setTbodyState(id, colspan, message) {
+  document.getElementById(id).innerHTML = `<tr><td colspan="${colspan}" class="text-center py-6" style="color:var(--log-text-muted)">${esc(message)}</td></tr>`;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.log-tab-btn').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  document.querySelectorAll('.log-tab-panel').forEach(el => el.classList.toggle('active', el.id === 'tab-' + tab));
+}
+
+// Map sidebar route /admin/log/<key> to the internal tab and page title.
+(function applySidebarRoute() {
+  const path = (window.location.pathname || '').toLowerCase();
+  const map = {
+    '/admin/log/analysis': { tab: 'analysis', title: '后端日志 · 分析' },
+    '/admin/log/detail':   { tab: 'logs',     title: '后端日志 · 详情' },
+    '/admin/log/backend':  { tab: 'overview', title: '后端日志分析' },
+  };
+  const hit = map[path];
+  if (!hit) return;
+  const titleEl = document.getElementById('log-page-title');
+  if (titleEl) titleEl.textContent = hit.title;
+  switchTab(hit.tab);
+})();
+
+// ── resizable table columns (drag the small grip on each th right edge). ──
+(function enableTableColumnResize() {
+  const STORAGE_KEY = 'proj-log-ui:logs-table:colwidths';
+  const table = document.getElementById('logs-table');
+  if (!table) return;
+  const colgroup = table.querySelector('colgroup');
+  const ths = table.querySelectorAll('thead th');
+  if (!colgroup || !ths.length) return;
+  const cols = colgroup.querySelectorAll('col');
+
+  // restore persisted widths
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (Array.isArray(saved) && saved.length === cols.length) {
+      saved.forEach((w, i) => { if (w) cols[i].style.width = w + 'px'; });
+    }
+  } catch { /* ignore */ }
+
+  const persist = () => {
+    const widths = Array.from(cols).map(c => parseInt(c.style.width, 10) || c.getBoundingClientRect().width | 0);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(widths)); } catch { /* ignore */ }
+  };
+
+  ths.forEach((th, idx) => {
+    if (idx >= cols.length - 1) return; // last column auto-fills
+    const handle = document.createElement('span');
+    handle.className = 'col-resizer';
+    th.appendChild(handle);
+    handle.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      const startX = ev.clientX;
+      const startW = th.getBoundingClientRect().width;
+      handle.classList.add('active');
+      table.classList.add('col-resizing');
+      const onMove = (e) => {
+        const next = Math.max(32, Math.round(startW + (e.clientX - startX)));
+        cols[idx].style.width = next + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        handle.classList.remove('active');
+        table.classList.remove('col-resizing');
+        persist();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    handle.addEventListener('dblclick', () => {
+      cols[idx].style.width = '';
+      persist();
+    });
+  });
+})();
+
+function formatDurationCount(value) {
+  return Number.isFinite(value) ? String(value) : '—';
+}
+
+function hoursWindow(hours) {
+  const now = Date.now();
+  return { since: new Date(now - hours * 3600 * 1000), until: new Date(now) };
+}
+
+function toLocalDateStr(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function parseLogDate(row) {
+  const raw = row?.timestamp;
+  if (!raw) return null;
+  const d = new Date(String(raw).replace(' ', 'T'));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function levelNoThreshold(level) {
+  return ({ INFO:20, WARNING:30, ERROR:40, CRITICAL:50 }[level] || null);
+}
+
+async function checkConfig() {
+  try {
+    await ensureServerMeta();
+  } catch {
+    dbEnabled = false;
+  }
+  document.getElementById('disabled-card').classList.toggle('log-hidden', dbEnabled);
+  document.getElementById('main-panels').classList.toggle('log-hidden', !dbEnabled);
+  if (dbEnabled) {
+    await loadAnalytics(false);
+    await loadLogsPage(0);
+  }
+}
+
+function analyticsCacheName() {
+  const hours = Number(document.getElementById('f-hours').value || 24);
+  const bucket = Number(document.getElementById('f-bucket').value || 60);
+  const level = document.getElementById('f-level').value || 'all';
+  const search = document.getElementById('f-search').value.trim().toLowerCase() || '-';
+  const name = document.getElementById('f-name').value.trim().toLowerCase() || '-';
+  return `backend:agg:${hours}:${bucket}:${level}:${search}:${name}`;
+}
+
+async function loadAnalytics(forceFresh = false) {
+  if (!dbEnabled) return;
+  const hours = Number(document.getElementById('f-hours').value || 24);
+  const bucket = Number(document.getElementById('f-bucket').value || 60);
+  const params = new URLSearchParams({
+    hours: String(hours),
+    bucket_minutes: String(bucket),
+    top_loggers: '10',
+  });
+  const level = document.getElementById('f-level').value;
+  const search = document.getElementById('f-search').value.trim();
+  const name = document.getElementById('f-name').value.trim();
+  const minLevel = levelNoThreshold(level);
+  if (minLevel != null) params.set('min_levelno', String(minLevel));
+  if (search) params.set('search', search);
+  if (name) params.set('name', name);
+  const cacheName = analyticsCacheName();
+  const cached = readCache(cacheName);
+  if (!forceFresh && cached) {
+    aggregate = cached;
+    refreshAnalytics();
+  }
+  try {
+    if (!cached) setBanner('info', '后端日志分析加载中…');
+    const resp = await fetch('/admin/api/logs/aggregate?' + params.toString());
+    if (!resp.ok) throw new Error(await resp.text());
+    aggregate = await resp.json();
+    writeCache(cacheName, aggregate, 30000);
+    refreshAnalytics();
+  } catch (err) {
+    if (!cached) {
+      aggregate = null;
+      refreshAnalytics();
+    }
+    setBanner('err', `后端日志分析加载失败：${err.message || err}`);
+  }
+}
+
+function currentMode() {
+  return document.getElementById('f-mode').value;
+}
+
+function destroyChart(name) {
+  if (charts[name]) { charts[name].destroy(); charts[name] = null; }
+}
+
+function renderMetrics() {
+  const m = (aggregate && aggregate.metrics) || {};
+  const window = (aggregate && aggregate.window) || {};
+  const hoursVal = Number(document.getElementById('f-hours').value || 24);
+  const cached = window.cached_buckets ?? 0;
+  const fetched = (window.fetched_buckets ?? 1) - 1;  // exclude open bucket
+  const total = cached + fetched;
+  document.getElementById('m-total').textContent = String(m.total ?? 0);
+  document.getElementById('m-window').textContent = total
+    ? `最近 ${hoursVal} 小时 · 缓存命中 ${cached}/${total}`
+    : `最近 ${hoursVal} 小时`;
+  document.getElementById('m-warning-24h').textContent = String(m.warning_24h ?? 0);
+  document.getElementById('m-error-24h').textContent = String(m.error_24h ?? 0);
+  document.getElementById('m-warning-error').textContent = `${m.warning ?? 0} / ${m.error ?? 0}`;
+  document.getElementById('m-critical').textContent = `CRITICAL：${m.critical ?? 0}`;
+  document.getElementById('m-error-rate').textContent = (m.total ?? 0)
+    ? ((((m.error ?? 0) + (m.critical ?? 0)) * 100) / m.total).toFixed(1) + '%'
+    : '—';
+  document.getElementById('m-top-level').textContent = `最常见级别：${m.top_level || '—'}`;
+  document.getElementById('m-top-logger').textContent = m.top_logger || '—';
+  document.getElementById('m-logger-count').textContent = `${m.logger_count ?? 0} 个日志器`;
+}
+
+function renderOverviewTable() {
+  const mode = currentMode();
+  const rows = (aggregate && (mode === 'level' ? aggregate.analysis_by_level : aggregate.analysis_by_logger)) || [];
+  if (!rows.length) {
+    setTbodyState('overview-tbody', 6, '当前条件下暂无日志');
+    return;
+  }
+  document.getElementById('overview-tbody').innerHTML = rows.map(row => `
+    <tr>
+      <td class="font-semibold">${esc(row.group)}</td>
+      <td>${row.count}</td>
+      <td class="text-amber-600">${row.WARNING}</td>
+      <td class="text-red-600">${row.ERROR}</td>
+      <td class="text-pink-600">${row.CRITICAL}</td>
+      <td class="log-mono" style="color:var(--log-text-muted)">${esc(row.last || '—')}</td>
+    </tr>`).join('');
+}
+
+function renderOverviewCharts() {
+  destroyChart('level');
+  destroyChart('logger');
+  const levelDist = (aggregate && aggregate.level_dist) || {};
+  const topLoggers = (aggregate && aggregate.top_loggers) || [];
+  const totalLevel = LEVEL_ORDER.reduce((acc, l) => acc + (levelDist[l] || 0), 0);
+  if (!totalLevel && !topLoggers.length) {
+    setChartState('level-chart', 'level-chart-state', '当前条件下暂无图表数据');
+    setChartState('logger-chart', 'logger-chart-state', '当前条件下暂无图表数据');
+    return;
+  }
+  setChartState('level-chart', 'level-chart-state', totalLevel ? '' : '暂无级别分布');
+  setChartState('logger-chart', 'logger-chart-state', topLoggers.length ? '' : '暂无日志器数据');
+  if (totalLevel) {
+    charts.level = new Chart(document.getElementById('level-chart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: LEVEL_ORDER,
+        datasets: [{
+          label: '日志数量',
+          data: LEVEL_ORDER.map(l => levelDist[l] || 0),
+          backgroundColor: LEVEL_COLORS,
+          borderRadius: 8,
+          maxBarThickness: 26,
+        }]
+      },
+      options: { plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+    });
+  }
+  if (topLoggers.length) {
+    const top10 = topLoggers.slice(0, 10);
+    charts.logger = new Chart(document.getElementById('logger-chart').getContext('2d'), {
+      type: 'bar',
+      data: { labels: top10.map(x => x.name), datasets:[{ label:'日志数', data: top10.map(x => x.count), backgroundColor: COLORS.slice(0, top10.length), borderRadius:8 }] },
+      options: { indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true } } }
+    });
+  }
+}
+
+function renderTimelineCharts() {
+  destroyChart('timeline');
+  destroyChart('modeTimeline');
+  const timeline = (aggregate && aggregate.timeline) || [];
+  const topLoggerNames = (aggregate && aggregate.top_logger_names) || [];
+  if (!timeline.length) {
+    setChartState('timeline-chart', 'timeline-chart-state', '暂无时段数据');
+    setChartState('mode-timeline-chart', 'mode-timeline-chart-state', '暂无时段对比数据');
+    setTbodyState('timeline-tbody', 5, '暂无时段数据');
+    return;
+  }
+  setChartState('timeline-chart', 'timeline-chart-state', '');
+  setChartState('mode-timeline-chart', 'mode-timeline-chart-state', '');
+  const labels = timeline.map(row => new Date(String(row.bucket).replace(' ', 'T')).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }));
+  charts.timeline = new Chart(document.getElementById('timeline-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'WARNING', data: timeline.map(x => x.WARNING), borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.12)', fill:false, tension:.2 },
+        { label:'ERROR', data: timeline.map(x => x.ERROR), borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.12)', fill:false, tension:.2 },
+        { label:'CRITICAL', data: timeline.map(x => x.CRITICAL), borderColor:'#ec4899', backgroundColor:'rgba(236,72,153,.12)', fill:false, tension:.2 },
+      ]
+    },
+    options: { scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ position:'bottom' } } }
+  });
+  const mode = currentMode();
+  let modeDatasets;
+  if (mode === 'level') {
+    modeDatasets = LEVEL_ORDER.map((lvl, idx) => {
+      const data = timeline.map(row => {
+        if (lvl === 'WARNING') return row.WARNING;
+        if (lvl === 'ERROR') return row.ERROR;
+        if (lvl === 'CRITICAL') return row.CRITICAL;
+        return Math.max(0, row.total - row.WARNING - row.ERROR - row.CRITICAL);
+      });
+      return { label: lvl, data, borderColor: LEVEL_COLORS[idx], backgroundColor: LEVEL_COLORS[idx] + '22', fill:false, tension:.2 };
+    }).filter(ds => ds.data.some(v => v > 0));
+  } else {
+    modeDatasets = topLoggerNames.map((nm, idx) => ({
+      label: nm,
+      data: timeline.map(row => (row.by_logger || {})[nm] || 0),
+      borderColor: COLORS[idx % COLORS.length],
+      backgroundColor: COLORS[idx % COLORS.length] + '22',
+      fill: false,
+      tension: .2,
+    }));
+  }
+  charts.modeTimeline = new Chart(document.getElementById('mode-timeline-chart').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: modeDatasets },
+    options: { scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ position:'bottom' } } }
+  });
+  const tbody = document.getElementById('timeline-tbody');
+  tbody.innerHTML = timeline.map(row => `
+    <tr>
+      <td>${esc(new Date(String(row.bucket).replace(' ', 'T')).toLocaleString('zh-CN'))}</td>
+      <td>${row.total}</td>
+      <td class="text-amber-600">${row.WARNING}</td>
+      <td class="text-red-600">${row.ERROR}</td>
+      <td class="text-pink-600">${row.CRITICAL}</td>
+    </tr>`).join('');
+}
+
+function renderLogsTable() {
+  if (!detailLogs.length) {
+    setTbodyState('logs-tbody', 6, '无匹配日志');
+    return;
+  }
+  document.getElementById('logs-tbody').innerHTML = detailLogs.map((row, idx) => `
+    <tr>
+      <td class="log-mono" style="color:var(--log-text-muted)">${esc(row.timestamp || '—')}</td>
+      <td><span class="log-level log-level-${esc(row.level || 'INFO')}">${esc(row.level || '—')}</span></td>
+      <td class="log-mono">${esc(row.name || '—')}</td>
+      <td>${esc(String(row.process || '—'))}</td>
+      <td>${esc(row.message || '')}</td>
+      <td><button class="text-indigo-600 font-semibold" onclick="showDetail(${idx})">查看</button></td>
+    </tr>`).join('');
+}
+
+function showDetail(idx) {
+  const row = detailLogs[idx];
+  if (!row) return;
+  const body = document.getElementById('detail-body');
+  let html = '';
+  [['时间', row.timestamp], ['级别', row.level], ['日志器', row.name], ['PID', row.process], ['消息', row.message]].forEach(([label, value]) => {
+    html += `<div class="log-modal-label">${esc(label)}</div><div class="log-modal-val">${esc(String(value ?? '—'))}</div>`;
+  });
+  if (row.exc_info) {
+    html += `<div class="log-modal-label">异常堆栈</div><div class="log-modal-val log-mono">${esc(String(row.exc_info))}</div>`;
+  }
+  body.innerHTML = html;
+  document.getElementById('detail-modal').style.display = 'flex';
+}
+
+function closeDetail() {
+  document.getElementById('detail-modal').style.display = 'none';
+}
+
+function refreshAnalytics() {
+  renderMetrics();
+  renderOverviewTable();
+  renderOverviewCharts();
+  renderTimelineCharts();
+  setBanner('', '');
+}
+
+async function loadLogs() {
+  await loadAnalytics(true);
+  await loadLogsPage(0);
+}
+
+async function loadLogsPage(offset = 0) {
+  if (!dbEnabled) return;
+  const hours = Number(document.getElementById('f-hours').value || 24);
+  const limit = Number(document.getElementById('logs-page-size').value || 100);
+  const params = new URLSearchParams({ limit: String(limit), offset: String(Math.max(0, offset)), order: 'DESC' });
+  const level = document.getElementById('f-level').value;
+  const search = document.getElementById('f-search').value.trim();
+  const name = document.getElementById('f-name').value.trim();
+  const { since, until } = hoursWindow(hours);
+  params.set('since', toLocalDateStr(since));
+  params.set('until', toLocalDateStr(until));
+  if (search) params.set('search', search);
+  if (name) params.set('name', name);
+  const minLevel = levelNoThreshold(level);
+  if (minLevel != null) params.set('min_levelno', String(minLevel));
+  const cacheName = `backend:detail:${hours}:${level || 'all'}:${search || '-'}:${name || '-'}:${Math.max(0, offset)}:${limit}`;
+  const cached = readCache(cacheName);
+  if (cached) {
+    detailLogs = cached.rows || [];
+    pageState = cached.pageState || pageState;
+    renderLogsTable();
+    updatePager();
+  }
+  try {
+    const resp = await fetch('/admin/api/logs?' + params.toString());
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    detailLogs = data.rows || [];
+    pageState = {
+      offset: data.offset || 0,
+      limit: data.limit || limit,
+      hasMore: !!data.has_more,
+      returned: data.returned || detailLogs.length,
+      total: data.total || 0,
+    };
+    writeCache(cacheName, { rows: detailLogs, pageState }, 20000);
+    renderLogsTable();
+    updatePager();
+  } catch (err) {
+    if (!cached) {
+      detailLogs = [];
+      renderLogsTable();
+      updatePager();
+    }
+    setBanner('err', `日志明细加载失败：${err.message || err}`);
+  }
+}
+
+function updatePager() {
+  document.getElementById('logs-prev-btn').disabled = pageState.offset <= 0;
+  document.getElementById('logs-next-btn').disabled = !pageState.hasMore;
+  const start = detailLogs.length ? pageState.offset + 1 : 0;
+  const end = pageState.offset + detailLogs.length;
+  document.getElementById('logs-page-info').textContent = detailLogs.length
+    ? `${start}-${end}`
+    : '0-0';
+}
+
+checkConfig().catch(err => {
+  console.error(err);
+  setBanner('err', `加载后端日志分析失败：${err.message || err}`);
+});
+
+window.addEventListener('beforeunload', () => Object.keys(charts).forEach(destroyChart));
+</script>
+</body>
+</html>

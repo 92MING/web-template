@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Detail</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-ecommerce-product-detail title="Premium Wireless Headphones" price="$299" old-price="$399" rating="4.8" description="Experience studio-quality sound with active noise cancellation and 30-hour battery life." image="https://picsum.photos/seed/headphones/600/600" images='["https://picsum.photos/seed/h1/120/120","https://picsum.photos/seed/h2/120/120","https://picsum.photos/seed/h3/120/120"]'>
+    <div slot="navbar"><builtin-navbar brand="AudioStore" items='[{"label":"Products","href":"#"},{"label":"Support","href":"#"}]'></builtin-navbar></div>
+  </builtin-tpl-ecommerce-product-detail>
+</body>
+</html>

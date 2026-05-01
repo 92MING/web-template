@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>分布式网络管理</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <style>
+    html { font-size: 13px; }
+    body.distributed-panel-body {
+      min-height: 100vh;
+      margin: 0;
+      overflow: auto;
+      background: #f4f7fb;
+      color: #0f172a;
+    }
+    html.dark body.distributed-panel-body {
+      background: #0b1220;
+      color: #e2e8f0;
+    }
+    .distributed-page {
+      width: min(1220px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 18px 0 24px;
+    }
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .page-title {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.15;
+      font-weight: 800;
+    }
+    .top-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .panel-section {
+      border: 1px solid rgba(148, 163, 184, .28);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
+      padding: 14px;
+    }
+    html.dark .panel-section {
+      background: rgba(15, 23, 42, .86);
+      border-color: rgba(148, 163, 184, .18);
+    }
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 11px;
+      line-height: 1.2;
+      font-weight: 800;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    html.dark .section-title { color: #94a3b8; }
+    .self-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+      font-size: 12px;
+    }
+    .self-grid span:last-child,
+    .mono-value {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .add-node-form {
+      display: grid;
+      grid-template-columns: minmax(140px, 1.1fr) minmax(130px, 1fr) 90px minmax(120px, 1fr) 110px 96px;
+      gap: 10px;
+      align-items: center;
+    }
+    .node-input {
+      min-width: 0;
+      height: 34px;
+      border: 1px solid rgba(148, 163, 184, .4);
+      border-radius: 6px;
+      background: #fff;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+    html.dark .node-input {
+      background: #0f172a;
+      border-color: rgba(148, 163, 184, .24);
+      color: #e2e8f0;
+    }
+    .primary-button {
+      height: 34px;
+      border-radius: 6px;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .primary-button:hover { background: #1d4ed8; }
+    .node-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .node-list {
+      display: grid;
+      gap: 10px;
+    }
+    .node-card {
+      border: 1px solid rgba(148, 163, 184, .32);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+    html.dark .node-card { background: rgba(15, 23, 42, .72); }
+    .node-healthy { border-color: rgba(34, 197, 94, .45); background: rgba(240, 253, 244, .82); }
+    .node-degraded { border-color: rgba(245, 158, 11, .45); background: rgba(255, 251, 235, .82); }
+    .node-unreachable { border-color: rgba(239, 68, 68, .45); background: rgba(254, 242, 242, .82); }
+    html.dark .node-healthy { background: rgba(20, 83, 45, .16); }
+    html.dark .node-degraded { background: rgba(120, 53, 15, .16); }
+    html.dark .node-unreachable { background: rgba(127, 29, 29, .16); }
+    .node-card-head {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .node-id-row,
+    .node-metrics,
+    .node-meta,
+    .node-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
+    }
+    .node-metrics { justify-content: flex-end; }
+    .node-meta {
+      margin-top: 7px;
+      color: #475569;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    html.dark .node-meta { color: #cbd5e1; }
+    .relation-badge {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+    .relation-parent { background: #dbeafe; color: #1d4ed8; }
+    .relation-child { background: #ede9fe; color: #6d28d9; }
+    .relation-friend { background: #e2e8f0; color: #475569; }
+    .node-id {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-weight: 800;
+    }
+    .danger-link {
+      color: #dc2626;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .command-button {
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .command-restart { background: #dbeafe; color: #1d4ed8; }
+    .command-stop { background: #fee2e2; color: #b91c1c; }
+    .command-ping { background: #dcfce7; color: #15803d; }
+    .ping-result {
+      min-width: 88px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .ping-ok { color: #15803d; }
+    .ping-fail { color: #dc2626; }
+    .ping-checking { color: #2563eb; }
+    @media (max-width: 900px) {
+      .distributed-page { width: min(100vw - 20px, 680px); padding-top: 12px; }
+      .top-grid { grid-template-columns: 1fr; }
+      .add-node-form { grid-template-columns: 1fr 1fr; }
+      .node-card-head { grid-template-columns: 1fr; align-items: start; }
+      .node-metrics { justify-content: flex-start; }
+    }
+    @media (max-width: 520px) {
+      .add-node-form,
+      .self-grid { grid-template-columns: 1fr; }
+      .page-title { font-size: 19px; }
+    }
+  </style>
+</head>
+<body class="distributed-panel-body">
+
+<main class="distributed-page">
+<header class="page-header">
+  <h1 class="page-title">分布式网络管理</h1>
+</header>
+
+<div class="top-grid">
+
+<!-- Self Info -->
+<section id="self-info" class="panel-section">
+  <h2 class="section-title">当前节点</h2>
+  <div class="self-grid" id="self-info-content">
+    <div><span class="text-slate-400">ID:</span> <span id="self-id" class="font-mono">—</span></div>
+    <div><span class="text-slate-400">Host:</span> <span id="self-host">—</span></div>
+    <div><span class="text-slate-400">Port:</span> <span id="self-port">—</span></div>
+    <div><span class="text-slate-400">Workers:</span> <span id="self-workers">—</span></div>
+  </div>
+</section>
+
+<!-- Add Node Form -->
+<section class="panel-section">
+  <h2 class="section-title">添加节点</h2>
+  <form id="add-node-form" class="add-node-form">
+    <input id="node-id" type="text" placeholder="节点ID" class="node-input" required/>
+    <input id="node-host" type="text" placeholder="Host" class="node-input" required/>
+    <input id="node-port" type="number" placeholder="Port" class="node-input" required/>
+    <input id="node-parent-id" type="text" placeholder="Parent ID" class="node-input"/>
+    <select id="node-relation" class="node-input">
+      <option value="friend">Friend</option>
+      <option value="parent">Parent</option>
+      <option value="child">Child</option>
+    </select>
+    <button type="submit" class="primary-button">添加</button>
+  </form>
+</section>
+
+</div>
+
+<!-- Node List -->
+<section class="panel-section">
+  <div class="node-panel-header">
+    <h2 class="section-title" style="margin:0">节点列表</h2>
+    <button onclick="loadNodes()" class="text-sm text-blue-600 hover:underline">刷新</button>
+  </div>
+  <div id="node-list" class="node-list">加载中...</div>
+</section>
+</main>
+
+<script>
+const ADMIN_LOGIN_PATH = '/admin/login';
+const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+let adminAuthRedirectPending = false;
+
+function clearAdminAuthArtifacts() {
+  try {
+    window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+  } catch {}
+  document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+function redirectToAdminLogin() {
+  if (adminAuthRedirectPending) return;
+  adminAuthRedirectPending = true;
+  clearAdminAuthArtifacts();
+  const nextPath = window.parent && window.parent !== window
+    ? '/admin/panel'
+    : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+      return;
+    }
+  } catch {}
+  window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch('/admin/api' + path, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    if (res.status === 401) {
+      redirectToAdminLogin();
+      throw new Error('登录状态已失效，正在跳转登录页。');
+    }
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function loadSelf() {
+  try {
+    const data = await api('/distributed/self');
+    document.getElementById('self-id').textContent = data.node_id || '—';
+    document.getElementById('self-host').textContent = data.host || '—';
+    document.getElementById('self-port').textContent = data.port || '—';
+    document.getElementById('self-workers').textContent = data.worker_count || '—';
+  } catch (e) {
+    console.error('loadSelf failed:', e);
+  }
+}
+
+function nodeDomId(nodeId) {
+  return 'node-ping-' + String(nodeId).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function formatMs(value) {
+  return typeof value === 'number' ? value.toFixed(1) + 'ms' : '—';
+}
+
+async function loadNodes() {
+  const container = document.getElementById('node-list');
+  container.innerHTML = '加载中...';
+  try {
+    const nodes = await api('/distributed/nodes');
+    if (!nodes.length) {
+      container.innerHTML = '<div class="text-slate-400 text-sm">暂无节点</div>';
+      return;
+    }
+    container.innerHTML = nodes.map(n => {
+      const management = n.management || { can_manage: n.relation === 'child', route: [] };
+      const route = management.route && management.route.length ? management.route.join(' → ') : '—';
+      const pingStatusId = `${nodeDomId(n.node_id)}-status`;
+      return `
+      <div class="node-card node-${n.health_status}">
+        <div class="node-card-head">
+          <div class="node-id-row">
+            <span class="relation-badge relation-${n.relation}">${n.relation}</span>
+            <span class="node-id">${n.node_id}</span>
+          </div>
+          <div class="node-metrics">
+            <span class="text-xs text-slate-400">RTT: ${formatMs(n.rtt_ms)}</span>
+            <span class="text-xs text-slate-400">Score: ${n.health_score.toFixed(0)}</span>
+            <button onclick="pingNode('${n.node_id}', this)" class="command-button command-ping">测试</button>
+            <span id="${pingStatusId}" class="ping-result">—</span>
+            <button onclick="removeNode('${n.node_id}')" class="danger-link hover:underline">删除</button>
+          </div>
+        </div>
+        <div class="text-sm text-slate-500">${n.host}:${n.port} <span class="ml-2">GSD: ${n.gsd_port || '—'}</span></div>
+        <div class="node-meta">
+          <span>Parent: ${n.metadata?.parent_id || n.metadata?.parent_node_id || '—'}</span>
+          <span>管理路径: ${route}</span>
+          <span class="${management.can_manage ? 'text-green-600' : 'text-slate-400'}">${management.can_manage ? '可管理' : '不可管理'}</span>
+        </div>
+        ${management.can_manage ? `
+          <div class="node-actions mt-3">
+            <button onclick="sendCommand('${n.node_id}', 'restart')" class="command-button command-restart">重启</button>
+            <button onclick="sendCommand('${n.node_id}', 'stop')" class="command-button command-stop">停止</button>
+          </div>
+        ` : ''}
+      </div>
+    `}).join('');
+  } catch (e) {
+    container.innerHTML = `<div class="text-red-500 text-sm">加载失败: ${e.message}</div>`;
+  }
+}
+
+async function pingNode(nodeId, button) {
+  const status = document.getElementById(`${nodeDomId(nodeId)}-status`);
+  if (status) {
+    status.className = 'ping-result ping-checking';
+    status.textContent = '测试中...';
+  }
+  if (button) button.disabled = true;
+  try {
+    const data = await api(`/distributed/nodes/${nodeId}/ping`, {
+      method: 'POST',
+      body: {},
+    });
+    if (status) {
+      if (data.ok) {
+        const via = data.relayed && data.via_node ? ` via ${data.via_node}` : '';
+        status.className = 'ping-result ping-ok';
+        status.textContent = `连通 ${formatMs(data.rtt_ms)}${via}`;
+      } else {
+        status.className = 'ping-result ping-fail';
+        status.textContent = `失败 ${data.error || data.status_code || ''}`.trim();
+      }
+    }
+  } catch (e) {
+    if (status) {
+      status.className = 'ping-result ping-fail';
+      status.textContent = '失败';
+    }
+    alert('联通性测试失败: ' + e.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function removeNode(nodeId) {
+  if (!confirm(`确定要删除节点 ${nodeId} 吗?`)) return;
+  try {
+    await api(`/distributed/nodes/${nodeId}`, { method: 'DELETE' });
+    loadNodes();
+  } catch (e) {
+    alert('删除失败: ' + e.message);
+  }
+}
+
+async function sendCommand(nodeId, command) {
+  if (!confirm(`确定要向 ${nodeId} 发送 ${command} 命令吗?`)) return;
+  try {
+    await api(`/distributed/nodes/${nodeId}/command`, {
+      method: 'POST',
+      body: { command, args: {} },
+    });
+    alert('命令已发送');
+  } catch (e) {
+    alert('命令发送失败: ' + e.message);
+  }
+}
+
+document.getElementById('add-node-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    node_id: document.getElementById('node-id').value,
+    host: document.getElementById('node-host').value,
+    port: parseInt(document.getElementById('node-port').value),
+    relation: document.getElementById('node-relation').value,
+    metadata: {},
+  };
+  const parentId = document.getElementById('node-parent-id').value.trim();
+  if (parentId) body.metadata.parent_id = parentId;
+  try {
+    await api('/distributed/nodes', { method: 'POST', body });
+    document.getElementById('add-node-form').reset();
+    loadNodes();
+  } catch (err) {
+    alert('添加失败: ' + err.message);
+  }
+});
+
+loadSelf();
+loadNodes();
+</script>
+
+</body>
+</html>

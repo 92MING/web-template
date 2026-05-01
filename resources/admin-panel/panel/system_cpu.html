@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CPU 监控</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-monitoring-shared.css" />
+  <script src="/vendor/chart/chart.js"></script>
+  <style>
+    html { font-size: 11px; height: 100%; }
+    :root {
+      --monitor-accent-1: rgba(99, 102, 241, 0.12);
+      --monitor-accent-2: rgba(14, 165, 233, 0.10);
+      --monitor-accent-3: rgba(79, 70, 229, 0.08);
+    }
+
+    .panel-page {
+      padding: 6px;
+    }
+
+    .monitor-shell {
+      gap: 6px;
+    }
+
+    .panel-hero {
+      gap: 8px;
+      padding: 8px 10px;
+      grid-template-columns: minmax(0, 1.35fr) minmax(220px, auto);
+      align-items: start;
+    }
+
+    .panel-kicker {
+      font-size: 10px;
+      letter-spacing: .14em;
+    }
+
+    .panel-title {
+      margin-top: 3px;
+      font-size: 16px;
+      line-height: 1.05;
+    }
+
+    .panel-hero-actions {
+      gap: 6px;
+      justify-content: flex-start;
+    }
+
+    .monitor-hero-pills {
+      gap: 5px;
+    }
+
+    .monitor-hero-pills .panel-pill {
+      min-height: 24px;
+      padding: 0 8px;
+      font-size: 11px;
+    }
+
+    #cpu-summary.monitor-status {
+      min-height: 0;
+      padding: 5px 8px;
+      line-height: 1.35;
+      font-size: 10px;
+    }
+
+    .monitor-metric-grid {
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+      gap: 6px;
+    }
+
+    .panel-stat-card {
+      min-height: 38px;
+      padding: 6px 8px;
+      border-radius: var(--proj-radius-md);
+    }
+
+    .panel-stat-kicker,
+    .panel-card-kicker {
+      font-size: 9px;
+      letter-spacing: .12em;
+      line-height: 1;
+    }
+
+    .panel-stat-value {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .panel-note {
+      margin-top: 2px;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    .cpu-layout-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);
+      gap: 6px;
+      align-items: start;
+    }
+
+    .cpu-layout-column {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .panel-card {
+      border-radius: var(--proj-radius-lg);
+      padding: 9px;
+    }
+
+    .panel-card-header {
+      gap: 6px;
+    }
+
+    .panel-card-title {
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .panel-card-body {
+      margin-top: 6px;
+    }
+
+    .monitor-chart-shell {
+      padding: 6px;
+      border-radius: var(--proj-radius-md);
+    }
+
+    .monitor-chart-area {
+      height: 126px;
+    }
+
+    .monitor-detail-fold summary {
+      padding: 5px 8px;
+      font-size: 10px;
+    }
+
+    .monitor-detail-body {
+      padding-top: 6px;
+    }
+
+    .monitor-scroll-region {
+      max-height: 320px;
+      padding-right: 2px;
+    }
+
+    .monitor-core-grid,
+    .monitor-detail-grid {
+      grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
+      gap: 6px;
+    }
+
+    .monitor-metric-box {
+      padding: 7px 8px;
+      border-radius: var(--proj-radius-md);
+    }
+
+    .monitor-metric-kicker {
+      font-size: 9px;
+      letter-spacing: .06em;
+    }
+
+    .monitor-metric-value {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .monitor-metric-note {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .monitor-meter-track {
+      margin-top: 5px;
+      height: 5px;
+    }
+
+    #core-summary.panel-pill {
+      align-self: flex-start;
+      min-height: 24px;
+      padding: 0 8px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    #cpu-details.monitor-detail-grid {
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    }
+
+    #time-slices.monitor-detail-grid {
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    }
+
+    @media (max-width: 980px) {
+      .cpu-layout-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+  <script src="/html-assets/js/core-ui-utils.js"></script>
+  <script src="/html-assets/js/panel-monitoring-shared.js"></script>
+</head>
+<body class="panel-page-body monitor-page-body">
+  <main class="panel-page monitor-page">
+    <div class="panel-page-shell monitor-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker"></div>
+          <div class="panel-title">CPU 监控</div>
+        </div>
+        <div class="panel-hero-actions">
+          <div class="panel-action-row monitor-hero-pills">
+            <span id="cpu-timestamp" class="panel-pill panel-mono">更新时间：—</span>
+            <span class="panel-pill">轮询：2s</span>
+          </div>
+          <div id="cpu-summary" class="status-box monitor-status" data-kind="info">等待 CPU 指标…</div>
+        </div>
+      </section>
+
+      <section class="panel-stat-grid monitor-metric-grid">
+        <div class="panel-stat-card"><div class="panel-stat-kicker">整体</div><div id="overall-percent" class="panel-stat-value">—%</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">频率</div><div id="current-freq" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">逻辑 / 物理</div><div id="cpu-counts" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">Ctx</div><div id="ctx-switches" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">中断</div><div id="interrupts" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">进程数</div><div id="process-count" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">软中断 / 调用</div><div id="soft-interrupts" class="panel-note">Soft IRQ：—</div><div id="syscalls" class="panel-note">Syscalls：—</div></div>
+      </section>
+
+      <section class="cpu-layout-grid">
+        <div class="cpu-layout-column">
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div>
+                <div class="panel-card-kicker">History</div>
+                <div class="panel-card-title">整体 CPU 曲线</div>
+              </div>
+            </div>
+            <div class="panel-card-body">
+              <div class="monitor-chart-shell">
+                <div class="monitor-chart-area"><canvas id="cpu-chart"></canvas></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div>
+                <div class="panel-card-kicker">Details</div>
+                <div class="panel-card-title">CPU 详情</div>
+              </div>
+            </div>
+            <div class="panel-card-body">
+              <div id="cpu-details" class="monitor-detail-grid"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cpu-layout-column">
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div>
+                <div class="panel-card-kicker">Cores</div>
+                <div class="panel-card-title">每核利用率</div>
+              </div>
+              <div id="core-summary" class="panel-pill">—</div>
+            </div>
+            <div class="panel-card-body">
+                <div class="monitor-scroll-region">
+                  <div id="core-bars" class="monitor-core-grid"></div>
+                </div>
+            </div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div>
+                <div class="panel-card-kicker">Times</div>
+                <div class="panel-card-title">CPU 时间分布</div>
+              </div>
+            </div>
+            <div class="panel-card-body">
+              <div id="time-slices" class="monitor-detail-grid"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const MAX_POINTS = 60;
+    const history = [];
+    const monitorShared = window.ProjPanelMonitoring || {};
+    const clampPercent = monitorShared.clampPercent || ((value) => Math.max(0, Math.min(100, Number(value || 0))));
+    const formatPercent = monitorShared.formatPercent || ((value) => `${Number(value || 0).toFixed(1)}%`);
+    const percentToneClass = monitorShared.percentToneClass || ((value) => (clampPercent(value) < 60 ? 'monitor-meter-fill-ok' : clampPercent(value) < 80 ? 'monitor-meter-fill-warn' : 'monitor-meter-fill-danger'));
+    const statusKindForPercent = monitorShared.statusKindForPercent || ((value) => (clampPercent(value) < 60 ? 'success' : clampPercent(value) < 80 ? 'warn' : 'error'));
+    const formatHistoryLabel = monitorShared.formatHistoryLabel || ((value) => String(value || ''));
+    let cpuChart = null;
+    let timer = null;
+
+    function startPolling() {
+      if (timer) return;
+      timer = window.setInterval(refreshCpu, 2000);
+    }
+
+    function stopPolling() {
+      if (!timer) return;
+      window.clearInterval(timer);
+      timer = null;
+    }
+
+    function fmtFreq(value) {
+      const num = Number(value || 0);
+      if (!Number.isFinite(num) || num <= 0) return '—';
+      return num >= 1000 ? `${(num / 1000).toFixed(2)} GHz` : `${num.toFixed(1)} MHz`;
+    }
+
+    function initChart() {
+      cpuChart?.destroy();
+      cpuChart = new Chart(document.getElementById('cpu-chart').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'CPU %',
+            data: [],
+            borderColor: '#818cf8',
+            backgroundColor: 'rgba(129,140,248,.16)',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: .28,
+          }],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { display: false },
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#94a3b8', callback: (v) => `${v}%` },
+              grid: { color: 'rgba(148, 163, 184, 0.12)' },
+            },
+          },
+        },
+      });
+    }
+
+    function renderChart() {
+      if (!cpuChart) return;
+      cpuChart.data.labels = history.map((item) => item.label);
+      cpuChart.data.datasets[0].data = history.map((item) => item.value);
+      cpuChart.update('none');
+    }
+
+    function renderCoreBars(cores) {
+      const container = document.getElementById('core-bars');
+      container.innerHTML = '';
+      const samples = cores.map((core) => Number(core.percent || 0));
+      const avg = samples.length ? samples.reduce((sum, value) => sum + value, 0) / samples.length : 0;
+      const peak = samples.length ? Math.max(...samples) : 0;
+      document.getElementById('core-summary').textContent = `共 ${cores.length} 个逻辑核心 · 平均 ${formatPercent(avg)} · 峰值 ${formatPercent(peak)}`;
+      cores.forEach((core) => {
+        const pct = Number(core.percent || 0);
+        const row = document.createElement('div');
+        row.className = 'monitor-metric-box';
+        row.innerHTML = `
+          <div class="monitor-metric-kicker">Core ${core.index}</div>
+          <div class="monitor-metric-value">${formatPercent(pct)}</div>
+          <div class="monitor-meter-track"><div class="monitor-meter-fill ${percentToneClass(pct)}" style="width:${clampPercent(pct)}%"></div></div>
+          <div class="monitor-metric-note">${fmtFreq(core.freq_mhz)}</div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function renderTimeSlices(times) {
+      const container = document.getElementById('time-slices');
+      container.innerHTML = '';
+      Object.entries(times || {}).forEach(([key, value]) => {
+        const pct = Number(value || 0);
+        const card = document.createElement('div');
+        card.className = 'monitor-metric-box';
+        card.innerHTML = `
+          <div class="monitor-metric-kicker">${key}</div>
+          <div class="monitor-metric-value">${formatPercent(pct)}</div>
+          <div class="monitor-meter-track"><div class="monitor-meter-fill ${percentToneClass(pct)}" style="width:${clampPercent(pct)}%"></div></div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderDetails(details) {
+      const container = document.getElementById('cpu-details');
+      container.innerHTML = '';
+      details.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'monitor-metric-box';
+        card.innerHTML = `<div class="monitor-metric-kicker">${item.key}</div><div class="monitor-metric-value">${item.value}</div>`;
+        container.appendChild(card);
+      });
+    }
+
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function fetchAdminJson(path, options = {}) {
+      const response = await fetch(path, { credentials: 'same-origin', ...options });
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      const data = contentType.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : await response.text().catch(() => '');
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        if (typeof data === 'string') {
+          throw new Error(data || `HTTP ${response.status}`);
+        }
+        throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+      }
+      if (typeof data === 'string') {
+        throw new Error('接口未返回 JSON。');
+      }
+      return data;
+    }
+
+    async function refreshCpu() {
+      try {
+        const data = await fetchAdminJson('/admin/api/system/cpu', { cache: 'no-store' });
+        const summary = data.summary || {};
+        const overallPercent = Number(summary.overall_percent || 0);
+        document.getElementById('overall-percent').textContent = formatPercent(overallPercent);
+        document.getElementById('current-freq').textContent = fmtFreq(summary.current_freq_mhz);
+        document.getElementById('cpu-counts').textContent = `${summary.logical_count || 0} / ${summary.physical_count || '—'}`;
+        document.getElementById('cpu-timestamp').textContent = `更新时间：${data.timestamp || '—'}`;
+        document.getElementById('ctx-switches').textContent = `${summary.ctx_switches ?? 0}`;
+        document.getElementById('interrupts').textContent = `${summary.interrupts ?? 0}`;
+        document.getElementById('soft-interrupts').textContent = `Soft IRQ：${summary.soft_interrupts ?? '—'}`;
+        document.getElementById('process-count').textContent = `${summary.process_count ?? 0}`;
+        document.getElementById('syscalls').textContent = `Syscalls：${summary.syscalls ?? '—'}`;
+        const summaryEl = document.getElementById('cpu-summary');
+        summaryEl.dataset.kind = statusKindForPercent(overallPercent);
+        summaryEl.textContent = `整体 ${formatPercent(overallPercent)} · ${summary.logical_count || 0} 个逻辑核心 / ${summary.physical_count || '—'} 个物理核心 · 频率 ${fmtFreq(summary.current_freq_mhz)}`;
+
+        history.push({ label: formatHistoryLabel(data.timestamp), value: overallPercent });
+        while (history.length > MAX_POINTS) history.shift();
+        renderChart();
+        renderCoreBars(data.per_core || []);
+        renderTimeSlices(data.times_percent || {});
+        renderDetails(data.details || []);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    initChart();
+    refreshCpu();
+    startPolling();
+    window.addEventListener('pagehide', stopPolling);
+    window.addEventListener('beforeunload', stopPolling);
+  </script>
+</body>
+</html>

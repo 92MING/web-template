@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#667eea">
+<title>e-Shop 登录</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; }
+  .top-bar { position: absolute; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; align-items: center; z-index: 10; }
+  .auth-wrap { width: min(420px, 90vw); margin: 0 auto; }
+  .mode-switch { display: flex; padding: 4px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: 999px; background: rgba(255,255,255,.16); margin-bottom: 16px; }
+  .mode-switch button { border: 0; border-radius: 999px; padding: 9px 14px; color: var(--builtin-color-muted, #6b7280); background: transparent; cursor: pointer; font: 700 13px system-ui, sans-serif; }
+  .mode-switch button.active { color: white; background: linear-gradient(135deg, var(--builtin-primary, #2563eb), #7c3aed); }
+  .form { min-width: 0; display: grid; gap: 14px; }
+  .form input, .form select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: 12px; background: var(--builtin-input-bg, #ffffff); color: var(--builtin-color-text, #111827); font: inherit; width: 100%; box-sizing: border-box; }
+  .row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  .hidden { display: none !important; }
+  .test-box { margin-top: 18px; padding: 14px; border: 1px dashed var(--builtin-border, #d1d5db); border-radius: 18px; color: var(--builtin-color-muted, #6b7280); font: 13px/1.6 system-ui, sans-serif; background: var(--builtin-surface, #ffffff); }
+  .test-box code { color: var(--builtin-color-text, #111827); background: var(--builtin-header-bg, #f3f4f6); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  .btn-primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, var(--builtin-primary, #2563eb), #7c3aed); color: #fff;
+    font: 700 14px system-ui, sans-serif; cursor: pointer; min-height: 44px;
+  }
+  @media (max-width: 560px) {
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
+  <builtin-theme-toggle></builtin-theme-toggle>
+</div>
+
+<builtin-tpl-auth-login id="login-page" layout="fullscreen" title="e-Shop" subtitle="">
+  <div slot="logo" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">
+    <builtin-icon name="shopping" size="28"></builtin-icon>
+    <span style="font-size:22px;font-weight:800;">e-Shop</span>
+  </div>
+  <div slot="form" class="auth-wrap">
+    <div class="mode-switch" aria-label="mode">
+      <button id="mode-login" class="active" type="button" data-copy="login">登录</button>
+      <button id="mode-register" type="button" data-copy="register">注册</button>
+    </div>
+    <builtin-login-panel id="login-panel" mode="email-password" surface="plain"></builtin-login-panel>
+    <form id="register-form" class="form hidden">
+      <div class="row">
+        <input id="reg-username" data-placeholder="username" placeholder="用户名" required />
+        <input id="reg-password" type="password" data-placeholder="password" placeholder="密码" required />
+      </div>
+      <div class="row">
+        <input id="reg-password2" type="password" data-placeholder="confirm" placeholder="确认密码" required />
+        <select id="reg-role" required>
+          <option value="customer" data-copy="customer">顾客端</option>
+          <option value="merchant" data-copy="merchant">商家端</option>
+          <option value="admin" data-copy="admin">管理员</option>
+        </select>
+      </div>
+      <button type="submit" id="btn-register" class="btn-primary" data-copy="register">注册</button>
+    </form>
+    <div class="test-box">
+      <div data-copy="test_accounts" style="font-weight:700;margin-bottom:6px;">测试账户</div>
+      <div style="display:grid;gap:4px;">
+        <div><code>customer1 / 123456</code> <span data-copy="customer">顾客端</span></div>
+        <div><code>customer2 / 123456</code> <span data-copy="customer">顾客端</span></div>
+        <div><code>merchant1 / 123456</code> <span data-copy="merchant">商家端</span></div>
+        <div><code>admin / 123456</code> <span data-copy="admin">管理员</span></div>
+      </div>
+    </div>
+  </div>
+</builtin-tpl-auth-login>
+
+<script type="module">
+import { initEshop, api, t, switchLang, BuiltinToast } from './eshop-utils.js?v=20260501-1';
+
+await initEshop();
+
+const copy = {
+  'zh-cn': {
+    login: '登录', register: '注册', customer: '顾客端', merchant: '商家端', admin: '管理员',
+    username: '用户名', password: '密码', confirm: '确认密码', role: '角色',
+    fill: '请填写必要字段', mismatch: '两次密码不一致', login_failed: '登录失败', register_failed: '注册失败',
+    test_accounts: '测试账户',
+    err_username_exists: '用户名已被注册',
+    err_invalid_credentials: '用户名或密码错误',
+    err_invalid_action: '请求动作无效',
+    err_not_logged_in: '请先登录'
+  },
+  en: {
+    login: 'Sign in', register: 'Register', customer: 'Customer', merchant: 'Merchant', admin: 'Admin',
+    username: 'Username', password: 'Password', confirm: 'Confirm password', role: 'Role',
+    fill: 'Please fill in required fields', mismatch: 'Passwords do not match', login_failed: 'Login failed', register_failed: 'Registration failed',
+    test_accounts: 'Test accounts',
+    err_username_exists: 'Username already taken',
+    err_invalid_credentials: 'Invalid username or password',
+    err_invalid_action: 'Invalid action',
+    err_not_logged_in: 'Not logged in'
+  }
+};
+
+let mode = 'login';
+const $ = id => document.getElementById(id);
+const lang = localStorage.getItem('eshop_lang') || 'zh-cn';
+
+function dict() { return copy[lang] || copy['zh-cn']; }
+
+function renderCopy() {
+  const d = dict();
+  document.querySelectorAll('[data-copy]').forEach(el => {
+    const key = el.dataset.copy;
+    if (d[key]) el.textContent = d[key];
+  });
+  document.querySelectorAll('[data-placeholder]').forEach(el => {
+    const key = el.dataset.placeholder;
+    if (d[key]) el.placeholder = d[key];
+  });
+  const panel = $('login-panel');
+  if (panel) {
+    panel.labels = {
+      'login.title': d.login,
+      'login.email': d.username,
+      'login.password': d.password,
+      'login.signIn': d.login,
+      'login.loading': d.login,
+      'login.required': d.fill,
+    };
+  }
+}
+
+function setMode(nextMode) {
+  mode = nextMode;
+  $('login-panel').classList.toggle('hidden', mode !== 'login');
+  $('register-form').classList.toggle('hidden', mode !== 'register');
+  $('mode-login').classList.toggle('active', mode === 'login');
+  $('mode-register').classList.toggle('active', mode === 'register');
+  renderCopy();
+}
+
+function routeByRole(role) {
+  if (role === 'merchant' || role === 'admin') {
+    location.replace('merchant.html');
+  } else {
+    location.replace('index.html');
+  }
+}
+
+renderCopy();
+
+$('mode-login').addEventListener('click', () => setMode('login'));
+$('mode-register').addEventListener('click', () => setMode('register'));
+
+$('login-panel').addEventListener('builtin-submit', async (e) => {
+  const { email, password } = e.detail;
+  if (!email || !password) {
+    BuiltinToast.show(dict().fill, { type: 'warning' });
+    return;
+  }
+  try {
+    const res = await api('/shop/auth?action=login', {
+      method: 'POST',
+      body: JSON.stringify({ username: email, password })
+    });
+    if (res?.ok) {
+      localStorage.setItem('eshop_token', res.token);
+      localStorage.setItem('eshop_user', res.user_id);
+      localStorage.setItem('eshop_role', res.role);
+      routeByRole(res.role);
+    } else {
+      const code = res?.error_code;
+      const localized = code ? dict()['err_' + code] : null;
+      BuiltinToast.show(localized || res?.error || dict().login_failed, { type: 'error' });
+    }
+  } catch (err) {
+    BuiltinToast.show(dict().login_failed, { type: 'error' });
+  }
+});
+
+$('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = $('reg-username').value.trim();
+  const password = $('reg-password').value;
+  const password2 = $('reg-password2').value;
+  const role = $('reg-role').value;
+  if (!username || !password) {
+    BuiltinToast.show(dict().fill, { type: 'warning' });
+    return;
+  }
+  if (password !== password2) {
+    BuiltinToast.show(dict().mismatch, { type: 'error' });
+    return;
+  }
+  try {
+    const res = await api('/shop/auth?action=register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, role })
+    });
+    if (res?.ok) {
+      localStorage.setItem('eshop_token', res.token);
+      localStorage.setItem('eshop_user', res.user_id);
+      localStorage.setItem('eshop_role', res.role);
+      routeByRole(res.role);
+    } else {
+      const code = res?.error_code;
+      const localized = code ? dict()['err_' + code] : null;
+      BuiltinToast.show(localized || res?.error || dict().register_failed, { type: 'error' });
+    }
+  } catch (err) {
+    BuiltinToast.show(dict().register_failed, { type: 'error' });
+  }
+});
+</script>
+</body>
+</html>

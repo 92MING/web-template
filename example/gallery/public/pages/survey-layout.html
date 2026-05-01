@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Survey Layout</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-form-survey mode="single" questions='[
+    {"id":"q1","text":"How satisfied are you with our service?","type":"rating","options":[]},
+    {"id":"q2","text":"What features do you use most?","type":"checkbox","options":["Analytics","Chat","Reports","API"]},
+    {"id":"q3","text":"Any additional feedback?","type":"text","options":[],"placeholder":"Tell us more..."}
+  ]'></builtin-tpl-form-survey>
+</body>
+</html>

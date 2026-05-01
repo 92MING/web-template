@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>翻译测试 — AI Test</title>
+<link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+<link rel="stylesheet" href="/html-assets/css/ai-test-shared.css">
+<script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="ai-page">
+<div class="ai-shell">
+  <div class="ai-header">
+    <div class="ai-header-main">
+      <a href="/admin/test/ai" class="ai-back-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg><span data-i18n="translate.backLink">返回 AI 测试中心</span></a>
+      <h1 data-i18n="translate.title">翻译测试</h1>
+    </div>
+    <div class="ai-pills">
+      <span class="ai-pill">POST /ai/translate</span>
+      <span class="ai-pill"><strong id="translateStatus">就绪</strong></span>
+    </div>
+  </div>
+
+  <div class="ai-card">
+    <div class="ai-card-title"><h2 data-i18n="translate.request.title">请求参数</h2></div>
+    <div class="ai-grid-4">
+      <div class="ai-field">
+        <label for="targetLang" data-i18n="translate.targetLang">目标语言</label>
+        <input id="targetLang" class="ai-input" list="targetLangOptions" type="text" value="zh-tw" placeholder="输入语言代码（如 zh-tw / en / ja）" />
+        <datalist id="targetLangOptions"></datalist>
+      </div>
+      <div class="ai-field">
+        <label data-i18n="translate.mode.label">模式</label>
+        <label class="ai-check"><input type="checkbox" id="batchMode"><span data-i18n="translate.mode.batch">逐行翻译</span></label>
+      </div>
+      <div class="ai-field">
+        <label data-i18n="translate.quickActions">快捷操作</label>
+        <div class="ai-toolbar">
+          <button id="btnSwap" class="ai-button ai-button-secondary" type="button" data-i18n="translate.action.swap">交换</button>
+          <button id="btnClear" class="ai-button ai-button-secondary" type="button" data-i18n="translate.action.clear">清空</button>
+        </div>
+      </div>
+      <div class="ai-field">
+        <label data-i18n="translate.execute">执行</label>
+        <button id="btnTranslate" class="ai-button ai-button-primary" type="button">开始翻译</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorBox" class="ai-error-box"></div>
+
+  <div class="ai-result-compare" style="margin-top:16px;">
+    <section class="ai-card">
+      <div class="ai-card-title"><h2 data-i18n="translate.source.title">源文本</h2><span class="ai-badge ai-badge-muted" id="srcCount">0 字符</span></div>
+      <textarea id="srcText" class="ai-textarea" data-i18n-placeholder="translate.source.placeholder" placeholder="输入要翻译的文本；Ctrl/Cmd + Enter 可直接翻译。"></textarea>
+    </section>
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="translate.result.title">翻译结果</h2>
+        <div class="ai-toolbar">
+          <span class="ai-badge ai-badge-primary" id="outCount">0 字符</span>
+          <button id="btnCopy" class="ai-button ai-button-secondary" type="button" data-i18n="translate.action.copy">复制结果</button>
+        </div>
+      </div>
+      <textarea id="outText" class="ai-textarea" readonly data-i18n-placeholder="translate.result.placeholder" placeholder="翻译结果将显示在这里。"></textarea>
+    </section>
+  </div>
+
+  <div class="ai-metric-grid" style="margin-top:16px;">
+    <div class="ai-metric"><div class="ai-metric-value" id="metricClient">—</div><div class="ai-metric-label" data-i18n="translate.metric.client">客户端耗时</div></div>
+    <div class="ai-metric"><div class="ai-metric-value" id="metricServer">—</div><div class="ai-metric-label" data-i18n="translate.metric.server">服务端耗时</div></div>
+    <div class="ai-metric"><div class="ai-metric-value" id="metricLines">—</div><div class="ai-metric-label" data-i18n="translate.metric.lines">处理行数</div></div>
+    <div class="ai-metric"><div class="ai-metric-value" id="metricMode">—</div><div class="ai-metric-label" data-i18n="translate.metric.mode">执行模式</div></div>
+  </div>
+
+  <div class="ai-inspector-grid" style="margin-top:16px;">
+    <section class="ai-card" id="translateInspector">
+      <div class="ai-card-title"><h2 data-i18n="translate.inspector.title">请求 / 响应检查</h2></div>
+      <div class="ai-grid-2">
+        <div><div class="ai-card-subtitle">Request</div><pre class="ai-json" data-kind="request">—</pre></div>
+        <div><div class="ai-card-subtitle">Response</div><pre class="ai-json" data-kind="response">—</pre></div>
+      </div>
+      <div class="ai-grid-2" style="margin-top:12px;">
+        <div><div class="ai-card-subtitle">Error</div><pre class="ai-json" data-kind="error">—</pre></div>
+        <div><div class="ai-card-subtitle">Timing</div><pre class="ai-json" data-kind="timing">—</pre></div>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="translate.history.title">持久化历史</h2>
+        <button id="btnClearHistory" class="ai-button ai-button-danger" type="button" data-i18n="translate.history.clear">清空历史</button>
+      </div>
+      <div id="historyList" class="ai-history-list"></div>
+    </section>
+  </div>
+</div>
+
+<script src="/html-assets/js/ai-test-shared.js"></script>
+<script>
+(function () {
+  'use strict';
+  const utils = window.AITestShared;
+  const I18N = {
+    'common.emptyHistory': { 'zh-cn': '暂无历史记录', 'zh-tw': '暫無歷史記錄', en: 'No history yet' },
+    'common.copyFailed': { 'zh-cn': '复制失败。', 'zh-tw': '複製失敗。', en: 'Copy failed.' },
+    'translate.docTitle': { 'zh-cn': '翻译测试 — AI Test', 'zh-tw': '翻譯測試 — AI Test', en: 'Translation Test - AI Test' },
+    'translate.backLink': { 'zh-cn': '返回 AI 测试中心', 'zh-tw': '返回 AI 測試中心', en: 'Back to AI Test Hub' },
+    'translate.title': { 'zh-cn': '翻译测试', 'zh-tw': '翻譯測試', en: 'Translation Test' },
+    'translate.request.title': { 'zh-cn': '请求参数', 'zh-tw': '請求參數', en: 'Request Parameters' },
+    'translate.targetLang': { 'zh-cn': '目标语言', 'zh-tw': '目標語言', en: 'Target Language' },
+    'translate.mode.label': { 'zh-cn': '模式', 'zh-tw': '模式', en: 'Mode' },
+    'translate.mode.batch': { 'zh-cn': '逐行翻译', 'zh-tw': '逐行翻譯', en: 'Line by Line' },
+    'translate.mode.singleValue': { 'zh-cn': '单次', 'zh-tw': '單次', en: 'Single' },
+    'translate.mode.batchValue': { 'zh-cn': '逐行', 'zh-tw': '逐行', en: 'Batch' },
+    'translate.quickActions': { 'zh-cn': '快捷操作', 'zh-tw': '快捷操作', en: 'Quick Actions' },
+    'translate.action.swap': { 'zh-cn': '交换', 'zh-tw': '交換', en: 'Swap' },
+    'translate.action.clear': { 'zh-cn': '清空', 'zh-tw': '清空', en: 'Clear' },
+    'translate.execute': { 'zh-cn': '执行', 'zh-tw': '執行', en: 'Run' },
+    'translate.action.run': { 'zh-cn': '开始翻译', 'zh-tw': '開始翻譯', en: 'Translate' },
+    'translate.action.running': { 'zh-cn': '翻译中...', 'zh-tw': '翻譯中...', en: 'Translating...' },
+    'translate.action.copy': { 'zh-cn': '复制结果', 'zh-tw': '複製結果', en: 'Copy Result' },
+    'translate.source.title': { 'zh-cn': '源文本', 'zh-tw': '源文本', en: 'Source Text' },
+    'translate.source.placeholder': { 'zh-cn': '输入要翻译的文本；Ctrl/Cmd + Enter 可直接翻译。', 'zh-tw': '輸入要翻譯的文本；Ctrl/Cmd + Enter 可直接翻譯。', en: 'Enter text to translate. Press Ctrl/Cmd + Enter to submit.' },
+    'translate.result.title': { 'zh-cn': '翻译结果', 'zh-tw': '翻譯結果', en: 'Translation Result' },
+    'translate.result.placeholder': { 'zh-cn': '翻译结果将显示在这里。', 'zh-tw': '翻譯結果會顯示在這裡。', en: 'The translated text will appear here.' },
+    'translate.metric.client': { 'zh-cn': '客户端耗时', 'zh-tw': '客戶端耗時', en: 'Client Time' },
+    'translate.metric.server': { 'zh-cn': '服务端耗时', 'zh-tw': '服務端耗時', en: 'Server Time' },
+    'translate.metric.lines': { 'zh-cn': '处理行数', 'zh-tw': '處理行數', en: 'Processed Lines' },
+    'translate.metric.mode': { 'zh-cn': '执行模式', 'zh-tw': '執行模式', en: 'Execution Mode' },
+    'translate.inspector.title': { 'zh-cn': '请求 / 响应检查', 'zh-tw': '請求 / 回應檢查', en: 'Request / Response Inspector' },
+    'translate.history.title': { 'zh-cn': '持久化历史', 'zh-tw': '持久化歷史', en: 'History' },
+    'translate.history.clear': { 'zh-cn': '清空历史', 'zh-tw': '清空歷史', en: 'Clear History' },
+    'translate.history.emptySource': { 'zh-cn': '空文本', 'zh-tw': '空文本', en: 'Empty Source' },
+    'translate.history.unknownLanguage': { 'zh-cn': '未知语言', 'zh-tw': '未知語言', en: 'Unknown Language' },
+    'translate.history.emptyResult': { 'zh-cn': '无结果', 'zh-tw': '無結果', en: 'No Result' },
+    'translate.history.restore': { 'zh-cn': '恢复', 'zh-tw': '恢復', en: 'Restore' },
+    'translate.status.idle': { 'zh-cn': '就绪', 'zh-tw': '就緒', en: 'Ready' },
+    'translate.status.running': { 'zh-cn': '执行中', 'zh-tw': '執行中', en: 'Running' },
+    'translate.status.success': { 'zh-cn': '成功', 'zh-tw': '成功', en: 'Success' },
+    'translate.status.error': { 'zh-cn': '失败', 'zh-tw': '失敗', en: 'Failed' },
+    'translate.error.empty': { 'zh-cn': '请输入要翻译的文本。', 'zh-tw': '請輸入要翻譯的文本。', en: 'Enter text to translate.' },
+    'translate.error.failedPrefix': { 'zh-cn': '翻译失败', 'zh-tw': '翻譯失敗', en: 'Translation failed' },
+    'translate.count.chars': { 'zh-cn': '字符', 'zh-tw': '字元', en: 'chars' },
+  };
+  const store = utils.createHistoryStore('translate_history', 18);
+  const LANG_LABELS = {};
+  const uiState = { busy: false, status: 'idle' };
+
+  const srcText = document.getElementById('srcText');
+  const outText = document.getElementById('outText');
+  const targetLang = document.getElementById('targetLang');
+  const batchMode = document.getElementById('batchMode');
+  const errorBox = document.getElementById('errorBox');
+  const btnTranslate = document.getElementById('btnTranslate');
+
+  function t(key, fallback) {
+    return utils.t(key, fallback);
+  }
+
+  function syncStatus() {
+    document.getElementById('translateStatus').textContent = t(`translate.status.${uiState.status}`);
+  }
+
+  function syncActionButton() {
+    btnTranslate.disabled = uiState.busy;
+    btnTranslate.textContent = uiState.busy ? t('translate.action.running') : t('translate.action.run');
+  }
+
+  function syncDocumentTitle() {
+    document.title = t('translate.docTitle');
+  }
+
+  utils.bindFormState('translate', [
+    { id: 'targetLang' },
+    { id: 'batchMode', type: 'checkbox', eventName: 'change' },
+    { id: 'srcText' },
+  ]);
+
+  function resolveTargetLanguage() {
+    return (targetLang.value || '').trim() || 'zh-tw';
+  }
+
+  async function loadLanguageOptions() {
+    const list = document.getElementById('targetLangOptions');
+    if (!list) return;
+    try {
+      const resp = await fetch('/ai/languages');
+      if (!resp.ok) return;
+      const rows = await resp.json();
+      if (!Array.isArray(rows)) return;
+      const items = rows
+        .filter((row) => row && row.code)
+        .map((row) => {
+          const code = String(row.code).trim();
+          const name = String(row.name || '').trim();
+          if (code && name) LANG_LABELS[code] = name;
+          return `<option value="${utils.escapeHtml(code)}">${utils.escapeHtml(name ? `${name} (${code})` : code)}</option>`;
+        })
+        .join('');
+      list.innerHTML = items;
+    } catch {}
+  }
+
+  function setError(message) {
+    errorBox.textContent = message || '';
+    errorBox.classList.toggle('visible', !!message);
+  }
+
+  function updateCounts() {
+    const suffix = t('translate.count.chars');
+    document.getElementById('srcCount').textContent = `${srcText.value.length} ${suffix}`;
+    document.getElementById('outCount').textContent = `${outText.value.length} ${suffix}`;
+  }
+
+  function renderHistory() {
+    const history = store.load();
+    utils.renderHistoryList(document.getElementById('historyList'), history, (item) => `
+      <div class="ai-history-item">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;color:var(--ai-text);">${utils.escapeHtml((item.source || '').slice(0, 70) || t('translate.history.emptySource'))}</div>
+          <div class="ai-history-meta" style="margin-top:6px;">${utils.escapeHtml(LANG_LABELS[item.target_language] || item.target_language || t('translate.history.unknownLanguage'))} · ${utils.escapeHtml(utils.toLocaleTime(item.ts))}</div>
+          <div style="margin-top:8px;color:var(--ai-text-soft);font-size:13px;line-height:1.6;">${utils.escapeHtml((item.result || '').slice(0, 120) || t('translate.history.emptyResult'))}</div>
+        </div>
+        <div class="ai-toolbar" style="align-self:center;">
+          <button class="ai-button ai-button-secondary" type="button" onclick="window.__translateRestore('${item.id}')">${utils.escapeHtml(t('translate.history.restore'))}</button>
+        </div>
+      </div>
+    `);
+  }
+
+  utils.wireI18n(I18N, () => {
+    syncDocumentTitle();
+    syncStatus();
+    syncActionButton();
+    updateCounts();
+    renderHistory();
+    const metricMode = document.getElementById('metricMode');
+    if (metricMode.dataset.mode === 'batch') metricMode.textContent = t('translate.mode.batchValue');
+    if (metricMode.dataset.mode === 'single') metricMode.textContent = t('translate.mode.singleValue');
+  });
+
+  window.__translateRestore = function (id) {
+    const item = store.load().find((entry) => entry.id === id);
+    if (!item) return;
+    srcText.value = item.source || '';
+    outText.value = item.result || '';
+    targetLang.value = item.target_language || 'zh-tw';
+    batchMode.checked = !!item.batch_mode;
+    updateCounts();
+    setError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  async function translateLine(text, lang) {
+    const req = { text, target_language: lang };
+    const started = performance.now();
+    const resp = await fetch('/ai/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!resp.ok) throw await utils.parseErrorResponse(resp);
+    const data = await resp.json();
+    return { req, data, clientMs: Math.round(performance.now() - started) };
+  }
+
+  async function runTranslate() {
+    const text = srcText.value.trim();
+    if (!text) return setError(t('translate.error.empty'));
+
+    setError('');
+    uiState.busy = true;
+    uiState.status = 'running';
+    syncActionButton();
+    syncStatus();
+
+    const lang = resolveTargetLanguage();
+    const requestPayload = { text, target_language: lang, batch_mode: batchMode.checked };
+    let responsePayload = null;
+    let errorPayload = null;
+    let totalServerMs = 0;
+    const started = performance.now();
+
+    try {
+      if (batchMode.checked) {
+        const lines = text.split('\n');
+        const translated = [];
+        const responses = [];
+        for (const line of lines) {
+          if (!line.trim()) {
+            translated.push('');
+            continue;
+          }
+          const { data } = await translateLine(line, lang);
+          translated.push(data.translated || '');
+          responses.push(data);
+          totalServerMs += Number(data.elapsed_ms || 0);
+        }
+        outText.value = translated.join('\n');
+        responsePayload = { mode: 'batch', items: responses, translated: outText.value };
+      } else {
+        const { data } = await translateLine(text, lang);
+        outText.value = data.translated || '';
+        totalServerMs = Number(data.elapsed_ms || 0);
+        responsePayload = data;
+      }
+
+      const clientMs = Math.round(performance.now() - started);
+      document.getElementById('metricClient').textContent = utils.formatDuration(clientMs);
+      document.getElementById('metricServer').textContent = utils.formatDuration(totalServerMs);
+      document.getElementById('metricLines').textContent = String(text.split('\n').filter(Boolean).length || 1);
+      document.getElementById('metricMode').dataset.mode = batchMode.checked ? 'batch' : 'single';
+      document.getElementById('metricMode').textContent = batchMode.checked ? t('translate.mode.batchValue') : t('translate.mode.singleValue');
+
+      utils.setInspector('translateInspector', {
+        request: requestPayload,
+        response: responsePayload,
+        error: null,
+        timing: { client_ms: clientMs, server_ms: totalServerMs },
+      });
+
+      store.push({
+        source: text,
+        result: outText.value,
+        target_language: lang,
+        batch_mode: batchMode.checked,
+        client_ms: clientMs,
+        server_ms: totalServerMs,
+      });
+      renderHistory();
+      uiState.status = 'success';
+      syncStatus();
+      updateCounts();
+    } catch (error) {
+      const clientMs = Math.round(performance.now() - started);
+      errorPayload = error?.parsed || error?.raw || error?.message || String(error);
+      utils.setInspector('translateInspector', {
+        request: requestPayload,
+        response: responsePayload,
+        error: errorPayload,
+        timing: { client_ms: clientMs, server_ms: totalServerMs || null },
+      });
+      document.getElementById('metricClient').textContent = utils.formatDuration(clientMs);
+      document.getElementById('metricServer').textContent = utils.formatDuration(totalServerMs || null);
+      uiState.status = 'error';
+      syncStatus();
+      setError(`${t('translate.error.failedPrefix')}: ${error.message || error}`);
+    } finally {
+      uiState.busy = false;
+      syncActionButton();
+      updateCounts();
+    }
+  }
+
+  document.getElementById('btnTranslate').addEventListener('click', runTranslate);
+  document.getElementById('btnSwap').addEventListener('click', () => {
+    const tmp = srcText.value;
+    srcText.value = outText.value;
+    outText.value = tmp;
+    updateCounts();
+  });
+  document.getElementById('btnClear').addEventListener('click', () => {
+    srcText.value = '';
+    outText.value = '';
+    setError('');
+    updateCounts();
+  });
+  document.getElementById('btnCopy').addEventListener('click', async () => {
+    try { await utils.copyText(outText.value); } catch { setError(t('common.copyFailed')); }
+  });
+  document.getElementById('btnClearHistory').addEventListener('click', () => { store.clear(); renderHistory(); });
+  srcText.addEventListener('input', updateCounts);
+  srcText.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      runTranslate();
+    }
+  });
+
+  updateCounts();
+  loadLanguageOptions();
+  renderHistory();
+  syncDocumentTitle();
+  syncStatus();
+  syncActionButton();
+})();
+</script>
+</body>
+</html>

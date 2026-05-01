@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后端设置</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <script src="/html-assets/js/page-controls.js"></script>
+  <script src="/html-assets/js/backend-settings-renderer.js"></script>
+  <style>
+    .panel-card-header.panel-card-header-schema {
+      align-items: center;
+      min-height: 20px;
+    }
+
+    .panel-card-header-schema .panel-card-title {
+      margin-top: 0;
+    }
+
+    #config-root {
+      display: grid;
+      gap: 6px;
+    }
+
+    #config-root .section[data-depth="0"] > summary {
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      background: color-mix(in srgb, var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96)) 90%, transparent);
+    }
+
+    #config-root .section[data-depth="0"][data-section-tone="cyan"] > summary {
+      background: color-mix(in srgb, rgba(8, 145, 178, 0.12) 55%, var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96)));
+    }
+
+    #config-root .section[data-depth="0"][data-section-tone="emerald"] > summary {
+      background: color-mix(in srgb, rgba(5, 150, 105, 0.12) 55%, var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96)));
+    }
+
+    #config-root .section[data-depth="0"][data-section-tone="amber"] > summary {
+      background: color-mix(in srgb, rgba(217, 119, 6, 0.11) 55%, var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96)));
+    }
+
+    #config-root .section[data-depth="0"][data-section-tone="rose"] > summary {
+      background: color-mix(in srgb, rgba(225, 29, 72, 0.1) 52%, var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96)));
+    }
+
+    #config-root .section[data-depth="0"][data-section-tone="indigo"] > summary {
+      background: color-mix(in srgb, rgba(79, 70, 229, 0.09) 50%, var(--proj-page-surface-strong, rgba(255, 255, 255, 0.96)));
+    }
+
+    #config-root .section[data-depth="0"] .section-title {
+      font-size: 13px;
+    }
+
+    #config-root .section[data-depth="0"] .field-desc {
+      margin-top: 3px;
+    }
+
+    #config-root .section[data-depth="0"] .field-path {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(255, 255, 255, 0.46);
+      font-size: 9px;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body class="panel-page-body">
+  <main class="panel-page">
+    <div class="panel-page-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker">Backend Settings</div>
+          <h1 class="panel-title">后端设置</h1>
+          <div class="panel-subtitle">直接查看和修改当前运行时配置。字段标签与通用文案通过全局翻译表加载，避免前端重复写死多语言映射。</div>
+        </div>
+        <div class="panel-hero-actions">
+          <div class="panel-action-row">
+            <button id="reload-btn" type="button" class="panel-btn">重新载入</button>
+            <button id="edit-btn" type="button" class="panel-btn">编辑</button>
+            <button id="cancel-btn" type="button" class="panel-btn" disabled>取消</button>
+            <button id="save-btn" type="button" class="panel-btn panel-btn-primary" disabled>保存配置</button>
+            <label id="write-file-label" class="panel-check-row" style="display:none;">
+              <input id="write-file-cb" type="checkbox" />
+              <span id="write-file-text">写入原配置文件</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-summary-grid">
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Write Target</div>
+          <div id="write-path" class="panel-stat-value panel-mono text-sm break-all">—</div>
+          <div id="source-path" class="panel-note" style="display:none">—</div>
+        </article>
+        <article class="panel-stat-card">
+          <div class="panel-stat-kicker">Mode</div>
+          <div id="edit-mode" class="panel-stat-value">只读</div>
+          <div id="mode-note" class="panel-note" style="display:none">—</div>
+        </article>
+      </section>
+
+      <section id="status-box" class="status-box" data-kind="info">加载中…</section>
+
+      <section class="panel-card">
+        <div class="panel-card-header panel-card-header-schema">
+          <div>
+            <h2 class="panel-card-title">配置结构</h2>
+          </div>
+        </div>
+        <div class="panel-card-body space-y-2" id="config-root"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const state = {
+      payload: null,
+      config: null,
+      originalConfig: null,
+      editing: false,
+      invalidFields: new Set(),
+      translations: {},
+    };
+
+    const STATIC_TRANSLATION_KEYS = [
+      'backend.settings.title',
+      'backend.settings.schema',
+      'backend.settings.write_target',
+      'backend.settings.mode',
+      'backend.settings.reload',
+      'backend.settings.edit',
+      'backend.settings.cancel',
+      'backend.settings.save',
+      'backend.settings.write_source',
+      'backend.settings.mode.readonly',
+      'backend.settings.mode.editing',
+      'backend.settings.status.loading',
+      'backend.settings.status.loaded',
+      'backend.settings.status.cancelled',
+      'backend.settings.status.editing',
+      'backend.settings.status.load_failed',
+      'backend.settings.boolean.true',
+      'backend.settings.boolean.false',
+      'backend.settings.item.add',
+      'backend.settings.item.remove',
+      'backend.settings.required',
+      'backend.settings.nullable',
+      'backend.settings.helper.list',
+      'backend.settings.helper.json',
+      'backend.settings.helper.boolean',
+      'backend.settings.helper.enum_array',
+    ];
+
+    function t(key, fallback) {
+      return state.translations[key] || fallback || key;
+    }
+
+    function applyStaticTranslations() {
+      document.title = t('backend.settings.title', '后端设置');
+      document.querySelector('.panel-kicker').textContent = t('backend.settings.title', '后端设置');
+      document.querySelector('.panel-title').textContent = t('backend.settings.title', '后端设置');
+      document.querySelector('.panel-card-title').textContent = t('backend.settings.schema', '配置结构');
+      document.querySelectorAll('.panel-stat-kicker')[0].textContent = t('backend.settings.write_target', '写入目标');
+      document.querySelectorAll('.panel-stat-kicker')[1].textContent = t('backend.settings.mode', '模式');
+      document.getElementById('reload-btn').textContent = t('backend.settings.reload', '重新载入');
+      document.getElementById('edit-btn').textContent = t('backend.settings.edit', '编辑');
+      document.getElementById('cancel-btn').textContent = t('backend.settings.cancel', '取消');
+      document.getElementById('save-btn').textContent = t('backend.settings.save', '保存配置');
+      document.getElementById('write-file-text').textContent = t('backend.settings.write_source', '写入原配置文件');
+    }
+
+    function walkSchemaKeys(items, keys) {
+      (items || []).forEach((item) => {
+        if (item.label_key) keys.add(item.label_key);
+        if (item.description_key) keys.add(item.description_key);
+        (item.options || []).forEach((option) => keys.add(option));
+        if (item.children && item.children.length) walkSchemaKeys(item.children, keys);
+      });
+    }
+
+    async function loadTranslationsForSchema(schema) {
+      const lang = document.documentElement.lang || 'zh-cn';
+      const keys = new Set(STATIC_TRANSLATION_KEYS);
+      walkSchemaKeys(schema, keys);
+      const query = Array.from(keys).join(',');
+      if (!query) return;
+      const resp = await fetch(`/api/ui_translate?keys=${encodeURIComponent(query)}&lang=${encodeURIComponent(lang.toLowerCase())}`);
+      if (!resp.ok) return;
+      const data = await resp.json().catch(() => ({}));
+      state.translations = data.translations || {};
+      applyStaticTranslations();
+    }
+
+    function deepClone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function getByPath(obj, path) {
+      if (!path) return obj;
+      return path.split('.').reduce((current, key) => (current == null ? undefined : current[key]), obj);
+    }
+
+    function setByPath(obj, path, value) {
+      const parts = path.split('.');
+      let current = obj;
+      for (let index = 0; index < parts.length - 1; index += 1) {
+        const part = parts[index];
+        if (typeof current[part] !== 'object' || current[part] === null || Array.isArray(current[part])) {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+      current[parts[parts.length - 1]] = value;
+    }
+
+    function setStatus(message, kind = 'info') {
+      const el = document.getElementById('status-box');
+      el.textContent = message || '—';
+      el.dataset.kind = kind === 'error' ? 'error' : kind === 'success' ? 'success' : kind === 'warn' ? 'warn' : 'info';
+    }
+
+    function updateModeBanner() {
+      document.getElementById('edit-mode').textContent = state.editing
+        ? t('backend.settings.mode.editing', '编辑中')
+        : t('backend.settings.mode.readonly', '只读');
+      const configFile = state.payload?.config_file || {};
+      document.getElementById('write-path').textContent = configFile.write_path || '—';
+      document.getElementById('source-path').textContent = configFile.source_path || '—';
+      document.getElementById('mode-note').textContent = configFile.write_note || '';
+      document.getElementById('edit-btn').disabled = state.editing;
+      document.getElementById('cancel-btn').disabled = !state.editing;
+      document.getElementById('save-btn').disabled = !state.editing;
+      document.getElementById('write-file-label').style.display = state.editing ? '' : 'none';
+    }
+
+    function humanizeJson(value) {
+      return JSON.stringify(value ?? null, null, 2);
+    }
+
+    function parsePrimitiveList(raw, itemKind) {
+      const lines = String(raw || '').split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+      if (itemKind === 'integer') return lines.map(item => Number.parseInt(item, 10));
+      if (itemKind === 'number') return lines.map(item => Number(item));
+      if (itemKind === 'boolean') return lines.map(item => ['1', 'true', 'yes', 'on'].includes(item.toLowerCase()));
+      return lines;
+    }
+
+    function markFieldValidity(element, path, valid) {
+      element.classList.toggle('field-invalid', !valid);
+      if (valid) state.invalidFields.delete(path);
+      else state.invalidFields.add(path);
+    }
+
+    const renderer = window.ProjBackendSettingsRenderer.createRenderer({
+      state,
+      getByPath,
+      setByPath,
+      markFieldValidity,
+      parsePrimitiveList,
+      humanizeJson,
+    });
+
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function fetchAdminJson(path, options = {}) {
+      const resp = await fetch(path, { credentials: 'same-origin', ...options });
+      const contentType = String(resp.headers.get('content-type') || '').toLowerCase();
+      const data = contentType.includes('application/json')
+        ? await resp.json().catch(() => ({}))
+        : await resp.text().catch(() => '');
+      if (!resp.ok) {
+        if (resp.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        if (typeof data === 'string') {
+          throw new Error(data || `HTTP ${resp.status}`);
+        }
+        throw new Error(data.detail || data.message || `HTTP ${resp.status}`);
+      }
+      if (typeof data === 'string') {
+        throw new Error('接口未返回 JSON。');
+      }
+      return data;
+    }
+
+    function renderConfig() {
+      const root = document.getElementById('config-root');
+      root.innerHTML = '';
+      const schema = state.payload?.ui_schema || [];
+      schema.forEach(field => {
+        root.appendChild(renderer.renderField(field, getByPath(state.config, field.path), 0));
+      });
+      updateModeBanner();
+    }
+
+    async function loadSettings() {
+      setStatus(t('backend.settings.status.loading', '正在载入后端配置...'));
+      state.payload = await fetchAdminJson('/admin/api/backend/settings');
+      state.config = deepClone(state.payload.config || {});
+      state.originalConfig = deepClone(state.payload.config || {});
+      state.editing = false;
+      state.invalidFields.clear();
+      await loadTranslationsForSchema(state.payload.ui_schema || []);
+      renderConfig();
+      setStatus(state.payload.restart_required_message || t('backend.settings.status.loaded', '已载入'));
+    }
+
+    function startEdit() {
+      state.editing = true;
+      renderConfig();
+      setStatus(t('backend.settings.status.editing', '编辑中'));
+    }
+
+    function cancelEdit() {
+      state.config = deepClone(state.originalConfig || {});
+      state.editing = false;
+      state.invalidFields.clear();
+      document.getElementById('write-file-cb').checked = false;
+      renderConfig();
+      setStatus(t('backend.settings.status.cancelled', '已取消'));
+    }
+
+    async function saveConfig() {
+      if (state.invalidFields.size > 0) {
+        setStatus(`仍有 ${state.invalidFields.size} 个字段格式不合法，请先修正。`, 'error');
+        return;
+      }
+      const writeToFile = document.getElementById('write-file-cb').checked;
+      if (writeToFile) {
+        const writePath = state.payload?.config_file?.write_path || '（未知路径）';
+        const ok = confirm(
+          `⚠️ 写入原配置文件警告\n\n` +
+          `目标文件：${writePath}\n\n` +
+          `写入操作会使用标准序列化器（YAML/JSON）重新生成整个文件内容。` +
+          `原文件中的注释、自定义格式和排版将会丢失，无法恢复。\n\n` +
+          `建议：在写入前手动备份原配置文件。\n\n` +
+          `确认要写入吗？`
+        );
+        if (!ok) return;
+      }
+      document.getElementById('save-btn').disabled = true;
+      setStatus(writeToFile ? '正在写入配置文件…' : '正在应用运行时配置…');
+      try {
+        const data = await fetchAdminJson('/admin/api/backend/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: state.config, write_to_source_file: writeToFile }),
+        });
+        state.originalConfig = deepClone(state.config);
+        state.payload.config = deepClone(state.config);
+        if (data.file_path) {
+          state.payload.config_file = Object.assign({}, state.payload.config_file || {}, {
+            write_path: data.file_path,
+            write_note: data.write_note || null,
+          });
+        }
+        state.editing = false;
+        state.invalidFields.clear();
+        document.getElementById('write-file-cb').checked = false;
+        renderConfig();
+        const suffix = data.restart_required ? ' 建议执行后端重启以完整生效。' : '';
+        setStatus(`${data.message || '配置已应用。'}${suffix}`, 'success');
+      } catch (err) {
+        setStatus(`配置保存失败：${err.message || err}`, 'error');
+      } finally {
+        document.getElementById('save-btn').disabled = !state.editing;
+      }
+    }
+
+    document.getElementById('reload-btn').addEventListener('click', () => loadSettings().catch(err => setStatus(`${t('backend.settings.status.load_failed', '配置载入失败')}：${err.message || err}`, 'error')));
+    document.getElementById('edit-btn').addEventListener('click', startEdit);
+    document.getElementById('cancel-btn').addEventListener('click', cancelEdit);
+    document.getElementById('save-btn').addEventListener('click', saveConfig);
+
+    loadSettings().catch(err => setStatus(`${t('backend.settings.status.load_failed', '配置载入失败')}：${err.message || err}`, 'error'));
+  </script>
+</body>
+</html>

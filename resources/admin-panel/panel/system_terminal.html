@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统终端</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/vendor/xterm/xterm.min.css" />
+  <style>
+    html,
+    body {
+      height: 100%;
+    }
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--proj-page-bg);
+      color: var(--proj-page-text);
+      overflow: hidden;
+    }
+    main {
+      height: 100%;
+      min-height: 0;
+      box-sizing: border-box;
+    }
+    .layout-root {
+      height: 100%;
+      display: flex;
+      min-height: 0;
+    }
+    .panel {
+      background: var(--proj-page-surface);
+      border: 1px solid var(--proj-page-border);
+      box-shadow: var(--proj-page-shadow);
+      border-radius: 10px;
+    }
+    .terminal-window-frame {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 6px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--proj-page-surface-strong) 90%, #0f172a 10%), var(--proj-page-surface));
+    }
+    .terminal-windowbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: end;
+      padding: 2px 2px 0;
+      border-radius: 10px 10px 8px 8px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--proj-page-surface-strong) 88%, #0f172a 12%), color-mix(in srgb, var(--proj-page-surface) 94%, transparent 6%));
+    }
+    .terminal-windowbar-main {
+      min-width: 0;
+    }
+    .terminal-windowbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding-right: 2px;
+      position: relative;
+    }
+    .terminal-split-launch {
+      position: relative;
+      display: inline-flex;
+      align-items: stretch;
+    }
+    .terminal-launchbar {
+      display: grid;
+      grid-template-columns: 110px 180px minmax(220px, 1fr) auto;
+      gap: 6px;
+      align-items: end;
+      padding: 0 2px;
+    }
+    .terminal-launcher-panel {
+      display: grid;
+      gap: 6px;
+      padding: 6px 2px 0;
+      overflow: hidden;
+      max-height: 320px;
+      opacity: 1;
+      border-top: 1px solid color-mix(in srgb, var(--proj-page-border) 82%, transparent 18%);
+      transition: max-height .22s ease, opacity .18s ease, padding-top .18s ease, border-color .18s ease;
+    }
+    .terminal-launcher-panel.collapsed {
+      gap: 0;
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      border-top-color: transparent;
+      pointer-events: none;
+    }
+    .terminal-inline-field {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .terminal-mini-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+    .terminal-launch-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+    .terminal-meta-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 2px;
+    }
+    .terminal-meta-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .terminal-summary {
+      font-size: 11px;
+      color: var(--proj-page-muted);
+      white-space: nowrap;
+    }
+    .field {
+      width: 100%;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--proj-page-border);
+      background: var(--proj-page-input);
+      color: var(--proj-page-text);
+      padding: 0 8px;
+      font-size: 12px;
+    }
+    .field:focus {
+      outline: none;
+      border-color: rgba(99, 102, 241, 0.52);
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.22);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--proj-page-border);
+      padding: 0 9px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--proj-page-surface-strong);
+      color: var(--proj-page-text);
+      transition: background .15s ease, transform .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #0f766e);
+      border-color: rgba(37, 99, 235, 0.35);
+      color: #fff;
+    }
+    .window-btn {
+      width: 30px;
+      min-width: 30px;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1;
+      justify-content: center;
+    }
+    .split-main-btn {
+      width: 30px;
+      min-width: 30px;
+      padding: 0;
+      justify-content: center;
+      font-size: 16px;
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+      border-right: none;
+    }
+    .split-menu-btn {
+      width: 24px;
+      min-width: 24px;
+      padding: 0;
+      justify-content: center;
+      font-size: 11px;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+    .terminal-profile-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 220px;
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid var(--proj-page-border);
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, #0f172a 4%);
+      box-shadow: 0 18px 48px rgba(2, 6, 23, .24);
+      z-index: 20;
+      display: none;
+    }
+    .terminal-profile-menu.open {
+      display: block;
+    }
+    .terminal-profile-menu-header {
+      padding: 4px 6px 7px;
+      border-bottom: 1px solid color-mix(in srgb, var(--proj-page-border) 84%, transparent 16%);
+      margin-bottom: 4px;
+    }
+    .terminal-profile-menu-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--proj-page-muted);
+    }
+    .terminal-profile-menu-subtitle {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--proj-page-muted);
+      line-height: 1.5;
+    }
+    .terminal-profile-item {
+      width: 100%;
+      display: grid;
+      gap: 2px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .terminal-profile-item:hover {
+      background: color-mix(in srgb, var(--proj-page-surface-strong) 90%, white 10%);
+      border-color: color-mix(in srgb, var(--proj-page-border) 86%, transparent 14%);
+    }
+    .terminal-profile-item-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--proj-page-text);
+    }
+    .terminal-profile-item-meta {
+      display: none;
+    }
+    .terminal-divider {
+      height: 1px;
+      margin: 5px 4px;
+      background: color-mix(in srgb, var(--proj-page-border) 84%, transparent 16%);
+    }
+    .chip {
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border);
+      background: var(--proj-page-surface-strong);
+      min-height: 26px;
+      padding: 0 9px;
+      font-size: 10px;
+      color: var(--proj-page-muted);
+      display: inline-flex;
+      align-items: center;
+    }
+    .shell-hints {
+      display: none !important;
+    }
+    .shell-hints.open {
+      display: none !important;
+    }
+    .shell-hint {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border);
+      background: var(--proj-page-surface-strong);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--proj-page-text);
+    }
+    .shell-hint[data-kind="wsl"] {
+      border-color: rgba(14, 165, 233, .28);
+      background: rgba(14, 165, 233, .12);
+      color: #0f766e;
+    }
+    .tab-list {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x proximity;
+      padding: 0 2px 2px 0;
+      border-radius: 0;
+      border: none;
+      background: transparent;
+    }
+    .session-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: clamp(136px, 19vw, 208px);
+      max-width: min(260px, 32vw);
+      padding: 7px 10px 6px;
+      border-radius: 10px 10px 0 0;
+      border: 1px solid transparent;
+      border-bottom-color: transparent;
+      background: color-mix(in srgb, var(--proj-page-surface-strong) 88%, #0f172a 12%);
+      cursor: pointer;
+      transition: all .15s ease;
+      position: relative;
+      flex-shrink: 0;
+      scroll-snap-align: start;
+    }
+    .session-tab:hover {
+      transform: none;
+      background: color-mix(in srgb, var(--proj-page-surface-strong) 94%, white 6%);
+    }
+    .session-tab.active {
+      background: var(--proj-page-surface);
+      border-color: var(--proj-page-border);
+      box-shadow: none;
+    }
+    .session-tab.offline .session-tab-dot { background: #f59e0b; }
+    .session-tab.online .session-tab-dot { background: #10b981; }
+    .session-tab.error .session-tab-dot { background: #ef4444; }
+    .session-tab-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #94a3b8;
+      flex-shrink: 0;
+    }
+    .session-tab-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--proj-page-text);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .session-tab-meta {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--proj-page-muted);
+      font-size: 10px;
+      line-height: 1.35;
+    }
+    .session-tab.active .session-tab-title { color: var(--proj-page-text); }
+    .session-tab.active .session-tab-meta { color: var(--proj-page-muted); }
+    .session-tab-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      color: var(--proj-page-muted);
+      flex-shrink: 0;
+    }
+    .session-tab-close:hover {
+      border-color: var(--proj-page-border);
+      color: var(--proj-page-text);
+    }
+    .session-focus-card {
+      display: none !important;
+    }
+    #terminal-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      border-radius: 10px;
+      border: 1px solid var(--proj-page-border);
+      background: #020617;
+      overflow: hidden;
+    }
+    .term-shell {
+      position: absolute;
+      inset: 0;
+      display: none;
+      overflow: hidden;
+      background: #020617;
+    }
+    .term-shell.active { display: block; }
+    .term-host {
+      width: 100%;
+      height: 100%;
+      padding: 10px 12px 12px;
+    }
+    .term-host .xterm .xterm-viewport {
+      scrollbar-gutter: stable;
+      overflow-y: auto !important;
+    }
+    .term-host .xterm .xterm-screen {
+      padding-right: 6px;
+      box-sizing: border-box;
+    }
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: rgba(2, 6, 23, 0.86);
+      color: #94a3b8;
+    }
+    .empty-subtitle {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--proj-page-muted);
+    }
+    * { scrollbar-width: thin; scrollbar-color: #64748b transparent; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-thumb { background: #64748b; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    @media (max-width: 900px) {
+      .terminal-profile-menu {
+        min-width: 200px;
+      }
+      .session-tab {
+        min-width: 124px;
+        max-width: min(210px, 38vw);
+        padding: 6px 8px 5px;
+      }
+      .session-tab-title {
+        font-size: 10px;
+      }
+      .session-tab-meta {
+        font-size: 9px;
+      }
+      .terminal-launchbar {
+        grid-template-columns: 1fr 1fr;
+      }
+      .terminal-launchbar .terminal-inline-field.path {
+        grid-column: 1 / -1;
+      }
+      .terminal-launch-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+      }
+      .terminal-meta-strip {
+        align-items: flex-start;
+      }
+    }
+    @media (max-width: 640px) {
+      .terminal-windowbar {
+        grid-template-columns: 1fr;
+      }
+      .terminal-windowbar-actions {
+        gap: 3px;
+      }
+      .session-tab {
+        min-width: 108px;
+        max-width: min(72vw, 176px);
+        padding: 6px 8px;
+      }
+      .session-tab-meta {
+        display: none;
+      }
+      .window-btn {
+        width: 28px;
+        min-width: 28px;
+      }
+      .terminal-launchbar {
+        grid-template-columns: 1fr;
+      }
+      .terminal-launch-actions {
+        justify-content: flex-start;
+      }
+      .terminal-meta-strip {
+        display: grid;
+        align-items: flex-start;
+      }
+      .terminal-summary {
+        white-space: normal;
+      }
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body>
+  <main class="min-h-screen p-2 md:p-3">
+    <div class="layout-root">
+      <section class="panel terminal-window-frame">
+        <div class="terminal-windowbar">
+          <div class="terminal-windowbar-main">
+            <div id="session-tabs" class="tab-list"></div>
+          </div>
+          <div class="terminal-windowbar-actions">
+            <div class="terminal-split-launch">
+              <button id="new-tab-btn" type="button" class="btn btn-primary split-main-btn">+</button>
+              <button id="profile-menu-btn" type="button" class="btn btn-primary split-menu-btn" aria-haspopup="menu" aria-expanded="false">▾</button>
+              <div id="profile-menu" class="terminal-profile-menu" role="menu" aria-hidden="true">
+                <div class="terminal-profile-menu-header">
+                  <div class="terminal-profile-menu-title" data-i18n="term.profileMenu">终端配置</div>
+                </div>
+                <div id="profile-menu-items"></div>
+                <div class="terminal-divider"></div>
+                <button id="launcher-toggle-menu-btn" type="button" class="terminal-profile-item" role="menuitem">
+                  <span class="terminal-profile-item-title" data-i18n="term.launcherExpand">展开启动栏</span>
+                </button>
+              </div>
+            </div>
+            <button id="launcher-toggle-btn" type="button" class="btn window-btn"><i class="proj-icon proj-icon-chevron-down"></i></button>
+            <button id="duplicate-tab-btn" type="button" class="btn window-btn">⧉</button>
+            <button id="rename-tab-btn" type="button" class="btn window-btn"><i class="proj-icon proj-icon-pencil"></i></button>
+            <button id="close-tab-btn" type="button" class="btn window-btn">×</button>
+          </div>
+        </div>
+
+        <div id="terminal-launcher-panel" class="terminal-launcher-panel collapsed">
+          <div class="terminal-launchbar">
+            <label class="terminal-inline-field">
+              <span class="terminal-mini-label" data-i18n="term.shell">终端类型</span>
+              <select id="shell-select" class="field"></select>
+            </label>
+            <label class="terminal-inline-field">
+              <span class="terminal-mini-label" data-i18n="term.root">根目录</span>
+              <select id="root-select" class="field"></select>
+            </label>
+            <label class="terminal-inline-field path">
+              <span class="terminal-mini-label" data-i18n="term.path">相对路径</span>
+              <input id="path-input" class="field font-mono" data-i18n-placeholder="term.path.placeholder" placeholder="例如: server 或留空表示根目录" />
+            </label>
+            <div class="terminal-launch-actions">
+              <button id="connect-btn" type="button" class="btn btn-primary" data-i18n="term.connect">连接</button>
+              <button id="disconnect-btn" type="button" class="btn" data-i18n="term.disconnect">断开</button>
+              <button id="clear-btn" type="button" class="btn" data-i18n="term.clear">清屏</button>
+              <div id="terminal-status" class="chip" data-i18n="term.status.waiting">等待初始化</div>
+            </div>
+          </div>
+
+          <div class="terminal-meta-strip">
+            <div class="terminal-meta-group">
+              <div id="backend-chip" class="chip">backend: -</div>
+              <div id="active-shell-chip" class="chip">shell: -</div>
+              <div id="active-state-chip" class="chip">state: -</div>
+              <div id="cwd-chip" class="chip font-mono">cwd: -</div>
+            </div>
+            <div id="session-summary" class="terminal-summary">0 个标签</div>
+          </div>
+
+        </div>
+
+        <div id="session-focus-card" class="session-focus-card">
+          <div>
+            <div class="session-focus-kicker">Active Session</div>
+            <div id="focus-title" class="session-focus-title">未选择标签</div>
+            <div id="focus-meta" class="session-focus-meta"></div>
+          </div>
+          <div class="session-focus-pills">
+            <span id="focus-connection" class="session-focus-pill" data-tone="warn">未连接</span>
+            <span id="focus-shell" class="session-focus-pill" data-tone="info">shell: -</span>
+            <span id="focus-root" class="session-focus-pill">root: -</span>
+          </div>
+        </div>
+        <div id="terminal-stage">
+          <div id="empty-state" class="empty-state">
+            <div>
+              <div id="empty-title" class="text-sm font-semibold text-slate-600" data-i18n="term.empty">尚未创建终端标签，点击 + 手动新建</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/vendor/xterm/xterm.min.js"></script>
+  <script src="/vendor/xterm/xterm-addon-fit.min.js"></script>
+  <script>
+    'use strict';
+
+    window.I18N = Object.assign({}, window.I18N || {}, {
+      'term.kicker': { 'zh-cn': 'System Terminal', en: 'System Terminal' },
+      'term.title': { 'zh-cn': '终端标签', 'zh-tw': '終端標籤', en: 'Terminal Tabs' },
+      'term.shell': { 'zh-cn': '终端类型', 'zh-tw': '終端類型', en: 'Shell' },
+      'term.root': { 'zh-cn': '根目录', 'zh-tw': '根目錄', en: 'Root' },
+      'term.path': { 'zh-cn': '相对路径', 'zh-tw': '相對路徑', en: 'Relative Path' },
+      'term.path.placeholder': { 'zh-cn': '例如: server 或留空表示根目录', 'zh-tw': '例如: server 或留空表示根目錄', en: 'Example: server, or leave empty for root' },
+      'term.connect': { 'zh-cn': '连接', 'zh-tw': '連線', en: 'Connect' },
+      'term.newTab': { 'zh-cn': '新建', 'zh-tw': '新增', en: 'New Tab' },
+      'term.duplicate': { 'zh-cn': '复制', 'zh-tw': '複製', en: 'Duplicate' },
+      'term.rename': { 'zh-cn': '重命名', 'zh-tw': '重新命名', en: 'Rename' },
+      'term.disconnect': { 'zh-cn': '断开', 'zh-tw': '中斷', en: 'Disconnect' },
+      'term.close': { 'zh-cn': '关闭', 'zh-tw': '關閉', en: 'Close' },
+      'term.clear': { 'zh-cn': '清屏', 'zh-tw': '清屏', en: 'Clear' },
+      'term.profileMenu': { 'zh-cn': '终端配置', 'zh-tw': '終端設定', en: 'Profiles' },
+      'term.launcherExpand': { 'zh-cn': '展开启动栏', 'zh-tw': '展開啟動列', en: 'Open launcher' },
+      'term.launcherCollapse': { 'zh-cn': '收起启动栏', 'zh-tw': '收起啟動列', en: 'Collapse launcher' },
+      'term.openWithProfile': { 'zh-cn': '用此配置新建标签', 'zh-tw': '用此設定建立標籤', en: 'Open a tab with this profile' },
+      'term.renamePrompt': { 'zh-cn': '输入标签名称（留空恢复自动命名）', 'zh-tw': '輸入標籤名稱（留空恢復自動命名）', en: 'Enter a tab name (leave empty to restore auto naming)' },
+      'term.duplicateSuffix': { 'zh-cn': '副本', 'zh-tw': '副本', en: 'Copy' },
+      'term.status.waiting': { 'zh-cn': '等待初始化', 'zh-tw': '等待初始化', en: 'Waiting for init' },
+      'term.empty': { 'zh-cn': '尚未创建终端标签，点击 + 手动新建', 'zh-tw': '尚未建立終端標籤，點擊 + 手動新增', en: 'No terminal tab yet. Click + to create one manually' },
+      'term.pageTitle': { 'zh-cn': '系统终端', 'zh-tw': '系統終端', en: 'System Terminal' }
+    });
+
+    function currentLang() {
+      return typeof window.PageControls?.getLang === 'function' ? window.PageControls.getLang() : (document.documentElement.dataset.projLang || 'zh-cn');
+    }
+
+    function uiKey(key, fallbackZh = '', fallbackEn = '') {
+      const table = window.I18N || {};
+      const entry = table[key];
+      if (!entry) return currentLang() === 'en' ? fallbackEn : fallbackZh;
+      const lang = currentLang();
+      return entry[lang] || entry['zh-cn'] || entry.en || fallbackZh || fallbackEn || key;
+    }
+
+    function uiText(zh, en) {
+      return currentLang() === 'en' ? en : zh;
+    }
+
+    function applyStaticTranslations() {
+      const pathInput = document.getElementById('path-input');
+      if (pathInput) pathInput.placeholder = uiKey('term.path.placeholder', '例如: server 或留空表示根目录', 'Example: server, or leave empty for root');
+      [
+        ['new-tab-btn', '+', uiKey('term.newTab', '新建', 'New Tab')],
+        ['profile-menu-btn', '▾', uiKey('term.profileMenu', '终端配置', 'Profiles')],
+        ['launcher-toggle-btn', state.launcherExpanded ? '<i class="proj-icon proj-icon-chevron-down" style="transform:rotate(180deg)"></i>' : '<i class="proj-icon proj-icon-chevron-down"></i>', state.launcherExpanded ? uiKey('term.launcherCollapse', '收起启动栏', 'Collapse launcher') : uiKey('term.launcherExpand', '展开启动栏', 'Open launcher')],
+        ['duplicate-tab-btn', '⧉', uiKey('term.duplicate', '复制', 'Duplicate')],
+        ['rename-tab-btn', '<i class="proj-icon proj-icon-pencil"></i>', uiKey('term.rename', '重命名', 'Rename')],
+        ['close-tab-btn', '×', uiKey('term.close', '关闭', 'Close')]
+      ].forEach(([id, symbol, label]) => {
+        const button = document.getElementById(id);
+        if (!button) return;
+        button.innerHTML = symbol;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+      });
+      const menuTitle = document.querySelector('#launcher-toggle-menu-btn .terminal-profile-item-title');
+      if (menuTitle) {
+        menuTitle.textContent = state.launcherExpanded
+          ? uiKey('term.launcherCollapse', '收起启动栏', 'Collapse launcher')
+          : uiKey('term.launcherExpand', '展开启动栏', 'Open launcher');
+      }
+      document.title = uiKey('term.pageTitle', '系统终端', 'System Terminal');
+    }
+
+    const state = {
+      config: null,
+      sessions: new Map(),
+      order: [],
+      activeId: null,
+      nextId: 1,
+      stageObserver: null,
+      fitFrame: 0,
+      fitTimer: 0,
+      pendingForceFit: false,
+      launcherExpanded: false,
+      launcherPreference: null,
+      profileMenuOpen: false,
+      compactMode: false,
+      mediaQuery: null,
+    };
+
+    const LAUNCHER_STORAGE_KEY = 'proj-terminal-launcher-expanded';
+    const COMPACT_LAYOUT_MEDIA = '(max-width: 720px)';
+    const HEARTBEAT_INTERVAL_MS = 12000;
+    const HEARTBEAT_TIMEOUT_MS = 35000;
+    const FIT_RETRY_DELAY_MS = 80;
+    const FIT_LAYOUT_SETTLE_MS = 110;
+    const LAUNCHER_TRANSITION_MS = 180;
+
+    function isCompactLayout() {
+      if (state.mediaQuery) return !!state.mediaQuery.matches;
+      return window.matchMedia(COMPACT_LAYOUT_MEDIA).matches;
+    }
+
+    function resolveLauncherExpanded() {
+      return state.launcherPreference == null ? !isCompactLayout() : !!state.launcherPreference;
+    }
+
+    function updateResponsiveFlags() {
+      const nextCompact = isCompactLayout();
+      const changed = nextCompact !== state.compactMode;
+      state.compactMode = nextCompact;
+      document.documentElement.dataset.projTerminalCompact = nextCompact ? '1' : '0';
+      if (document.body) document.body.dataset.projTerminalCompact = nextCompact ? '1' : '0';
+      return changed;
+    }
+
+    function preferredTerminalFontSize() {
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
+      if (viewportWidth <= 480) return 11;
+      if (viewportWidth <= 720) return 12;
+      return 13;
+    }
+
+    function readLauncherPreference() {
+      try {
+        const raw = localStorage.getItem(LAUNCHER_STORAGE_KEY);
+        if (raw === '1') return true;
+        if (raw === '0') return false;
+        return null;
+      } catch {
+        return null;
+      }
+    }
+
+    function writeLauncherPreference() {
+      try {
+        if (state.launcherPreference == null) localStorage.removeItem(LAUNCHER_STORAGE_KEY);
+        else localStorage.setItem(LAUNCHER_STORAGE_KEY, state.launcherPreference ? '1' : '0');
+      } catch {}
+    }
+
+    function setLauncherExpanded(expanded, options = {}) {
+      state.launcherExpanded = !!expanded;
+      const panel = document.getElementById('terminal-launcher-panel');
+      const hints = document.getElementById('shell-hints');
+      if (panel) panel.classList.toggle('collapsed', !state.launcherExpanded);
+      if (hints) hints.classList.toggle('open', state.launcherExpanded && hints.childElementCount > 0);
+      if (options.persist !== false) {
+        state.launcherPreference = state.launcherExpanded;
+        writeLauncherPreference();
+      }
+      applyStaticTranslations();
+      if (!options.silent) {
+        fitActiveSession(true);
+        fitActiveSession(true, options.delay ?? LAUNCHER_TRANSITION_MS);
+      }
+    }
+
+    function toggleLauncherPanel(force) {
+      const next = typeof force === 'boolean' ? force : !state.launcherExpanded;
+      state.launcherPreference = next;
+      writeLauncherPreference();
+      setLauncherExpanded(next, { persist: false });
+    }
+
+    function syncLauncherLayout(options = {}) {
+      setLauncherExpanded(resolveLauncherExpanded(), { ...options, persist: false });
+    }
+
+    function setProfileMenuOpen(open) {
+      state.profileMenuOpen = !!open;
+      const menu = document.getElementById('profile-menu');
+      const button = document.getElementById('profile-menu-btn');
+      if (menu) {
+        menu.classList.toggle('open', state.profileMenuOpen);
+        menu.setAttribute('aria-hidden', state.profileMenuOpen ? 'false' : 'true');
+      }
+      if (button) button.setAttribute('aria-expanded', state.profileMenuOpen ? 'true' : 'false');
+    }
+
+    function toggleProfileMenu(force) {
+      const next = typeof force === 'boolean' ? force : !state.profileMenuOpen;
+      setProfileMenuOpen(next);
+    }
+
+    function httpUrl(path) {
+      return typeof window.projResolveUrl === 'function' ? window.projResolveUrl(path) : path;
+    }
+
+    function wsUrl(path, params) {
+      const base = (window.__FRONTEND_CONFIG__ && window.__FRONTEND_CONFIG__.frontend_baseurl) || '';
+      const target = new URL(httpUrl(path), base ? base + '/' : window.location.href);
+      target.protocol = target.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value == null) return;
+          target.searchParams.set(key, String(value));
+        });
+      }
+      return target.toString();
+    }
+
+    function isDarkTheme() {
+      return !!(window.PageControls && typeof window.PageControls.getDark === 'function' ? window.PageControls.getDark() : document.documentElement.classList.contains('dark'));
+    }
+
+    function postParentMessage(message) {
+      if (!message || !window.parent || window.parent === window) return;
+      try {
+        window.parent.postMessage(message, '*');
+      } catch {}
+    }
+
+    function syncParentTerminalState() {
+      let connectedCount = 0;
+      for (const session of state.sessions.values()) {
+        if (session.connected) connectedCount += 1;
+      }
+      postParentMessage({
+        type: 'proj-terminal-state',
+        sessionCount: state.order.length,
+        connectedCount,
+      });
+    }
+
+    function buildXtermTheme() {
+      return {
+        background: '#020617',
+        foreground: '#e2e8f0',
+        cursor: '#818cf8',
+        selectionBackground: 'rgba(129,140,248,.28)',
+        black: '#020617',
+        red: '#f87171',
+        green: '#4ade80',
+        yellow: '#fbbf24',
+        blue: '#60a5fa',
+        magenta: '#c084fc',
+        cyan: '#22d3ee',
+        white: '#e2e8f0',
+        brightBlack: '#475569',
+        brightWhite: '#f8fafc'
+      };
+    }
+
+    function wrapAnsi(code, text) {
+      return `\u001b[${code}m${text}\u001b[0m`;
+    }
+
+    function hasAnsi(text) {
+      return /\u001b\[[0-9;]*m/.test(String(text || ''));
+    }
+
+    function colorizePlainLine(line) {
+      const raw = String(line || '');
+      if (!raw) return raw;
+      const promptMatch = raw.match(/^((?:PS\s+[^>]*>|[A-Za-z]:\\[^>]*>|[^\s@]+@[^\s:]+:[^#$>]*[#$]))\s*(.*)$/);
+      if (promptMatch) {
+        const prompt = wrapAnsi('1;36', promptMatch[1]);
+        const command = promptMatch[2] ? wrapAnsi('1;37', promptMatch[2]) : '';
+        return `${prompt}${command}`;
+      }
+      if (/^\[connecting/i.test(raw)) return wrapAnsi('1;36', raw);
+      if (/^\[(session closed|session disconnected)\]/i.test(raw)) return wrapAnsi('1;33', raw);
+      if (/^\[error\]/i.test(raw)) return wrapAnsi('1;31', raw);
+      if (/\b(error|exception|traceback|failed|denied|not found|无法|失败)\b/i.test(raw)) return wrapAnsi('31', raw);
+      if (/\b(warn|warning|deprecated|注意)\b/i.test(raw)) return wrapAnsi('33', raw);
+      if (/^(\$|>|\+)\s+/.test(raw)) return wrapAnsi('36', raw);
+      return raw;
+    }
+
+    function colorizePlainOutput(text) {
+      const source = String(text || '');
+      if (!source || hasAnsi(source)) return source;
+      return source
+        .split(/(\r?\n)/)
+        .map((part) => (/^\r?\n$/.test(part) ? part : colorizePlainLine(part)))
+        .join('');
+    }
+
+    function writeTerminalOutput(session, text) {
+      if (!session) return;
+      session.term.write(colorizePlainOutput(text));
+    }
+
+    function writeTerminalNotice(session, message, tone) {
+      if (!session) return;
+      const code = tone === 'error'
+        ? '1;31'
+        : tone === 'warn'
+          ? '1;33'
+          : tone === 'ok'
+            ? '1;32'
+            : '1;36';
+      session.term.write(`${wrapAnsi(code, message)}\r\n`);
+    }
+
+    function clearSessionHeartbeat(session) {
+      if (!session) return;
+      if (session.heartbeatTimer) {
+        window.clearInterval(session.heartbeatTimer);
+        session.heartbeatTimer = 0;
+      }
+      session.lastPingAt = 0;
+      session.lastActivityAt = 0;
+    }
+
+    function startSessionHeartbeat(session, socket) {
+      if (!session) return;
+      clearSessionHeartbeat(session);
+      session.lastActivityAt = Date.now();
+      session.heartbeatTimer = window.setInterval(() => {
+        if (!session.ws || session.ws !== socket || socket.readyState !== WebSocket.OPEN) {
+          clearSessionHeartbeat(session);
+          return;
+        }
+        const now = Date.now();
+        if (session.lastPingAt && session.lastActivityAt < session.lastPingAt) {
+          if ((now - session.lastPingAt) > HEARTBEAT_TIMEOUT_MS) {
+            clearSessionHeartbeat(session);
+            session.connected = false;
+            session.lastError = uiText('终端连接超时，请重新连接标签。', 'Terminal connection timed out. Reconnect the tab.');
+            writeTerminalNotice(session, `[error] ${session.lastError}`, 'error');
+            renderTabs();
+            try { socket.close(); } catch {}
+          }
+          return;
+        }
+        session.lastPingAt = now;
+        try {
+          socket.send(JSON.stringify({ type: 'ping' }));
+        } catch {}
+      }, HEARTBEAT_INTERVAL_MS);
+    }
+
+    function isCurrentSocket(session, socket) {
+      return !!session && !!socket && session.ws === socket;
+    }
+
+    function setFocusPill(id, text, tone) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text;
+      el.dataset.tone = tone || '';
+    }
+
+    function activeSession() {
+      return state.activeId ? state.sessions.get(state.activeId) || null : null;
+    }
+
+    function shellInfoByKey(shellKey) {
+      if (!state.config) return null;
+      return state.config.available_shells.find((item) => item.key === shellKey) || state.config.available_shells[0] || null;
+    }
+
+    function rootLabel(rootKey) {
+      if (!state.config) return rootKey || '-';
+      const item = state.config.roots.find((entry) => entry.key === rootKey);
+      return item ? item.label : (rootKey || '-');
+    }
+
+    function sessionTitle(session) {
+      if (session.customLabel) return session.customLabel;
+      const location = session.path ? session.path.split('/').filter(Boolean).pop() : rootLabel(session.root);
+      return `${session.shellLabel || uiText('终端', 'Terminal')} · ${location || rootLabel(session.root)}`;
+    }
+
+    function sessionMeta(session) {
+      const prefix = rootLabel(session.root || state.config?.default_root || '');
+      return `${prefix}${session.path ? '/' + session.path : ''}`;
+    }
+
+    function setStatus(message, kind) {
+      const el = document.getElementById('terminal-status');
+      el.textContent = message;
+      el.style.color = kind === 'error' ? '#dc2626' : kind === 'warn' ? '#b45309' : '#475569';
+    }
+
+    function updateIndicators() {
+      const session = activeSession();
+      document.getElementById('session-summary').textContent = uiText(`${state.order.length} 个标签`, `${state.order.length} tabs`);
+      document.getElementById('empty-state').style.display = state.order.length ? 'none' : 'flex';
+      if (!session) {
+        document.getElementById('active-shell-chip').textContent = 'shell: -';
+        document.getElementById('active-state-chip').textContent = 'state: -';
+        document.getElementById('cwd-chip').textContent = 'cwd: -';
+        document.getElementById('focus-title').textContent = uiText('未选择标签', 'No active tab');
+        document.getElementById('focus-meta').textContent = '';
+        setFocusPill('focus-connection', uiText('未连接', 'Offline'), 'warn');
+        setFocusPill('focus-shell', 'shell: -', 'info');
+        setFocusPill('focus-root', 'root: -', '');
+        return;
+      }
+      const status = session.lastError ? 'error' : session.connected ? 'online' : 'idle';
+      document.getElementById('active-shell-chip').textContent = `shell: ${session.shellLabel || '-'}`;
+      document.getElementById('active-state-chip').textContent = `state: ${status}`;
+      document.getElementById('cwd-chip').textContent = `cwd: ${sessionMeta(session)}`;
+      const label = session.connected ? `${uiText('已连接', 'Connected')} · ${session.shellLabel}` : session.lastError ? `${uiText('异常', 'Error')} · ${session.shellLabel}` : `${uiText('未连接', 'Idle')} · ${session.shellLabel}`;
+      document.getElementById('focus-title').textContent = sessionTitle(session);
+      document.getElementById('focus-meta').textContent = `${sessionMeta(session)} · ${session.connected ? uiText('正在收发终端数据', 'Streaming terminal I/O') : session.lastError ? session.lastError : uiText('等待连接或重新连接此标签页', 'Waiting to connect or reconnect this tab')}`;
+      setFocusPill('focus-connection', session.connected ? uiText('在线', 'Online') : session.lastError ? uiText('异常', 'Error') : uiText('空闲', 'Idle'), session.connected ? 'ok' : session.lastError ? 'error' : 'warn');
+      setFocusPill('focus-shell', `shell: ${session.shellLabel || '-'}`, 'info');
+      setFocusPill('focus-root', `root: ${rootLabel(session.root || '')}`, '');
+      setStatus(label, session.lastError ? 'error' : session.connected ? 'ok' : 'warn');
+    }
+
+    function syncControlsFromSession(session) {
+      if (!session) return;
+      const shellSelect = document.getElementById('shell-select');
+      const rootSelect = document.getElementById('root-select');
+      const pathInput = document.getElementById('path-input');
+      if (session.shell) shellSelect.value = session.shell;
+      if (session.root) rootSelect.value = session.root;
+      pathInput.value = session.path || '';
+    }
+
+    function applyControlsToSession(session) {
+      if (!session || !state.config) return;
+      const shellKey = document.getElementById('shell-select').value || session.shell;
+      const shellInfo = shellInfoByKey(shellKey);
+      session.shell = shellInfo?.key || shellKey || '';
+      session.shellLabel = shellInfo?.label || session.shellLabel || '终端';
+      session.root = document.getElementById('root-select').value || state.config.default_root || session.root;
+      session.path = document.getElementById('path-input').value.trim();
+      renderTabs();
+    }
+
+    function launchContext(seed = null) {
+      const rootSelect = document.getElementById('root-select');
+      const pathInput = document.getElementById('path-input');
+      return {
+        root: rootSelect?.value || seed?.root || state.config?.default_root || '',
+        path: pathInput ? pathInput.value.trim() : (seed?.path ?? state.config?.default_terminal_path ?? ''),
+      };
+    }
+
+    function applyThemeToSessions() {
+      const theme = buildXtermTheme();
+      for (const session of state.sessions.values()) {
+        session.term.options.theme = theme;
+        session.shellEl.style.background = theme.background;
+        if (typeof session.term.refresh === 'function') {
+          session.term.refresh(0, Math.max(0, session.term.rows - 1));
+        }
+      }
+    }
+
+    function applyResponsiveTerminalFontSize() {
+      const nextSize = preferredTerminalFontSize();
+      let changed = false;
+      for (const session of state.sessions.values()) {
+        if (session.term.options.fontSize === nextSize) continue;
+        session.term.options.fontSize = nextSize;
+        session.lastFitHostSize = '';
+        session.lastResizeKey = '';
+        changed = true;
+      }
+      return changed;
+    }
+
+    function fitSession(session, options = {}) {
+      if (!session) return;
+      const hostRect = session.host.getBoundingClientRect();
+      const hostSizeKey = `${Math.round(hostRect.width)}x${Math.round(hostRect.height)}`;
+      if (!options.force && session.lastFitHostSize === hostSizeKey) return;
+      session.lastFitHostSize = hostSizeKey;
+      try {
+        session.fitAddon.fit();
+      } catch {}
+      const resizeKey = `${session.term.cols}x${session.term.rows}`;
+      if (!options.force && session.lastResizeKey === resizeKey) return;
+      session.lastResizeKey = resizeKey;
+      if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+        try {
+          session.ws.send(JSON.stringify({ type: 'resize', cols: session.term.cols, rows: session.term.rows }));
+        } catch {}
+      }
+    }
+
+    function fitActiveSession(force = false, delay = 0) {
+      state.pendingForceFit = state.pendingForceFit || force;
+      if (delay > 0) {
+        if (state.fitTimer) window.clearTimeout(state.fitTimer);
+        state.fitTimer = window.setTimeout(() => {
+          state.fitTimer = 0;
+          fitActiveSession(force);
+        }, delay);
+        return;
+      }
+      if (state.fitFrame) return;
+      state.fitFrame = requestAnimationFrame(() => {
+        state.fitFrame = 0;
+        const session = activeSession();
+        if (!session || document.hidden) return;
+        const rect = session.host.getBoundingClientRect();
+        if (rect.width < 12 || rect.height < 12) {
+          fitActiveSession(state.pendingForceFit, FIT_RETRY_DELAY_MS);
+          return;
+        }
+        const nextForce = state.pendingForceFit;
+        state.pendingForceFit = false;
+        fitSession(session, { force: nextForce });
+      });
+    }
+
+    function renderTabs() {
+      const wrap = document.getElementById('session-tabs');
+      wrap.innerHTML = '';
+      state.order.forEach((id) => {
+        const session = state.sessions.get(id);
+        if (!session) return;
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = `session-tab ${state.activeId === id ? 'active' : ''} ${session.lastError ? 'error' : session.connected ? 'online' : 'offline'}`;
+        tab.innerHTML = `
+          <span class="session-tab-dot"></span>
+          <span class="min-w-0 flex-1 text-left">
+            <span class="session-tab-title">${escapeHtml(sessionTitle(session))}</span>
+            <span class="session-tab-meta">${escapeHtml(sessionMeta(session))}</span>
+          </span>
+          <span class="session-tab-close" aria-label="${escapeHtml(uiText('关闭', 'Close'))}">×</span>`;
+        tab.title = `${sessionTitle(session)}\n${sessionMeta(session)}`;
+        tab.addEventListener('click', () => activateSession(id));
+        tab.addEventListener('dblclick', () => renameSession(id));
+        tab.querySelector('.session-tab-close').addEventListener('click', (event) => {
+          event.stopPropagation();
+          closeSession(id);
+        });
+        wrap.appendChild(tab);
+      });
+      updateIndicators();
+      syncParentTerminalState();
+    }
+
+    function activateSession(id) {
+      if (!state.sessions.has(id)) return;
+      state.activeId = id;
+      syncControlsFromSession(state.sessions.get(id));
+      state.sessions.forEach((session, sessionId) => {
+        session.shellEl.classList.toggle('active', sessionId === id);
+      });
+      renderTabs();
+      requestAnimationFrame(() => {
+        const session = activeSession();
+        if (!session) return;
+        fitActiveSession(true);
+        session.term.focus();
+      });
+    }
+
+    function disconnectSession(session, options = {}) {
+      if (!session) return;
+      clearSessionHeartbeat(session);
+      if (session.ws) {
+        try { session.ws.close(); } catch {}
+      }
+      session.ws = null;
+      session.connected = false;
+      if (!options.silent) {
+        writeTerminalNotice(session, '[session disconnected]', 'warn');
+      }
+      renderTabs();
+    }
+
+    function destroySession(session) {
+      disconnectSession(session, { silent: true });
+      try { session.term.dispose(); } catch {}
+      try { session.shellEl.remove(); } catch {}
+    }
+
+    function closeSession(id) {
+      const session = state.sessions.get(id);
+      if (!session) return;
+      destroySession(session);
+      state.sessions.delete(id);
+      state.order = state.order.filter((item) => item !== id);
+      if (state.activeId === id) {
+        state.activeId = state.order[state.order.length - 1] || null;
+      }
+      renderTabs();
+      if (state.activeId) activateSession(state.activeId);
+    }
+
+    function closeAllSessions() {
+      if (!state.order.length) return;
+      for (const id of [...state.order]) {
+        const session = state.sessions.get(id);
+        if (!session) continue;
+        destroySession(session);
+      }
+      state.sessions.clear();
+      state.order = [];
+      state.activeId = null;
+      renderTabs();
+      setStatus(uiText('已关闭所有终端标签', 'All terminal tabs closed'), 'ok');
+    }
+
+    function createSession(options = {}) {
+      const seed = options.seed || activeSession() || null;
+      const desiredShellKey = options.shellKey || seed?.shell || document.getElementById('shell-select')?.value || '';
+      const shellInfo = shellInfoByKey(desiredShellKey);
+      const launch = launchContext(seed);
+      const id = `terminal-${state.nextId++}`;
+      const shellEl = document.createElement('div');
+      shellEl.className = 'term-shell';
+      shellEl.dataset.sessionId = id;
+      const host = document.createElement('div');
+      host.className = 'term-host';
+      shellEl.appendChild(host);
+      document.getElementById('terminal-stage').appendChild(shellEl);
+
+      const term = new Terminal({
+        cursorBlink: true,
+        convertEol: false,
+        fontFamily: 'Consolas, "Cascadia Mono", "JetBrains Mono", monospace',
+        fontSize: preferredTerminalFontSize(),
+        theme: buildXtermTheme(),
+        scrollback: 5000,
+      });
+      const fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(host);
+      const session = {
+        id,
+        shellEl,
+        host,
+        term,
+        fitAddon,
+        ws: null,
+        connected: false,
+        lastError: '',
+        shell: shellInfo?.key || desiredShellKey || state.config?.available_shells[0]?.key || '',
+        shellLabel: shellInfo?.label || (options.shellKey ? '' : seed?.shellLabel) || state.config?.available_shells[0]?.label || uiText('终端', 'Terminal'),
+        root: Object.prototype.hasOwnProperty.call(options, 'root') ? options.root : launch.root,
+        path: Object.prototype.hasOwnProperty.call(options, 'path') ? options.path : launch.path,
+        customLabel: '',
+        lastFitHostSize: '',
+        lastResizeKey: '',
+        heartbeatTimer: 0,
+        lastPingAt: 0,
+        lastActivityAt: 0,
+      };
+      term.onData((data) => {
+        if (!session.ws || session.ws.readyState !== WebSocket.OPEN) return;
+        session.ws.send(JSON.stringify({ type: 'input', data }));
+      });
+      writeTerminalNotice(session, 'Terminal', 'ok');
+
+      state.sessions.set(id, session);
+      state.order.push(id);
+      renderTabs();
+      activateSession(id);
+      if (options.connect !== false) connectSession(session);
+      return session;
+    }
+
+    function launchProfile(shellKey) {
+      if (!state.config) return;
+      setProfileMenuOpen(false);
+      createSession({ connect: true, shellKey });
+    }
+
+    function selectedShell() {
+      return shellInfoByKey(document.getElementById('shell-select').value);
+    }
+
+    function renameSession(id) {
+      const session = state.sessions.get(id);
+      if (!session) return;
+      const current = session.customLabel || sessionTitle(session);
+      const next = window.prompt(uiKey('term.renamePrompt', '输入标签名称（留空恢复自动命名）', 'Enter a tab name (leave empty to restore auto naming)'), current);
+      if (next == null) return;
+      const trimmed = String(next).trim();
+      const autoName = sessionTitle({ ...session, customLabel: '' });
+      session.customLabel = trimmed && trimmed !== autoName ? trimmed : '';
+      renderTabs();
+    }
+
+    function duplicateSession(id) {
+      const session = state.sessions.get(id);
+      if (!session) return;
+      const clone = createSession({ connect: false, seed: session });
+      if (session.customLabel) clone.customLabel = `${session.customLabel} ${uiKey('term.duplicateSuffix', '副本', 'Copy')}`;
+      renderTabs();
+    }
+
+    function connectSession(session) {
+      if (!state.config || !session) return;
+      if (!state.config.terminal_available) {
+        setStatus(state.config.terminal_unavailable_reason || '终端不可用', 'error');
+        return;
+      }
+
+      disconnectSession(session, { silent: true });
+      session.lastError = '';
+      if (session.id === state.activeId) applyControlsToSession(session);
+      const shellInfo = shellInfoByKey(session.shell) || selectedShell();
+      session.shell = shellInfo?.key || session.shell;
+      session.shellLabel = shellInfo?.label || session.shellLabel;
+      fitSession(session, { force: true });
+      writeTerminalNotice(session, `[connecting ${session.shellLabel} ${sessionMeta(session)}]`, 'info');
+
+      const socket = new WebSocket(wsUrl(state.config.websocket_path, {
+        shell: session.shell,
+        root: session.root,
+        path: session.path,
+        cols: session.term.cols,
+        rows: session.term.rows,
+      }));
+      session.ws = socket;
+
+      socket.onopen = () => {
+        if (!isCurrentSocket(session, socket)) return;
+        session.connected = true;
+        session.lastError = '';
+        startSessionHeartbeat(session, socket);
+        renderTabs();
+      };
+      socket.onmessage = (event) => {
+        if (!isCurrentSocket(session, socket)) return;
+        let payload = null;
+        try { payload = JSON.parse(event.data); } catch { return; }
+        if (!payload || !payload.type) return;
+        session.lastActivityAt = Date.now();
+        if (payload.type === 'output') {
+          writeTerminalOutput(session, payload.data || '');
+          return;
+        }
+        if (payload.type === 'pong') {
+          return;
+        }
+        if (payload.type === 'ready') {
+          session.connected = true;
+          session.lastError = '';
+          session.path = payload.cwd || session.path;
+          if (payload.root && payload.root.key) session.root = payload.root.key;
+          if (session.id === state.activeId) syncControlsFromSession(session);
+          renderTabs();
+          fitSession(session, { force: true });
+          if (state.activeId === session.id) session.term.focus();
+          return;
+        }
+        if (payload.type === 'error') {
+          session.lastError = payload.message || '终端发生错误';
+          session.connected = false;
+          writeTerminalNotice(session, `[error] ${session.lastError}`, 'error');
+          renderTabs();
+          return;
+        }
+        if (payload.type === 'exit') {
+          session.connected = false;
+          writeTerminalNotice(session, '[session closed]', 'warn');
+          renderTabs();
+        }
+      };
+      socket.onerror = () => {
+        if (!isCurrentSocket(session, socket)) return;
+        session.connected = false;
+        session.lastError = '终端连接失败';
+        clearSessionHeartbeat(session);
+        writeTerminalNotice(session, '[error] 终端连接失败', 'error');
+        renderTabs();
+      };
+      socket.onclose = () => {
+        if (!isCurrentSocket(session, socket)) return;
+        clearSessionHeartbeat(session);
+        session.ws = null;
+        session.connected = false;
+        renderTabs();
+      };
+      renderTabs();
+    }
+
+    function populateConfig(config) {
+      const shellSelect = document.getElementById('shell-select');
+      const rootSelect = document.getElementById('root-select');
+      const shellHints = document.getElementById('shell-hints');
+      const profileItems = document.getElementById('profile-menu-items');
+      shellSelect.innerHTML = '';
+      rootSelect.innerHTML = '';
+      if (shellHints) shellHints.innerHTML = '';
+      profileItems.innerHTML = '';
+
+      config.available_shells.forEach((item, index) => {
+        const option = document.createElement('option');
+        option.value = item.key;
+        option.textContent = item.label;
+        if (index === 0) option.selected = true;
+        shellSelect.appendChild(option);
+
+        const profileButton = document.createElement('button');
+        profileButton.type = 'button';
+        profileButton.className = 'terminal-profile-item';
+        profileButton.setAttribute('role', 'menuitem');
+        profileButton.innerHTML = `<span class="terminal-profile-item-title">${escapeHtml(item.label)}</span>`;
+        profileButton.addEventListener('click', () => launchProfile(item.key));
+        profileItems.appendChild(profileButton);
+      });
+
+      config.roots.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = item.key;
+        option.textContent = `${item.label} · ${item.path}`;
+        option.selected = item.key === config.default_root;
+        rootSelect.appendChild(option);
+      });
+
+      document.getElementById('path-input').value = config.default_terminal_path || '';
+      document.getElementById('backend-chip').textContent = config.windows_terminal_backend
+        ? `backend: ${config.windows_terminal_backend}`
+        : `platform: ${config.platform}`;
+
+      document.getElementById('connect-btn').disabled = !config.terminal_available;
+      document.getElementById('new-tab-btn').disabled = !config.terminal_available;
+      document.getElementById('profile-menu-btn').disabled = !config.terminal_available;
+
+      if (!config.terminal_available) {
+        setStatus(config.terminal_unavailable_reason || '终端功能不可用', 'error');
+      }
+
+      syncLauncherLayout({ silent: true });
+    }
+
+    async function loadConfig() {
+      const response = await fetch(httpUrl('/admin/api/system/tools/config'));
+      if (!response.ok) throw new Error('无法读取系统工具配置');
+      const config = await response.json();
+      state.config = config;
+      populateConfig(config);
+      syncParentTerminalState();
+    }
+
+    function escapeHtml(text) {
+      return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    document.getElementById('connect-btn').addEventListener('click', () => {
+      const session = activeSession();
+      if (session) connectSession(session);
+    });
+    document.getElementById('new-tab-btn').addEventListener('click', () => {
+      setProfileMenuOpen(false);
+      createSession({ connect: true });
+    });
+    document.getElementById('profile-menu-btn').addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleProfileMenu();
+    });
+    document.getElementById('launcher-toggle-btn').addEventListener('click', () => toggleLauncherPanel());
+    document.getElementById('launcher-toggle-menu-btn').addEventListener('click', () => {
+      toggleLauncherPanel();
+      setProfileMenuOpen(false);
+    });
+    document.getElementById('duplicate-tab-btn').addEventListener('click', () => {
+      if (state.activeId) duplicateSession(state.activeId);
+    });
+    document.getElementById('rename-tab-btn').addEventListener('click', () => {
+      if (state.activeId) renameSession(state.activeId);
+    });
+    document.getElementById('disconnect-btn').addEventListener('click', () => disconnectSession(activeSession()));
+    document.getElementById('close-tab-btn').addEventListener('click', () => {
+      if (state.activeId) closeSession(state.activeId);
+    });
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      const session = activeSession();
+      if (session) session.term.clear();
+    });
+    ['shell-select', 'root-select'].forEach((id) => {
+      document.getElementById(id).addEventListener('change', () => applyControlsToSession(activeSession()));
+    });
+    document.getElementById('path-input').addEventListener('input', () => applyControlsToSession(activeSession()));
+    document.addEventListener('keydown', (event) => {
+      const meta = event.ctrlKey || event.metaKey;
+      if (event.key === 'Escape' && state.profileMenuOpen) {
+        setProfileMenuOpen(false);
+        return;
+      }
+      if (meta && event.shiftKey && event.key.toLowerCase() === 't') {
+        event.preventDefault();
+        createSession({ connect: true });
+        return;
+      }
+      if (meta && event.key.toLowerCase() === 'w') {
+        const target = activeSession();
+        if (!target) return;
+        event.preventDefault();
+        closeSession(target.id);
+      }
+    });
+    document.addEventListener('click', (event) => {
+      const menu = document.getElementById('profile-menu');
+      const button = document.getElementById('profile-menu-btn');
+      if (!menu || !button) return;
+      if (!menu.contains(event.target) && !button.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    });
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'proj-terminal-close-all') {
+        closeAllSessions();
+      }
+    });
+
+    const launcherPanel = document.getElementById('terminal-launcher-panel');
+    if (launcherPanel) {
+      launcherPanel.addEventListener('transitionend', (event) => {
+        if (event.propertyName === 'max-height' || event.propertyName === 'padding-top') {
+          fitActiveSession(true);
+        }
+      });
+    }
+
+    function handleViewportResize() {
+      const compactChanged = updateResponsiveFlags();
+      const fontChanged = applyResponsiveTerminalFontSize();
+      if (state.launcherPreference == null && compactChanged) {
+        syncLauncherLayout();
+      }
+      if (compactChanged || fontChanged) {
+        fitActiveSession(true, FIT_LAYOUT_SETTLE_MS);
+      }
+    }
+
+    state.stageObserver = new ResizeObserver(() => fitActiveSession());
+    state.stageObserver.observe(document.getElementById('terminal-stage'));
+    window.addEventListener('resize', handleViewportResize);
+    window.addEventListener('proj-theme-change', applyThemeToSessions);
+    window.addEventListener('proj-language-change', () => {
+      applyStaticTranslations();
+      renderTabs();
+      updateIndicators();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) fitActiveSession(true, FIT_LAYOUT_SETTLE_MS);
+    });
+    window.addEventListener('beforeunload', () => {
+      for (const session of state.sessions.values()) disconnectSession(session, { silent: true });
+    });
+
+    state.mediaQuery = window.matchMedia(COMPACT_LAYOUT_MEDIA);
+    if (typeof state.mediaQuery.addEventListener === 'function') {
+      state.mediaQuery.addEventListener('change', handleViewportResize);
+    } else if (typeof state.mediaQuery.addListener === 'function') {
+      state.mediaQuery.addListener(handleViewportResize);
+    }
+    state.launcherPreference = readLauncherPreference();
+    state.launcherExpanded = resolveLauncherExpanded();
+    updateResponsiveFlags();
+    setProfileMenuOpen(false);
+    applyStaticTranslations();
+    loadConfig().then(() => {
+      setStatus(uiText('已准备好，可手动新建终端标签', 'Ready to create terminal tabs manually'), 'ok');
+      applyThemeToSessions();
+      handleViewportResize();
+    }).catch((error) => {
+      syncParentTerminalState();
+      setStatus(error.message || '初始化失败', 'error');
+    });
+  </script>
+</body>
+</html>

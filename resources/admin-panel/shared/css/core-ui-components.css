@@ -1,0 +1,284 @@
+@import url('/html-assets/css/core-design-tokens.css');
+
+.proj-card,
+.panel-card,
+.panel-stat-card,
+.iframe-fallback,
+.status-box {
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-glass);
+  box-shadow: var(--proj-shadow-lg);
+}
+
+.proj-summary-card,
+.panel-stat-card {
+  border-radius: var(--proj-radius-lg);
+}
+
+.proj-card,
+.panel-card,
+.iframe-fallback,
+.status-box,
+.section,
+.panel-table-wrap {
+  border-radius: var(--proj-radius-xl);
+}
+
+.proj-toolbar,
+.panel-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--proj-space-2);
+}
+
+.proj-btn,
+.panel-btn,
+.iframe-btn,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--proj-space-2);
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--proj-radius-lg);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+  color: var(--proj-text-strong);
+  font-size: 11px;
+  font-weight: 800;
+  transition: background .12s ease, border-color .12s ease, color .12s ease, opacity .12s ease;
+}
+
+.proj-btn:hover:not(:disabled),
+.panel-btn:hover:not(:disabled),
+.iframe-btn:hover:not(:disabled),
+.btn:hover:not(:disabled) {
+  border-color: var(--proj-border-strong);
+  opacity: .96;
+}
+
+.proj-btn:disabled,
+.panel-btn:disabled,
+.iframe-btn:disabled,
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.proj-btn-primary,
+.panel-btn-primary,
+.btn-primary {
+  background: var(--proj-brand-500);
+  border-color: var(--proj-brand-border);
+  color: #ffffff;
+}
+
+.proj-btn-danger,
+.panel-btn-danger,
+.btn-danger {
+  background: var(--proj-danger-500);
+  border-color: var(--proj-danger-border);
+  color: #ffffff;
+}
+
+.proj-btn-warn,
+.panel-btn-warn,
+.btn-warn {
+  background: var(--proj-warn-500);
+  border-color: var(--proj-warn-border);
+  color: #ffffff;
+}
+
+.proj-pill,
+.panel-pill,
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--proj-space-2);
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: var(--proj-radius-pill);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+  color: var(--proj-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.proj-input,
+.proj-select,
+.proj-textarea,
+.field-input,
+.field-textarea {
+  width: 100%;
+  border-radius: var(--proj-radius-lg);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-page-input);
+  color: var(--proj-text-strong);
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.proj-input:focus,
+.proj-select:focus,
+.proj-textarea:focus,
+.field-input:focus,
+.field-textarea:focus {
+  outline: none;
+  border-color: var(--proj-brand-border);
+  box-shadow: var(--proj-focus-ring);
+}
+
+.proj-check-row,
+.panel-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--proj-space-2);
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--proj-radius-lg);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+  color: var(--proj-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.proj-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--proj-space-2);
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: var(--proj-radius-pill);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+  color: var(--proj-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.proj-tab.is-active {
+  background: var(--proj-brand-500);
+  border-color: var(--proj-brand-border);
+  color: #ffffff;
+}
+
+.proj-fold,
+.section {
+  overflow: hidden;
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+}
+
+.proj-fold > summary,
+.section > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proj-fold > summary::-webkit-details-marker,
+.section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.proj-table-shell,
+.panel-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+}
+
+.proj-table,
+.panel-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.proj-table th,
+.proj-table td,
+.panel-table th,
+.panel-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--proj-border-soft);
+  text-align: left;
+  font-size: 11px;
+  vertical-align: top;
+}
+
+.proj-table th,
+.panel-table th {
+  color: var(--proj-text-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 10px;
+}
+
+.proj-banner {
+  border-radius: var(--proj-radius-md);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--proj-text-muted);
+}
+
+.proj-banner[data-tone="warn"] {
+  border-color: var(--proj-warn-border);
+  background: var(--proj-warn-soft);
+  color: var(--proj-warn-500);
+}
+
+.proj-banner[data-tone="success"] {
+  border-color: var(--proj-success-border);
+  background: var(--proj-success-soft);
+  color: var(--proj-success-500);
+}
+
+.proj-banner[data-tone="error"] {
+  border-color: var(--proj-danger-border);
+  background: var(--proj-danger-soft);
+  color: var(--proj-danger-500);
+}
+
+.proj-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 12px;
+  border-radius: var(--proj-radius-lg);
+  border: 1px dashed var(--proj-border-strong);
+  background: color-mix(in srgb, var(--proj-surface-elevated) 84%, transparent);
+  color: var(--proj-text-muted);
+  text-align: center;
+}
+
+.proj-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.45);
+}
+
+.proj-modal-card {
+  width: min(720px, 100%);
+  max-height: min(88vh, 820px);
+  overflow: auto;
+  border-radius: var(--proj-radius-xl);
+  border: 1px solid var(--proj-border-soft);
+  background: var(--proj-surface-elevated);
+  box-shadow: var(--proj-shadow-xl);
+}

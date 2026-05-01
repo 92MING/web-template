@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RTC 房间管理</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/rtc-ui-shared.css" />
+  <style>
+    body {
+      color: var(--proj-page-text);
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 640px at 0% 0%, rgba(59, 130, 246, 0.11), transparent 55%),
+        radial-gradient(900px 520px at 100% 0%, rgba(99, 102, 241, 0.14), transparent 58%),
+        var(--proj-page-bg);
+    }
+    body.rtc-admin-page {
+      font-size: 12px;
+    }
+    .panel {
+      background: var(--proj-page-surface);
+      border: 1px solid var(--proj-page-border);
+      box-shadow: var(--proj-page-shadow);
+    }
+    .rtc-admin-page .rtc-shell-card {
+      border-radius: 20px;
+    }
+    .rtc-admin-page .rtc-toolbar {
+      gap: 8px;
+    }
+    .rtc-admin-page .rtc-title-block {
+      gap: 3px;
+    }
+    .rtc-admin-page .rtc-kicker {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+    }
+    .rtc-admin-page .rtc-pill-row {
+      gap: 6px;
+    }
+    .rtc-admin-page .rtc-chip {
+      min-height: 24px;
+      padding: 0 9px;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .rtc-admin-page .rtc-chip strong {
+      font-size: 11.5px;
+      font-weight: 800;
+    }
+    .rtc-admin-page .rtc-toolbar-main,
+    .rtc-admin-page .rtc-toolbar-actions,
+    .rtc-admin-page .rtc-compact-actions {
+      gap: 8px;
+    }
+    .rtc-admin-page .rtc-outline-btn,
+    .rtc-admin-page .rtc-danger-btn,
+    .rtc-admin-page .rtc-primary-btn {
+      min-height: 34px;
+      padding: 0 12px;
+      gap: 6px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .rtc-admin-page .rtc-admin-room-grid {
+      gap: 8px;
+    }
+    .rtc-admin-page .rtc-admin-room-card {
+      gap: 10px;
+      padding: 12px;
+    }
+    .rtc-admin-page .rtc-admin-room-head {
+      gap: 10px;
+    }
+    .rtc-admin-page .rtc-admin-room-title {
+      gap: 3px;
+    }
+    .rtc-admin-page .rtc-admin-room-title strong {
+      font-size: 14px;
+      line-height: 1.25;
+    }
+    .rtc-admin-page .rtc-admin-room-title span {
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .rtc-admin-page .rtc-admin-room-meta {
+      gap: 6px;
+    }
+    .rtc-admin-page .rtc-admin-room-meta > div,
+    .rtc-admin-page .rtc-modal-stat {
+      padding: 8px 10px;
+      gap: 3px;
+      border-radius: 12px;
+    }
+    .rtc-admin-page .rtc-admin-room-meta span,
+    .rtc-admin-page .rtc-modal-stat span {
+      font-size: 9px;
+      letter-spacing: 0.07em;
+    }
+    .rtc-admin-page .rtc-admin-room-meta strong,
+    .rtc-admin-page .rtc-modal-stat strong {
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .rtc-admin-page .rtc-admin-room-actions {
+      gap: 6px;
+    }
+    .rtc-admin-page .rtc-list-row {
+      gap: 10px;
+      padding: 9px 11px;
+    }
+    .rtc-admin-page .rtc-list-row small,
+    .rtc-admin-page .rtc-quiet-note {
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .rtc-admin-page #status-banner {
+      padding: 9px 12px;
+      font-size: 12px;
+    }
+    .room-card {
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .room-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(99, 102, 241, 0.35);
+      box-shadow: 0 18px 28px rgba(15, 23, 42, 0.16);
+    }
+    * { scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb { background: #475569; border-radius: 9999px; border: 2px solid transparent; background-clip: content-box; }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="rtc-admin-page">
+  <main class="min-h-screen p-2.5 md:p-3">
+    <div class="mx-auto max-w-7xl space-y-2.5">
+      <section class="panel rtc-shell-card rounded-2xl px-3.5 py-3 md:px-4 md:py-4">
+        <div class="rtc-toolbar">
+          <div class="rtc-title-block">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h8"></path><path d="M12 8v8"></path><rect x="3" y="5" width="18" height="14" rx="3"></rect></svg>
+              </span>
+              <span class="rtc-kicker" data-i18n="rtc.kicker">WebRTC Control</span>
+            </div>
+            <h1 class="mt-0.5 text-xl font-semibold" data-i18n="rtc.title">房间管理</h1>
+          </div>
+          <div class="rtc-pill-row">
+            <span class="rtc-chip" data-tone="brand"><strong id="summary-total">—</strong><span data-i18n="rtc.summary.total">房间总数</span></span>
+            <span class="rtc-chip"><strong id="summary-members">—</strong><span data-i18n="rtc.summary.members">当前成员</span></span>
+            <span class="rtc-chip"><strong id="summary-refresh">开启</strong><span data-i18n="rtc.summary.refresh">自动刷新</span></span>
+            <span class="rtc-chip"><strong id="summary-updated">—</strong><span data-i18n="rtc.summary.updated">最近刷新</span></span>
+          </div>
+        </div>
+        <div class="mt-3 rtc-toolbar">
+          <div class="rtc-toolbar-main">
+            <label class="relative min-w-0 flex-1">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+              </span>
+              <input id="search-input" type="text" data-i18n-placeholder="rtc.search.placeholder" placeholder="搜索房间名称、ID、创建者" class="w-full rounded-xl border border-black/5 bg-white/40 py-2 pl-10 pr-3 text-xs outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-slate-950/55 dark:text-slate-100" />
+            </label>
+            <select id="page-size-select" class="rounded-xl border border-black/5 bg-white/40 px-3 py-2 text-xs outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-slate-950/55 dark:text-slate-100">
+              <option value="6">每页 6 个</option>
+              <option value="9" selected>每页 9 个</option>
+              <option value="12">每页 12 个</option>
+              <option value="18">每页 18 个</option>
+            </select>
+          </div>
+          <div class="rtc-toolbar-actions">
+            <label class="rtc-chip">
+              <input id="auto-refresh-input" type="checkbox" class="h-4 w-4 rounded border-white/10 bg-slate-900 accent-indigo-500" checked />
+              <span data-i18n="rtc.autoRefresh">自动刷新</span>
+            </label>
+            <button id="refresh-btn" class="rtc-primary-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+              <span data-i18n="rtc.refresh">刷新房间</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="space-y-2.5">
+        <div id="status-banner" class="hidden rounded-xl border px-3 py-2 text-xs"></div>
+        <div id="room-grid" class="rtc-admin-room-grid"></div>
+        <div id="empty-state" class="hidden panel rtc-shell-card rounded-2xl px-4 py-6 text-center">
+          <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800/80 text-slate-400">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M8 12h8"></path></svg>
+          </div>
+          <h2 id="empty-title" class="mt-3 text-base font-semibold" data-i18n="rtc.empty.title">暂无活跃房间</h2>
+        </div>
+        <div id="pagination" class="flex flex-wrap items-center justify-center gap-2"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="detail-modal" class="hidden fixed inset-0 z-40 items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+    <div class="panel rtc-modal-surface w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 md:p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div class="rtc-title-block">
+          <div class="rtc-kicker" data-i18n="rtc.detail.kicker">Room Detail</div>
+          <h2 id="detail-title" class="mt-2 text-xl font-semibold" data-i18n="rtc.detail.title">房间详情</h2>
+        </div>
+        <button id="detail-close" class="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/5 bg-white/40 text-slate-500 transition hover:border-black/10 hover:text-slate-900 dark:border-white/10 dark:bg-slate-950/55 dark:text-slate-300 dark:hover:border-white/20 dark:hover:text-white">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+        </button>
+      </div>
+      <div class="mt-5 rtc-modal-grid">
+        <div class="rtc-modal-stat"><span data-i18n="rtc.detail.id">房间 ID</span><strong id="detail-id" class="font-mono">—</strong></div>
+        <div class="rtc-modal-stat"><span data-i18n="rtc.detail.worker">Worker / 创建者</span><strong id="detail-worker">—</strong></div>
+        <div class="rtc-modal-stat"><span data-i18n="rtc.detail.name">房间名称</span><strong id="detail-name">—</strong></div>
+        <div class="rtc-modal-stat"><span data-i18n="rtc.detail.count">成员数量</span><strong id="detail-count">0</strong></div>
+      </div>
+      <div class="mt-5">
+        <div class="mb-2 rtc-kicker" data-i18n="rtc.detail.members">成员列表</div>
+        <div id="detail-members" class="rtc-list-surface max-h-[340px] overflow-y-auto"></div>
+      </div>
+      <div class="mt-5 rtc-compact-actions justify-between">
+        <button id="detail-copy" class="rtc-outline-btn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span data-i18n="rtc.detail.copy">复制房间 ID</span>
+        </button>
+        <button id="detail-stop" class="rtc-danger-btn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+          <span data-i18n="rtc.detail.stop">强制停止房间</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    window.I18N = Object.assign({}, window.I18N || {}, {
+      'rtc.kicker': { 'zh-cn': 'WebRTC Control', en: 'WebRTC Control' },
+      'rtc.title': { 'zh-cn': '房间管理', 'zh-tw': '房間管理', en: 'Room Management' },
+      'rtc.pageTitle': { 'zh-cn': 'RTC 房间管理', 'zh-tw': 'RTC 房間管理', en: 'RTC Room Management' },
+      'rtc.summary.total': { 'zh-cn': '房间总数', 'zh-tw': '房間總數', en: 'Rooms' },
+      'rtc.summary.members': { 'zh-cn': '当前成员', 'zh-tw': '目前成員', en: 'Members' },
+      'rtc.summary.refresh': { 'zh-cn': '自动刷新', 'zh-tw': '自動重新整理', en: 'Auto Refresh' },
+      'rtc.summary.updated': { 'zh-cn': '最近刷新', 'zh-tw': '最近更新', en: 'Updated' },
+      'rtc.search.placeholder': { 'zh-cn': '搜索房间名称、ID、创建者', 'zh-tw': '搜尋房間名稱、ID、建立者', en: 'Search room name, ID, or creator' },
+      'rtc.autoRefresh': { 'zh-cn': '自动刷新', 'zh-tw': '自動重新整理', en: 'Auto Refresh' },
+      'rtc.refresh': { 'zh-cn': '刷新房间', 'zh-tw': '重新整理房間', en: 'Refresh Rooms' },
+      'rtc.empty.title': { 'zh-cn': '暂无活跃房间', 'zh-tw': '暫無活躍房間', en: 'No active rooms' },
+      'rtc.empty.body': { 'zh-cn': '当前没有可管理的房间，稍后刷新重试。', 'zh-tw': '目前沒有可管理的房間，稍後重新整理再試。', en: 'There are no manageable rooms right now. Refresh again shortly.' },
+      'rtc.detail.kicker': { 'zh-cn': 'Room Detail', en: 'Room Detail' },
+      'rtc.detail.title': { 'zh-cn': '房间详情', 'zh-tw': '房間詳情', en: 'Room Detail' },
+      'rtc.detail.id': { 'zh-cn': '房间 ID', 'zh-tw': '房間 ID', en: 'Room ID' },
+      'rtc.detail.worker': { 'zh-cn': 'Worker / 创建者', 'zh-tw': 'Worker / 建立者', en: 'Worker / Creator' },
+      'rtc.detail.name': { 'zh-cn': '房间名称', 'zh-tw': '房間名稱', en: 'Room Name' },
+      'rtc.detail.count': { 'zh-cn': '成员数量', 'zh-tw': '成員數量', en: 'Members' },
+      'rtc.detail.members': { 'zh-cn': '成员列表', 'zh-tw': '成員列表', en: 'Members' },
+      'rtc.detail.copy': { 'zh-cn': '复制房间 ID', 'zh-tw': '複製房間 ID', en: 'Copy Room ID' },
+      'rtc.detail.stop': { 'zh-cn': '强制停止房间', 'zh-tw': '強制停止房間', en: 'Stop Room' }
+    });
+
+    function currentLang() {
+      return typeof window.PageControls?.getLang === 'function' ? window.PageControls.getLang() : (document.documentElement.dataset.projLang || 'zh-cn');
+    }
+
+    function currentLocale() {
+      return currentLang() === 'en' ? 'en-GB' : 'zh-CN';
+    }
+
+    function uiKey(key, fallbackZh = '', fallbackEn = '') {
+      const table = window.I18N || {};
+      const entry = table[key];
+      if (!entry) return currentLang() === 'en' ? fallbackEn : fallbackZh;
+      const lang = currentLang();
+      return entry[lang] || entry['zh-cn'] || entry.en || fallbackZh || fallbackEn || key;
+    }
+
+    function uiText(zh, en) {
+      return currentLang() === 'en' ? en : zh;
+    }
+
+    function applyStaticTranslations() {
+      document.title = uiKey('rtc.pageTitle', 'RTC 房间管理', 'RTC Room Management');
+      const searchInput = $('search-input');
+      if (searchInput) searchInput.placeholder = uiKey('rtc.search.placeholder', '搜索房间名称、ID、创建者', 'Search room name, ID, or creator');
+      const pageSizeSelect = $('page-size-select');
+      if (pageSizeSelect) {
+        const labels = [
+          uiText('每页 6 个', '6 per page'),
+          uiText('每页 9 个', '9 per page'),
+          uiText('每页 12 个', '12 per page'),
+          uiText('每页 18 个', '18 per page'),
+        ];
+        [...pageSizeSelect.options].forEach((option, index) => {
+          if (labels[index]) option.textContent = labels[index];
+        });
+      }
+    }
+
+    const STORAGE_KEY = 'proj-rtc-room-manage-state-v1';
+    const ALL_ROOMS_FETCH_SIZE = 100;
+    const AUTO_REFRESH_MS = 10000;
+    const state = {
+      query: '',
+      page: 1,
+      pageSize: 9,
+      autoRefresh: true,
+    };
+    let rooms = [];
+    let filteredRooms = [];
+    let totalRooms = 0;
+    let refreshTimer = null;
+    let activeRoomDetail = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function escHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        if (typeof saved.query === 'string') state.query = saved.query;
+        if (Number.isFinite(saved.page) && saved.page > 0) state.page = saved.page;
+        if (Number.isFinite(saved.pageSize) && saved.pageSize > 0) state.pageSize = saved.pageSize;
+        if (typeof saved.autoRefresh === 'boolean') state.autoRefresh = saved.autoRefresh;
+      } catch {}
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function setStatus(text, kind = 'info') {
+      const el = $('status-banner');
+      if (!text) {
+        el.classList.add('hidden');
+        el.textContent = '';
+        el.className = 'hidden rounded-2xl border px-4 py-3 text-sm';
+        return;
+      }
+      const styles = {
+        info: 'border-slate-700/80 bg-slate-900/55 text-slate-300',
+        success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+        warn: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
+        error: 'border-rose-500/35 bg-rose-500/10 text-rose-100',
+      };
+      el.className = `rounded-2xl border px-4 py-3 text-sm ${styles[kind] || styles.info}`;
+      el.textContent = text;
+      el.classList.remove('hidden');
+    }
+
+    function updateSummary() {
+      $('summary-total').textContent = String(totalRooms);
+      const members = rooms.reduce((sum, room) => sum + Number(room.candidate_count || 0), 0);
+      $('summary-members').textContent = String(members);
+      $('summary-refresh').textContent = state.autoRefresh ? uiText('开启', 'On') : uiText('关闭', 'Off');
+      $('summary-updated').textContent = new Date().toLocaleTimeString(currentLocale(), { hour12: false });
+    }
+
+    function getFilteredRooms() {
+      const query = state.query.trim().toLowerCase();
+      if (!query) return [...rooms];
+      return rooms.filter((room) => {
+        const text = [room.id, room.room_id, room.name, room.creator, room.creator_id, room.worker]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return text.includes(query);
+      });
+    }
+
+    function renderEmptyState(title, desc) {
+      $('room-grid').innerHTML = '';
+      $('pagination').innerHTML = '';
+      $('empty-title').textContent = title;
+      const emptyDesc = $('empty-desc');
+      if (emptyDesc) emptyDesc.textContent = desc;
+      $('empty-state').classList.remove('hidden');
+    }
+
+    function renderPagination(totalPages) {
+      const container = $('pagination');
+      container.innerHTML = '';
+      if (totalPages <= 1) return;
+
+      const createBtn = (label, page, disabled = false, active = false) => {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.disabled = disabled;
+        btn.className = active
+          ? 'rounded-2xl bg-indigo-500 px-3 py-2 text-sm font-medium text-white'
+          : 'rounded-2xl border border-white/10 bg-slate-950/55 px-3 py-2 text-sm text-slate-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40';
+        if (!disabled && !active) {
+          btn.addEventListener('click', () => {
+            state.page = page;
+            saveState();
+            renderRooms();
+          });
+        }
+        return btn;
+      };
+
+      container.appendChild(createBtn('«', 1, state.page === 1));
+      container.appendChild(createBtn('‹', Math.max(1, state.page - 1), state.page === 1));
+      const start = Math.max(1, state.page - 2);
+      const end = Math.min(totalPages, start + 4);
+      for (let page = start; page <= end; page += 1) {
+        container.appendChild(createBtn(String(page), page, false, state.page === page));
+      }
+      container.appendChild(createBtn('›', Math.min(totalPages, state.page + 1), state.page === totalPages));
+      container.appendChild(createBtn('»', totalPages, state.page === totalPages));
+    }
+
+    function renderRooms() {
+      filteredRooms = getFilteredRooms();
+      const totalPages = Math.max(1, Math.ceil(totalRooms / state.pageSize));
+      if (state.page > totalPages) state.page = totalPages;
+      saveState();
+
+      if (!totalRooms) {
+        renderEmptyState(uiText('暂无活跃房间', 'No active rooms'), uiText('当前没有可管理的房间，稍后刷新重试。', 'There are no manageable rooms right now. Refresh again shortly.'));
+        return;
+      }
+      if (!filteredRooms.length) {
+        renderEmptyState(uiText('没有匹配结果', 'No matching rooms'), uiText('请调整搜索关键词，或点击刷新重新获取房间列表。', 'Adjust the search query or refresh the room list.'));
+        renderPagination(totalPages);
+        return;
+      }
+
+      $('empty-state').classList.add('hidden');
+      const grid = $('room-grid');
+      grid.innerHTML = '';
+
+      filteredRooms.forEach((room) => {
+        const full = room._full || room;
+        const count = Number(full.candidate_count || Object.keys(full.candidates || {}).length || 0);
+        const visibilityBadge = full.password ? uiText('有密码', 'Protected') : uiText('公开', 'Public');
+        const roomId = full.id || room.id || full.room_id || room.room_id || '';
+        const name = full.name || room.name || uiText('未命名房间', 'Untitled Room');
+        const creator = full.creator || room.creator || full.creator_id || room.creator_id || '—';
+        const worker = full.worker || room.worker || '—';
+        const startTime = full.start_time ? new Date(full.start_time).toLocaleString(currentLocale()) : '—';
+        const card = document.createElement('article');
+        card.className = 'room-card rtc-shell-card rtc-admin-room-card';
+        card.innerHTML = `
+          <div class="rtc-admin-room-head">
+            <div class="rtc-admin-room-title">
+              <strong class="truncate">${escHtml(name)}</strong>
+              <span class="truncate font-mono">${escHtml(roomId)}</span>
+            </div>
+            <span class="rtc-chip" data-tone="brand"><strong>${count}</strong><span>${uiText('在线成员', 'Members')}</span></span>
+          </div>
+          <div class="rtc-pill-row">
+            <span class="rtc-chip">${escHtml(visibilityBadge)}</span>
+            <span class="rtc-chip"><span>${uiText('Worker', 'Worker')}</span><strong>${escHtml(worker)}</strong></span>
+          </div>
+          <div class="rtc-admin-room-meta">
+            <div><span>${uiText('创建者', 'Creator')}</span><strong>${escHtml(creator)}</strong></div>
+            <div><span>${uiText('访问级别', 'Access')}</span><strong>${escHtml(visibilityBadge)}</strong></div>
+            <div><span>Worker</span><strong>${escHtml(worker)}</strong></div>
+            <div><span>${uiText('创建时间', 'Created')}</span><strong>${escHtml(startTime)}</strong></div>
+          </div>
+          <div class="rtc-admin-room-actions">
+            <button data-action="copy" data-room-id="${escHtml(roomId)}" class="rtc-outline-btn">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              ${uiText('复制 ID', 'Copy ID')}
+            </button>
+            <button data-action="detail" data-room-id="${escHtml(roomId)}" class="rtc-outline-btn">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01"></path><path d="M11 12h1v4h1"></path></svg>
+              ${uiText('查看详情', 'Details')}
+            </button>
+            <button data-action="stop" data-room-id="${escHtml(roomId)}" data-room-name="${escHtml(name)}" class="rtc-danger-btn">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+              ${uiText('强制停止', 'Stop')}
+            </button>
+          </div>`;
+        card.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-action]');
+          if (button) return;
+          openDetail(roomId);
+        });
+        grid.appendChild(card);
+      });
+
+      renderPagination(totalPages);
+    }
+
+    async function fetchRooms(showBanner = false) {
+      const refreshBtn = $('refresh-btn');
+      refreshBtn.disabled = true;
+      refreshBtn.classList.add('opacity-70');
+      if (showBanner) setStatus(uiText('正在刷新房间列表…', 'Refreshing room list...'));
+      try {
+        const data = await fetch(`/admin/api/rooms?page=${state.page}&page_size=${state.pageSize}`).then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        });
+        rooms = Array.isArray(data.items) ? data.items : [];
+        totalRooms = Number(data.total || 0);
+        state.page = Number(data.page || state.page) || 1;
+
+        const detailById = new Map();
+        const detailResults = await Promise.allSettled(
+          rooms.map((room) => fetch(`/admin/api/rooms/${encodeURIComponent(room.id || room.room_id || '')}`).then(async (r) => {
+            if (!r.ok) throw new Error(await r.text());
+            return r.json();
+          }))
+        );
+        detailResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value?.id) {
+            detailById.set(result.value.id, result.value);
+          }
+        });
+        rooms = rooms.map((room) => ({ ...room, _full: detailById.get(room.id || room.room_id || '') || room }));
+
+        updateSummary();
+        renderRooms();
+        if (showBanner) setStatus(uiText('房间列表已更新。', 'Room list updated.'), 'success');
+        if (showBanner) setTimeout(() => setStatus(''), 1800);
+      } catch (error) {
+        setStatus(`${uiText('加载房间失败：', 'Failed to load rooms: ')}${error?.message || error}`, 'error');
+        if (!rooms.length) renderEmptyState(uiText('房间列表加载失败', 'Failed to load rooms'), uiText('请检查服务状态后再刷新。', 'Check the service and refresh again.'));
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('opacity-70');
+      }
+    }
+
+    function scheduleAutoRefresh() {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+      if (!state.autoRefresh) return;
+      refreshTimer = setInterval(() => fetchRooms(false), AUTO_REFRESH_MS);
+    }
+
+    async function copyText(text, successMessage = uiText('已复制到剪贴板。', 'Copied to clipboard.')) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus(successMessage, 'success');
+        setTimeout(() => setStatus(''), 1600);
+      } catch (error) {
+        setStatus(`${uiText('复制失败：', 'Copy failed: ')}${error?.message || error}`, 'error');
+      }
+    }
+
+    async function openDetail(roomId) {
+      if (!roomId) return;
+      activeRoomDetail = roomId;
+      const modal = $('detail-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      $('detail-title').textContent = uiText('房间详情', 'Room Detail');
+      $('detail-id').textContent = roomId;
+      $('detail-worker').textContent = uiText('加载中…', 'Loading...');
+      $('detail-name').textContent = uiText('加载中…', 'Loading...');
+      $('detail-count').textContent = '—';
+      $('detail-members').innerHTML = `<div class="px-4 py-6 text-sm text-slate-400">${uiText('正在加载成员列表…', 'Loading members...')}</div>`;
+      try {
+        const room = await fetch(`/admin/api/rooms/${encodeURIComponent(roomId)}`).then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        });
+        $('detail-title').textContent = room.name || uiText('房间详情', 'Room Detail');
+        $('detail-id').textContent = room.id || roomId;
+        $('detail-worker').textContent = `PID ${room.worker || '—'} · ${uiText('创建者', 'Creator')} ${room.creator || '—'}`;
+        $('detail-name').textContent = `${room.name || uiText('未命名房间', 'Untitled Room')}${room.description ? (' · ' + room.description) : ''}`;
+        $('detail-count').textContent = String(room.candidate_count || Object.keys(room.candidates || {}).length || 0);
+        $('detail-copy').onclick = () => copyText(room.id || roomId, uiText('房间 ID 已复制。', 'Room ID copied.'));
+        $('detail-stop').onclick = () => stopRoom(room.id || roomId, room.name || roomId, true);
+        const membersEl = $('detail-members');
+        membersEl.innerHTML = '';
+        const memberIds = Object.keys(room.candidates || {});
+        if (!memberIds.length) {
+          membersEl.innerHTML = `<div class="px-4 py-6 text-sm text-slate-400">${uiText('暂无成员', 'No members')}</div>`;
+          return;
+        }
+        memberIds.forEach((id) => {
+          const member = room.candidates[id] || {};
+          const row = document.createElement('div');
+          row.className = 'rtc-list-row';
+          row.innerHTML = `
+            <div class="min-w-0">
+              <div class="truncate font-mono text-xs" style="color:var(--rtc-ui-muted)">${escHtml(id)}</div>
+              <div class="mt-1 truncate text-sm font-semibold">${escHtml(member.name || uiText('未命名', 'Unnamed'))} ${member.is_admin ? '<span style="color:var(--rtc-ui-brand)">· Admin</span>' : ''} ${member.muted ? `· ${uiText('静音', 'Muted')}` : ''} ${member.deafen ? `· ${uiText('拒听', 'Deafened')}` : ''} ${member.reaction ? `· ${escHtml(member.reaction)}` : ''}</div>
+            </div>
+            <div class="text-right">
+              <div class="rtc-chip">${escHtml(member.join_time ? new Date(member.join_time).toLocaleString(currentLocale()) : '—')}</div>
+            </div>`;
+          membersEl.appendChild(row);
+        });
+      } catch (error) {
+        $('detail-members').innerHTML = `<div class="px-4 py-6 text-sm text-rose-200">${uiText('加载详情失败：', 'Failed to load details: ')}${escHtml(error?.message || error)}</div>`;
+      }
+    }
+
+    function closeDetail() {
+      activeRoomDetail = null;
+      const modal = $('detail-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function stopRoom(roomId, roomName, fromModal = false) {
+      if (!roomId) return;
+      const ok = window.confirm(`${uiText('确认强制停止房间“', 'Stop room “')}${roomName || roomId}${uiText('”吗？', '”?')}`);
+      if (!ok) return;
+      try {
+        const response = await fetch(`/admin/api/rooms/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setStatus(`${uiText('房间“', 'Room “')}${roomName || roomId}${uiText('”已停止。', '” stopped.')}`, 'success');
+        if (fromModal) closeDetail();
+        await fetchRooms(false);
+        setTimeout(() => setStatus(''), 1800);
+      } catch (error) {
+        setStatus(`${uiText('停止房间失败：', 'Failed to stop room: ')}${error?.message || error}`, 'error');
+      }
+    }
+
+    function bindEvents() {
+      $('search-input').value = state.query;
+      $('page-size-select').value = String(state.pageSize);
+      $('auto-refresh-input').checked = state.autoRefresh;
+
+      $('search-input').addEventListener('input', (event) => {
+        state.query = event.target.value;
+        saveState();
+        renderRooms();
+      });
+      $('page-size-select').addEventListener('change', (event) => {
+        state.pageSize = Number(event.target.value || 9) || 9;
+        state.page = 1;
+        saveState();
+        renderRooms();
+      });
+      $('auto-refresh-input').addEventListener('change', (event) => {
+        state.autoRefresh = !!event.target.checked;
+        saveState();
+        updateSummary();
+        scheduleAutoRefresh();
+      });
+      $('refresh-btn').addEventListener('click', () => fetchRooms(true));
+      $('room-grid').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        const roomId = button.dataset.roomId;
+        if (action === 'copy') copyText(roomId, uiText('房间 ID 已复制。', 'Room ID copied.'));
+        if (action === 'detail') openDetail(roomId);
+        if (action === 'stop') stopRoom(roomId, button.dataset.roomName);
+      });
+      $('detail-close').addEventListener('click', closeDetail);
+      $('detail-modal').addEventListener('click', (event) => {
+        if (event.target && event.target.id === 'detail-modal') closeDetail();
+      });
+      window.addEventListener('beforeunload', () => {
+        if (refreshTimer) clearInterval(refreshTimer);
+      });
+    }
+
+    loadState();
+    applyStaticTranslations();
+    bindEvents();
+    updateSummary();
+    fetchRooms(false);
+    scheduleAutoRefresh();
+    window.addEventListener('proj-language-change', () => {
+      applyStaticTranslations();
+      updateSummary();
+      renderRooms();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Manager</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-file-manager storage-used="12.4 GB" storage-total="100 GB" items='[
+    {"id":"f1","name":"Project Alpha","type":"folder","size":0,"modified":"2024-10-01"},
+    {"id":"f2","name":"Design Assets","type":"folder","size":0,"modified":"2024-09-28"},
+    {"id":"f3","name":"Report Q3.pdf","type":"file","size":2400000,"modified":"2024-10-10"},
+    {"id":"f4","name":"Logo.svg","type":"file","size":45000,"modified":"2024-09-15"},
+    {"id":"f5","name":"Meeting Notes.txt","type":"file","size":12000,"modified":"2024-10-12"}
+  ]'></builtin-tpl-file-manager>
+</body>
+</html>

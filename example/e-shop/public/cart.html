@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f5f5f5">
+<title>购物车 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
+  .page-wrap { max-width: 960px; margin: 0 auto; padding: 1rem; }
+  .cart-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  .cart-item:last-child { border-bottom: none; }
+  .cart-item img { width: 64px; height: 64px; object-fit: cover; border-radius: var(--builtin-radius, 6px); }
+  .cart-item-info { flex: 1; }
+  .qty-input { width: 80px; padding: 6px 9px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-input-bg, #ffffff); color: inherit; font-size: 14px; }
+  .btn-remove { padding: 6px 12px; border-radius: var(--builtin-radius, 6px); border: 1px solid var(--builtin-color-danger, #b91c1c); background: var(--builtin-color-danger, #b91c1c); color: #fff; cursor: pointer; font: inherit; }
+  .btn-remove:hover { opacity: 0.9; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 4px; padding: 10px 18px; border-radius: var(--builtin-radius, 6px); border: none; background: var(--builtin-primary, #2563eb); color: #fff; font-weight: 600; cursor: pointer; font: inherit; text-decoration: none; }
+  .btn-primary:hover { background: var(--builtin-primary-hover, #1d4ed8); }
+  .nav-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: var(--builtin-radius, 6px); border: 1px solid var(--builtin-border, #d1d5db); background: var(--builtin-button-bg, #ffffff); color: var(--builtin-color-text, #111827); font-weight: 500; cursor: pointer; font: inherit; text-decoration: none; }
+  .nav-btn:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  .cart-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+  @media (max-width: 720px) {
+    .page-wrap { padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem max(0.5rem, env(safe-area-inset-bottom)); }
+    .cart-item { gap: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <builtin-navbar id="navbar" brand="e-Shop">
+    <div slot="brand" style="display:flex;align-items:center;gap:8px;">
+      <builtin-icon name="shopping-cart" size="20" variant="outlined"></builtin-icon>
+      <span>e-Shop</span>
+    </div>
+    <div slot="actions" style="display:flex;gap:0.5rem;align-items:center;">
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
+      <builtin-theme-toggle></builtin-theme-toggle>
+      <a href="index.html" class="nav-btn" data-i18n="eshop.back_to_mall">返回商城</a>
+    </div>
+  </builtin-navbar>
+
+  <h1 style="margin:1rem 0; font-size:1.5rem;" data-i18n="eshop.cart">购物车</h1>
+
+  <builtin-card id="cart-card">
+    <div id="cart-list" data-i18n="eshop.loading">加载中...</div>
+  </builtin-card>
+
+  <div id="cart-footer" class="cart-footer" style="display:none;">
+    <div id="cart-total" style="font-size:1.25rem;font-weight:700;color:var(--builtin-primary);"></div>
+    <a href="checkout.html" class="btn-primary" data-i18n="eshop.go_to_checkout">去结算</a>
+  </div>
+</div>
+
+<script type="module">
+import { initEshop, api, t, applyI18n, USER_ID } from './eshop-utils.js';
+
+await initEshop();
+
+const $ = id => document.getElementById(id);
+
+const loadCart = async () => {
+  const r = await api('/shop/cart?user_id=' + USER_ID);
+  const items = (r && r.items) || [];
+  if (!items.length) {
+    $('cart-list').innerHTML = '';
+    const alertEl = document.createElement('builtin-alert');
+    alertEl.variant = 'info';
+    alertEl.setAttribute('data-i18n', 'eshop.cart_empty');
+    alertEl.textContent = '购物车是空的';
+    $('cart-list').appendChild(alertEl);
+    $('cart-footer').style.display = 'none';
+    await applyI18n();
+    return;
+  }
+  $('cart-footer').style.display = 'flex';
+  let total = 0;
+  $('cart-list').innerHTML = items.map((item) => {
+    const itemTotal = (item.price || 0) * item.quantity;
+    total += itemTotal;
+    return `
+      <div class="cart-item">
+        <img src="${item.image || 'https://placehold.co/64x64'}" alt="${item.name}">
+        <div class="cart-item-info">
+          <div style="font-weight:600;">${item.name}</div>
+          <div style="color:var(--builtin-primary);font-size:14px;">¥${item.price}</div>
+        </div>
+        <input type="number" value="${item.quantity}" min="1" max="${item.stock || 999}" class="qty-input" data-pid="${item.product_id}">
+        <button type="button" data-pid="${item.product_id}" class="btn-remove" data-i18n="eshop.delete">删除</button>
+      </div>
+    `;
+  }).join('');
+
+  $('cart-total').textContent = (await t('eshop.total')) + ': ¥' + total;
+  await applyI18n();
+
+  document.querySelectorAll('.qty-input').forEach(inp => {
+    inp.addEventListener('change', async (e) => {
+      const pid = e.target.dataset.pid;
+      const val = parseInt(e.target.value) || 1;
+      await api('/shop/cart', { method: 'PUT', body: JSON.stringify({ user_id: USER_ID, product_id: pid, quantity: val }) });
+      loadCart();
+    });
+  });
+
+  document.querySelectorAll('.btn-remove').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const pid = e.target.dataset.pid;
+      await api('/shop/cart', { method: 'DELETE', body: JSON.stringify({ user_id: USER_ID, product_id: pid }) });
+      loadCart();
+    });
+  });
+};
+
+loadCart();
+</script>
+</body>
+</html>

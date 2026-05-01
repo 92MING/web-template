@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player Page</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-video-player title="Exploring the Hidden Depths" views="1.2M views" channel="Deep Dive" subscribers="850K" src="/test-media/sample-video.mp4">
+    <div slot="navbar"><builtin-navbar brand="Deep Dive" items='[]'></builtin-navbar></div>
+  </builtin-tpl-video-player>
+</body>
+</html>

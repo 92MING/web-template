@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>优惠券管理 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 980px; --builtin-shell-secondary-width: 300px; }
+  .coupon-list { display: grid; gap: 0.75rem; }
+  .coupon-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  .coupon-item:last-child { border-bottom: none; }
+</style>
+<link rel="stylesheet" href="/eshop-merchant.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="card">
+    <builtin-schema-form id="coupon-form" submit-label="添加优惠券" layout="vertical"></builtin-schema-form>
+  </section>
+  <section class="card list-wrap">
+    <h2 style="margin:0;font-size:1.5rem;" data-copy="list_title">优惠券列表</h2>
+    <div id="list-state"></div>
+    <div class="coupon-list" id="coupon-list"></div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">优惠券上下文</strong></div>
+    <builtin-metadata-list id="coupon-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { initEshop, api, t, getRole, logout, switchLang, BuiltinToast } from './eshop-utils.js?v=20260501-1';
+
+await initEshop();
+
+if (getRole() !== 'merchant' && getRole() !== 'admin') {
+  location.replace('index.html');
+}
+
+const $ = id => document.getElementById(id);
+const form = $('coupon-form');
+const copy = {
+  'zh-cn': {
+    back: '返回商家后台',
+    eyebrow: '商家优惠券',
+    title: '优惠券管理',
+    documentTitle: '优惠券管理 - e-Shop',
+    lead: '统一维护优惠券门槛、面额和描述，供结算时直接复用。',
+    list_title: '优惠券列表',
+    contextTitle: '优惠券上下文',
+    couponId: '优惠券 ID',
+    couponCode: '优惠码',
+    discount: '优惠金额',
+    minOrder: '最低订单金额',
+    description: '描述',
+    submit: '添加优惠券',
+    ok_add: '优惠券已添加',
+    ok_delete: '优惠券已删除',
+    loadingTitle: '正在加载优惠券',
+    loadingDescription: '正在获取当前商家的优惠券列表。',
+    emptyTitle: '暂无优惠券',
+    emptyDescription: '创建第一张优惠券后，这里会显示优惠券摘要。',
+    errorTitle: '加载优惠券失败',
+    errorDescription: '请稍后重试，或返回商家后台重新进入。',
+    totalLabel: '优惠券数量',
+    strongestLabel: '最高优惠',
+    minOrderLabel: '最低门槛',
+    delete: '删除',
+  },
+  en: {
+    back: 'Back to Merchant',
+    eyebrow: 'Merchant Coupons',
+    title: 'Coupon Management',
+    documentTitle: 'Coupon Management - e-Shop',
+    lead: 'Maintain coupon thresholds, discount amounts and descriptions from one place.',
+    list_title: 'Coupon List',
+    contextTitle: 'Coupon Context',
+    couponId: 'Coupon ID',
+    couponCode: 'Coupon Code',
+    discount: 'Discount Amount',
+    minOrder: 'Min Order',
+    description: 'Description',
+    submit: 'Add Coupon',
+    ok_add: 'Coupon added',
+    ok_delete: 'Coupon deleted',
+    loadingTitle: 'Loading coupons',
+    loadingDescription: 'Fetching coupons available to this merchant.',
+    emptyTitle: 'No coupons yet',
+    emptyDescription: 'Coupons will appear here after the first one is created.',
+    errorTitle: 'Failed to load coupons',
+    errorDescription: 'Try again in a moment or return to the merchant console.',
+    totalLabel: 'Coupons',
+    strongestLabel: 'Top Discount',
+    minOrderLabel: 'Min Threshold',
+    delete: 'Delete',
+  }
+};
+
+let lang = localStorage.getItem('eshop_lang') || 'zh-cn';
+let coupons = [];
+
+function d() {
+  return copy[lang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  document.title = labels.documentTitle;
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'merchant.html';
+  appShell.backLabel = labels.back;
+  appShell.currentLang = lang;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'merchant.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+  document.querySelectorAll('[data-copy]').forEach((el) => {
+    el.textContent = labels[el.dataset.copy] || el.textContent;
+  });
+}
+
+function updateForm() {
+  const labels = d();
+  const current = form.getValue?.() || {};
+  form.schema = [
+    { name: 'id', label: labels.couponId, type: 'text', required: true, default: current.id || '' },
+    { name: 'code', label: labels.couponCode, type: 'text', required: true, default: current.code || '' },
+    { name: 'discount', label: labels.discount, type: 'number', required: true, default: current.discount || '' },
+    { name: 'min_order', label: labels.minOrder, type: 'number', required: true, default: current.min_order || '' },
+    { name: 'description', label: labels.description, type: 'text', default: current.description || '' },
+  ];
+  form.submitLabel = labels.submit;
+}
+
+function renderListState(mode) {
+  const labels = d();
+  const host = $('list-state');
+  if (mode === 'idle') {
+    host.innerHTML = '';
+    return;
+  }
+  if (mode === 'loading') {
+    host.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    host.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="merchant.html"></builtin-empty-state>`;
+    return;
+  }
+  host.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext() {
+  const maxDiscount = coupons.reduce((max, coupon) => Math.max(max, coupon.discount || 0), 0);
+  const minOrder = coupons.reduce((min, coupon) => Math.min(min, coupon.min_order || 0), Number.POSITIVE_INFINITY);
+  $('coupon-context').items = [
+    { icon: 'tag', label: d().totalLabel, value: String(coupons.length) },
+    { icon: 'notification', label: d().strongestLabel, value: coupons.length ? `¥${maxDiscount}` : '—' },
+    { icon: 'shopping-cart', label: d().minOrderLabel, value: coupons.length ? `¥${minOrder}` : '—' },
+  ];
+}
+
+function renderCoupons(summaries) {
+  const host = $('coupon-list');
+  if (!coupons.length) {
+    host.innerHTML = '';
+    renderListState('empty');
+    return;
+  }
+  renderListState('idle');
+  host.innerHTML = coupons.map((coupon, index) => `
+    <div class="coupon-item">
+      <div>
+        <div style="font-weight:700;">${coupon.code}</div>
+        <div style="font-size:12px;color:var(--builtin-color-muted);">${summaries[index]}</div>
+      </div>
+      <button class="ghost-btn danger btn-delete" type="button" data-id="${coupon.id}"><builtin-icon name="delete" size="14"></builtin-icon> ${d().delete}</button>
+    </div>
+  `).join('');
+  host.querySelectorAll('.btn-delete').forEach((btn) => {
+    btn.addEventListener('click', () => deleteCoupon(btn.dataset.id));
+  });
+}
+
+async function load() {
+  renderListState('loading');
+  try {
+    const res = await api('/shop/merchant/coupons');
+    coupons = (res && res.coupons) || [];
+    const summaries = await Promise.all(coupons.map((coupon) => t('eshop.coupon_summary', { min: coupon.min_order, discount: coupon.discount, desc: coupon.description || '' })));
+    renderCoupons(summaries);
+    updateContext();
+  } catch (_error) {
+    coupons = [];
+    $('coupon-list').innerHTML = '';
+    renderListState('error');
+    updateContext();
+  }
+}
+
+async function deleteCoupon(id) {
+  if (!confirm(await t('eshop.confirm_delete'))) return;
+  await api('/shop/merchant/coupons', { method: 'DELETE', body: JSON.stringify({ id }) });
+  BuiltinToast.show(d().ok_delete, { type: 'success' });
+  await load();
+}
+
+form.addEventListener('builtin-submit', async (event) => {
+  const value = event.detail.value;
+  const payload = {
+    id: value.id?.trim() || 'c' + Date.now(),
+    code: value.code?.trim(),
+    discount: parseInt(value.discount, 10) || 0,
+    min_order: parseInt(value.min_order, 10) || 0,
+    description: value.description?.trim() || '',
+  };
+  if (!payload.code) {
+    BuiltinToast.show(await t('eshop.fill_code'), { type: 'warning' });
+    return;
+  }
+  await api('/shop/merchant/coupons', { method: 'POST', body: JSON.stringify(payload) });
+  BuiltinToast.show(d().ok_add, { type: 'success' });
+  form.reset();
+  updateForm();
+  await load();
+});
+
+document.addEventListener('builtin-user-action', (e) => {
+  if (e.detail?.action === 'logout') logout();
+});
+
+document.addEventListener('builtin-lang-change', async (e) => {
+  lang = e.detail?.lang || lang;
+  await switchLang(lang);
+  applyShellCopy();
+  updateForm();
+  await load();
+});
+
+document.addEventListener('builtin-theme-change', (e) => {
+  localStorage.setItem('eshop_theme', e.detail.dark ? 'dark' : 'light');
+});
+
+applyShellCopy();
+updateForm();
+updateContext();
+await load();
+</script>
+</body>
+</html>

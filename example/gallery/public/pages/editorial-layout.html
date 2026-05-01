@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editorial Layout</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-magazine-editorial>
+    <div slot="navbar"><builtin-navbar brand="Editorial" items='[{"label":"Culture","href":"#"},{"label":"Design","href":"#"},{"label":"Tech","href":"#"}]'></builtin-navbar></div>
+    <h1 slot="headline">The Art of Slow Living</h1>
+    <div slot="author-name">Elena Rossi</div>
+    <div slot="publish-date">Oct 12, 2024</div>
+    <p slot="pull-quote">"In a world obsessed with speed, slowing down is a radical act."</p>
+    <div slot="author-bio">Elena writes about culture, design, and the spaces between.</div>
+  </builtin-tpl-magazine-editorial>
+</body>
+</html>

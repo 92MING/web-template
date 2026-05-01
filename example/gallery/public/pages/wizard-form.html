@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wizard Form</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-form-wizard steps='[
+    {"title":"Account","fields":[{"name":"email","label":"Email","type":"email"},{"name":"password","label":"Password","type":"password"}]},
+    {"title":"Profile","fields":[{"name":"name","label":"Full Name","type":"text"},{"name":"bio","label":"Bio","type":"textarea"}]},
+    {"title":"Review","fields":[]}
+  ]'></builtin-tpl-form-wizard>
+</body>
+</html>

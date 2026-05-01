@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统端口</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-monitoring-shared.css" />
+  <style>
+    html { font-size: 11px; height: 100%; }
+
+    :root {
+      --monitor-accent-1: rgba(99, 102, 241, 0.12);
+      --monitor-accent-2: rgba(6, 182, 212, 0.10);
+      --monitor-accent-3: rgba(59, 130, 246, 0.08);
+    }
+
+    .monitor-shell {
+      gap: 6px;
+    }
+
+    .port-workbench-grid {
+      --monitor-sidebar-width: 404px;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .port-toolbar-panel {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      min-height: 0;
+    }
+
+    .port-list-pane {
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #port-splitter {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .port-detail-pane {
+      grid-column: 3;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .port-toolbar-card,
+    .port-detail-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .port-detail-card {
+      min-height: 240px;
+    }
+
+    .port-toolbar-body {
+      padding: 5px 8px 6px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .port-toolbar-inline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .port-toolbar-inline .monitor-filter-field {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .port-toolbar-inline .monitor-filter-label {
+      display: none;
+    }
+
+    .port-toolbar-inline .monitor-input {
+      min-height: 28px;
+      padding: 0 8px;
+      border-radius: 10px;
+    }
+
+    .port-filter-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      align-items: end;
+    }
+
+    .port-filter-grid .monitor-filter-field {
+      grid-column: span 1;
+      gap: 4px;
+    }
+
+    .port-filter-grid .monitor-filter-field.is-wide {
+      grid-column: span 2;
+    }
+
+    .port-filter-grid .monitor-input,
+    .port-filter-grid .monitor-select {
+      min-height: 30px;
+      padding: 0 9px;
+      border-radius: 12px;
+    }
+
+    .port-toolbar-meta {
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--proj-text-muted);
+      max-width: min(42vw, 360px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .port-list-heading,
+    .port-detail-heading,
+    .port-page-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .port-toolbar-card .monitor-panel-header {
+      padding: 6px 8px 4px;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .port-toolbar-card .monitor-panel-actions {
+      gap: 4px;
+    }
+
+    .port-list-card .panel-card-title,
+    .port-detail-card .panel-card-title,
+    .port-toolbar-card .panel-card-title {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .port-list-card .panel-note,
+    .port-detail-card .panel-note,
+    .port-toolbar-card .panel-note,
+    .port-list-card .monitor-cell-primary,
+    .port-list-card .monitor-cell-secondary,
+    .port-list-card .monitor-data-table,
+    .port-toolbar-card .monitor-filter-label,
+    .port-toolbar-card .panel-check-row,
+    .port-toolbar-card .panel-btn {
+      font-size: 11px;
+    }
+
+    .port-toolbar-card .panel-btn,
+    .port-detail-card .panel-btn,
+    .port-list-card .panel-btn {
+      min-height: 28px;
+      padding-inline: 8px;
+    }
+
+    .monitor-advanced-overlay[hidden] {
+      display: none !important;
+    }
+
+    .monitor-advanced-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: grid;
+      place-items: start center;
+      padding: 52px 12px 12px;
+    }
+
+    .monitor-advanced-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.34);
+      backdrop-filter: blur(1px);
+    }
+
+    .monitor-advanced-popover {
+      position: relative;
+      width: min(700px, calc(100vw - 24px));
+      max-height: calc(100vh - 70px);
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid var(--proj-border-soft);
+      background: var(--proj-surface-elevated);
+      box-shadow: 0 20px 46px rgba(15, 23, 42, 0.22);
+      padding: 10px 12px 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .monitor-advanced-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--proj-border-soft);
+    }
+
+    .monitor-advanced-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--proj-text-strong);
+    }
+
+    .monitor-advanced-note {
+      font-size: 10px;
+      line-height: 1.45;
+      color: var(--proj-text-muted);
+    }
+
+    html.dark .monitor-advanced-backdrop {
+      background: rgba(2, 6, 23, 0.56);
+    }
+
+    .port-list-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .port-list-card .monitor-table-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+    }
+
+    .port-detail-card .monitor-detail-shell {
+      flex: 1 1 auto;
+      padding: 7px 8px 8px;
+      min-height: 0;
+      max-height: none;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    .port-detail-card .monitor-detail-stage {
+      gap: 6px;
+    }
+
+    .port-detail-card .monitor-primary-grid,
+    .port-detail-card .monitor-detail-grid {
+      gap: 6px;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    }
+
+    .port-detail-card .monitor-metric-box {
+      padding: 6px 7px;
+      border-radius: 10px;
+    }
+
+    .port-detail-card .monitor-metric-kicker {
+      font-size: 8px;
+      letter-spacing: 0.1em;
+    }
+
+    .port-detail-card .monitor-metric-value {
+      margin-top: 2px;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .port-detail-card .monitor-metric-note {
+      margin-top: 1px;
+      font-size: 9px;
+      line-height: 1.28;
+    }
+
+    .port-detail-card .monitor-list-card {
+      padding: 6px 8px;
+      border-radius: 10px;
+    }
+
+    .port-detail-card .monitor-list-body {
+      margin-top: 4px;
+      gap: 3px;
+      max-height: 260px;
+    }
+
+    .port-detail-card .monitor-list-row {
+      gap: 6px;
+      font-size: 9px;
+    }
+
+    .port-detail-card .monitor-empty-card {
+      min-height: 72px;
+      padding: 8px;
+    }
+
+    .port-list-card .monitor-table-scroll {
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    @media (max-width: 1180px) {
+      .port-workbench-grid {
+        --monitor-sidebar-width: 384px;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .port-toolbar-panel,
+      .port-list-pane,
+      #port-splitter,
+      .port-detail-pane {
+        grid-column: auto;
+        grid-row: auto;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .monitor-advanced-overlay {
+        padding-top: 44px;
+      }
+
+      .port-filter-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .port-filter-grid .monitor-filter-field,
+      .port-filter-grid .monitor-filter-field.is-wide {
+        grid-column: span 1;
+      }
+
+      .port-list-card {
+        min-height: 0;
+      }
+
+      .port-detail-card .monitor-detail-shell {
+        max-height: none;
+      }
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="panel-page-body monitor-page-body">
+  <main class="panel-page monitor-page">
+    <div class="panel-page-shell monitor-shell">
+      <div id="page-status" class="panel-note port-toolbar-meta" hidden aria-live="polite"></div>
+
+      <section id="port-workbench" class="monitor-workbench-grid monitor-workbench-split port-workbench-grid">
+        <section class="panel-card monitor-panel-card port-toolbar-card port-toolbar-panel">
+          <div class="monitor-panel-header">
+            <div class="monitor-panel-title port-page-heading">
+              <div class="panel-card-title">搜索 / 排序</div>
+              <div id="port-toolbar-meta" class="panel-note port-toolbar-meta">—</div>
+            </div>
+            <div class="monitor-panel-actions">
+                <button id="port-advanced-toggle" type="button" class="panel-btn" aria-haspopup="dialog" aria-expanded="false">进阶筛选</button>
+              <button id="refresh-btn" type="button" class="panel-btn panel-btn-primary">刷新</button>
+              <label class="panel-check-row monitor-toggle-chip">
+                <input id="listen-only" type="checkbox" class="rounded" />
+                仅监听
+              </label>
+              <label class="panel-check-row monitor-toggle-chip">
+                <input id="auto-refresh" type="checkbox" class="rounded" checked />
+                自动 5s
+              </label>
+            </div>
+          </div>
+          <div class="port-toolbar-body">
+            <div class="port-toolbar-inline">
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">搜索</span>
+                <input id="search-input" class="monitor-input" placeholder="端口 / 地址 / pid / 进程名" />
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <div id="port-advanced-overlay" class="monitor-advanced-overlay" hidden>
+          <div class="monitor-advanced-backdrop" data-advanced-close="1"></div>
+          <section class="monitor-advanced-popover" role="dialog" aria-modal="true" aria-labelledby="port-advanced-title">
+            <div class="monitor-advanced-head">
+              <div>
+                <div id="port-advanced-title" class="monitor-advanced-title">进阶筛选 / 排序</div>
+                <div class="monitor-advanced-note">按需展开进阶条件，主视图保持紧凑聚焦列表。</div>
+              </div>
+              <button id="port-advanced-close" type="button" class="panel-btn">关闭</button>
+            </div>
+            <div class="monitor-filter-grid port-filter-grid">
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">最大数量</span>
+                <input id="limit-input" type="number" min="1" max="10000" value="500" class="monitor-input" />
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">协议</span>
+                <select id="protocol-filter" class="monitor-select">
+                  <option value="">全部</option>
+                  <option value="tcp">TCP</option>
+                  <option value="udp">UDP</option>
+                </select>
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">状态</span>
+                <select id="status-filter" class="monitor-select">
+                  <option value="">全部</option>
+                  <option value="LISTEN">LISTEN</option>
+                  <option value="ESTABLISHED">ESTABLISHED</option>
+                  <option value="TIME_WAIT">TIME_WAIT</option>
+                  <option value="CLOSE_WAIT">CLOSE_WAIT</option>
+                </select>
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">排序</span>
+                <select id="port-sort" class="monitor-select">
+                  <option value="pid-desc">PID 降序</option>
+                  <option value="pid-asc">PID 升序</option>
+                  <option value="protocol-asc">协议升序</option>
+                  <option value="status-asc">状态升序</option>
+                  <option value="local-asc">本地地址升序</option>
+                </select>
+              </label>
+              <label class="monitor-filter-field">
+                <span class="monitor-filter-label">视图</span>
+                <select id="port-view-mode" class="monitor-select">
+                  <option value="flat">明细</option>
+                  <option value="grouped">按进程分组</option>
+                </select>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <section class="monitor-pane monitor-pane-main port-list-pane">
+          <section class="panel-card monitor-panel-card port-list-card">
+          <div class="monitor-panel-header">
+            <div class="monitor-panel-title monitor-panel-title-inline port-list-heading">
+              <div class="panel-card-title">端口列表</div>
+              <div id="list-meta" class="panel-note">—</div>
+            </div>
+            <div class="monitor-panel-actions">
+              <span id="selection-meta" class="panel-pill monitor-summary-pill">未选择</span>
+              <button id="clear-selection-btn" type="button" class="panel-btn">清空选择</button>
+            </div>
+          </div>
+          <div class="monitor-table-scroll">
+            <table class="monitor-data-table">
+              <colgroup>
+                <col class="monitor-col-check" />
+                <col class="monitor-col-xs" />
+                <col class="monitor-col-address" />
+                <col class="monitor-col-address" />
+                <col class="monitor-col-sm" />
+                <col class="monitor-col-xs" />
+                <col class="monitor-col-process" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th><input id="select-all" type="checkbox" class="rounded" /></th>
+                  <th>协议</th>
+                  <th>本地地址</th>
+                  <th>远端地址</th>
+                  <th>状态</th>
+                  <th>PID</th>
+                  <th>进程</th>
+                </tr>
+              </thead>
+              <tbody id="ports-table"></tbody>
+            </table>
+          </div>
+          </section>
+        </section>
+
+        <div id="port-splitter" class="monitor-splitter" data-splitter tabindex="0" role="separator" aria-label="调整详情侧栏宽度" aria-orientation="vertical">
+          <span class="monitor-splitter-grip" aria-hidden="true"></span>
+          <button id="port-split-toggle" type="button" class="monitor-splitter-toggle" aria-label="折叠详情侧栏" aria-expanded="true">›</button>
+        </div>
+
+        <aside id="port-sidebar" class="port-detail-pane monitor-pane monitor-pane-side">
+          <section class="panel-card monitor-panel-card port-detail-card">
+            <div class="monitor-panel-header">
+              <div class="monitor-panel-title monitor-panel-title-inline port-detail-heading">
+                <div class="panel-card-title">详情</div>
+                <div id="detail-title" class="panel-note panel-mono">未选择端口记录</div>
+              </div>
+            </div>
+            <div class="monitor-detail-shell">
+              <div id="detail-body" class="monitor-detail-stage"></div>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const state = {
+      rawItems: [],
+      items: [],
+      meta: { total: 0, truncated: false, generated_at: null },
+      timer: null,
+      selectedMode: 'flat',
+      selectionByMode: {
+        flat: new Set(),
+        grouped: new Set(),
+      },
+      focusByMode: {
+        flat: null,
+        grouped: null,
+      },
+    };
+
+    let detailTransitionFrame = null;
+
+    function initWorkbenchSplit({ rootId, splitterId, toggleId, storageKey, defaultWidth, minWidth, maxWidth, collapseAt }) {
+      const root = document.getElementById(rootId);
+      const splitter = document.getElementById(splitterId);
+      const toggle = document.getElementById(toggleId);
+      if (!root || !splitter || !toggle) return;
+
+      const mediaQuery = window.matchMedia('(max-width: 1024px)');
+      let width = defaultWidth;
+      let collapsed = false;
+
+      function clampWidth(value) {
+        return Math.max(minWidth, Math.min(maxWidth, value));
+      }
+
+      try {
+        const storedWidth = Number(window.localStorage.getItem(`${storageKey}:width`) || '');
+        if (Number.isFinite(storedWidth)) width = clampWidth(storedWidth);
+        window.localStorage.removeItem(`${storageKey}:collapsed`);
+      } catch (_) {
+        width = defaultWidth;
+        collapsed = false;
+      }
+
+      function persist() {
+        try {
+          window.localStorage.setItem(`${storageKey}:width`, String(Math.round(width)));
+        } catch (_) {
+          // Ignore storage failures.
+        }
+      }
+
+      function apply() {
+        const compact = mediaQuery.matches;
+        root.style.setProperty('--monitor-sidebar-width', `${Math.round(width)}px`);
+        root.classList.toggle('is-collapsed', !compact && collapsed);
+        toggle.textContent = compact ? '›' : (collapsed ? '‹' : '›');
+        toggle.disabled = compact;
+        toggle.setAttribute('aria-expanded', compact ? 'true' : String(!collapsed));
+        toggle.setAttribute('aria-label', compact ? '窄屏模式下不支持折叠详情侧栏' : (collapsed ? '展开详情侧栏' : '折叠详情侧栏'));
+        splitter.setAttribute('aria-valuemin', String(minWidth));
+        splitter.setAttribute('aria-valuemax', String(maxWidth));
+        splitter.setAttribute('aria-valuenow', String(Math.round(width)));
+      }
+
+      function setCollapsed(next) {
+        collapsed = !!next;
+        persist();
+        apply();
+      }
+
+      toggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (mediaQuery.matches) return;
+        setCollapsed(!collapsed);
+      });
+
+      splitter.addEventListener('dblclick', () => {
+        if (mediaQuery.matches) return;
+        setCollapsed(!collapsed);
+      });
+
+      splitter.addEventListener('keydown', (event) => {
+        if (mediaQuery.matches) return;
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          collapsed = false;
+          width = clampWidth(width + 24);
+          persist();
+          apply();
+          return;
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          collapsed = false;
+          width = clampWidth(width - 24);
+          if (width <= collapseAt) {
+            width = minWidth;
+            collapsed = true;
+          }
+          persist();
+          apply();
+          return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setCollapsed(!collapsed);
+        }
+      });
+
+      splitter.addEventListener('pointerdown', (event) => {
+        if (mediaQuery.matches) return;
+        if (event.target instanceof Element && event.target.closest('.monitor-splitter-toggle')) return;
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = width;
+        collapsed = false;
+        apply();
+        splitter.setPointerCapture(event.pointerId);
+        document.body.classList.add('is-panel-resizing');
+
+        const handleMove = (moveEvent) => {
+          width = clampWidth(startWidth - (moveEvent.clientX - startX));
+          apply();
+        };
+
+        const handleUp = (upEvent) => {
+          splitter.releasePointerCapture(upEvent.pointerId);
+          splitter.removeEventListener('pointermove', handleMove);
+          splitter.removeEventListener('pointerup', handleUp);
+          splitter.removeEventListener('pointercancel', handleUp);
+          document.body.classList.remove('is-panel-resizing');
+          if (width <= collapseAt) {
+            width = minWidth;
+            collapsed = true;
+          }
+          persist();
+          apply();
+        };
+
+        splitter.addEventListener('pointermove', handleMove);
+        splitter.addEventListener('pointerup', handleUp);
+        splitter.addEventListener('pointercancel', handleUp);
+      });
+
+      const handleMediaChange = () => apply();
+      if (typeof mediaQuery.addEventListener === 'function') mediaQuery.addEventListener('change', handleMediaChange);
+      else if (typeof mediaQuery.addListener === 'function') mediaQuery.addListener(handleMediaChange);
+
+      apply();
+    }
+
+    function httpUrl(path) {
+      return typeof window.projResolveUrl === 'function' ? window.projResolveUrl(path) : path;
+    }
+
+    function setStatus(message, ok = true) {
+      const el = document.getElementById('page-status');
+      if (!el) return;
+      el.textContent = message;
+      el.hidden = !!ok;
+      el.className = ok
+        ? 'panel-note port-toolbar-meta'
+        : 'panel-note port-toolbar-meta panel-danger-text';
+    }
+
+    function initAdvancedFilterPopover() {
+      const toggle = document.getElementById('port-advanced-toggle');
+      const overlay = document.getElementById('port-advanced-overlay');
+      const closeBtn = document.getElementById('port-advanced-close');
+      if (!toggle || !overlay || !closeBtn) return;
+
+      const close = () => {
+        overlay.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+      };
+
+      const open = () => {
+        overlay.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+      };
+
+      toggle.addEventListener('click', () => {
+        if (overlay.hidden) open();
+        else close();
+      });
+
+      closeBtn.addEventListener('click', close);
+
+      overlay.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target instanceof Element && target.hasAttribute('data-advanced-close')) {
+          close();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !overlay.hidden) {
+          event.preventDefault();
+          close();
+          toggle.focus();
+        }
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function animateDetailStage() {
+      const stage = document.getElementById('detail-body');
+      if (!stage) return;
+      if (detailTransitionFrame) {
+        window.cancelAnimationFrame(detailTransitionFrame);
+      }
+      stage.classList.add('is-updating');
+      detailTransitionFrame = window.requestAnimationFrame(() => {
+        detailTransitionFrame = window.requestAnimationFrame(() => {
+          stage.classList.remove('is-updating');
+          detailTransitionFrame = null;
+        });
+      });
+    }
+
+    function buildFlatKey(item) {
+      return `flat:${item.protocol || ''}:${item.local_address || ''}:${item.remote_address || ''}:${item.pid ?? 'none'}:${item.status || ''}:${item.process_name || ''}`;
+    }
+
+    function normalizeFlatItems(items) {
+      return (items || []).map((item) => ({ ...item, __key: buildFlatKey(item), __grouped: false }));
+    }
+
+    function groupPortsByProcess(items) {
+      const groups = new Map();
+      (items || []).forEach((item) => {
+        const key = `group:${item.pid ?? 'none'}:${item.process_name || 'unknown'}:${item.username || ''}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            __key: key,
+            __grouped: true,
+            pid: item.pid ?? null,
+            process_name: item.process_name || '—',
+            username: item.username || '—',
+            cmdline: item.cmdline || [],
+            protocol: '—',
+            local_address: '—',
+            remote_address: '—',
+            status: '—',
+            entry_count: 0,
+            listen_count: 0,
+            protocols: new Set(),
+            addresses: new Set(),
+            statuses: new Set(),
+          });
+        }
+        const group = groups.get(key);
+        group.entry_count += 1;
+        if (String(item.status || '').toUpperCase() === 'LISTEN') group.listen_count += 1;
+        if (item.protocol) group.protocols.add(String(item.protocol).toUpperCase());
+        if (item.local_address) group.addresses.add(item.local_address);
+        if (item.status) group.statuses.add(String(item.status).toUpperCase());
+      });
+      return Array.from(groups.values()).map((group) => ({
+        ...group,
+        protocol: Array.from(group.protocols).join(' / ') || '—',
+        local_address: `${group.entry_count} 个端口 · ${group.listen_count} 个监听`,
+        remote_address: `${group.addresses.size} 个本地地址`,
+        status: Array.from(group.statuses).slice(0, 3).join(' / ') || '—',
+      }));
+    }
+
+    function comparePortEntry(a, b) {
+      const mode = document.getElementById('port-sort').value || 'pid-desc';
+      const [key, order] = mode.split('-');
+      const direction = order === 'desc' ? -1 : 1;
+      let result = 0;
+      if (key === 'pid') result = Number(a?.pid || 0) - Number(b?.pid || 0);
+      else if (key === 'protocol') result = String(a?.protocol || '').localeCompare(String(b?.protocol || ''));
+      else if (key === 'status') result = String(a?.status || '').localeCompare(String(b?.status || ''));
+      else if (key === 'local') result = String(a?.local_address || '').localeCompare(String(b?.local_address || ''));
+      return result * direction;
+    }
+
+    function activeSelectionSet() {
+      return state.selectedMode === 'grouped' ? state.selectionByMode.grouped : state.selectionByMode.flat;
+    }
+
+    function activeFocusedKey() {
+      return state.focusByMode[state.selectedMode] || null;
+    }
+
+    function setActiveFocusedKey(key) {
+      state.focusByMode[state.selectedMode] = key || null;
+    }
+
+    function selectedItems() {
+      const selectedKeys = activeSelectionSet();
+      return state.items.filter((item) => selectedKeys.has(item.__key));
+    }
+
+    function focusedItem() {
+      const focusedKey = activeFocusedKey();
+      return state.items.find((item) => item.__key === focusedKey) || null;
+    }
+
+    function syncSelectionAndFocus() {
+      const visible = new Set(state.items.map((item) => item.__key));
+      const selectedKeys = activeSelectionSet();
+      [...selectedKeys].forEach((key) => {
+        if (!visible.has(key)) selectedKeys.delete(key);
+      });
+      const focusedKey = activeFocusedKey();
+      if (!focusedKey || !visible.has(focusedKey)) {
+        setActiveFocusedKey(state.items[0]?.__key ?? null);
+      }
+    }
+
+    function updateHeaderStats() {
+      const selected = selectedItems();
+      const listenCount = state.selectedMode === 'grouped'
+        ? state.items.reduce((sum, item) => sum + Number(item.listen_count || 0), 0)
+        : state.items.filter((item) => String(item.status || '').toUpperCase() === 'LISTEN').length;
+      const processCount = new Set(state.items.map((item) => item.pid ?? item.process_name ?? item.__key)).size;
+      document.getElementById('selection-meta').textContent = activeSelectionSet().size ? `已选择 ${activeSelectionSet().size} 项` : '未选择';
+      document.getElementById('selection-meta').className = activeSelectionSet().size
+        ? 'panel-pill monitor-summary-pill is-brand'
+        : 'panel-pill monitor-summary-pill';
+      document.getElementById('clear-selection-btn').disabled = activeSelectionSet().size === 0;
+      document.getElementById('list-meta').textContent = state.meta.generated_at
+        ? `更新时间 ${new Date(state.meta.generated_at).toLocaleString('zh-CN')} · 总数 ${state.meta.total}${state.meta.truncated ? ' · 已截断' : ''}`
+        : '—';
+      document.getElementById('port-toolbar-meta').textContent = state.selectedMode === 'grouped'
+        ? `分组 ${state.items.length} · 监听 ${listenCount} · 进程 ${processCount}`
+        : `明细 ${state.items.length} · 监听 ${listenCount} · 进程 ${processCount}`;
+    }
+
+    function updateSelectAllBox() {
+      const box = document.getElementById('select-all');
+      const total = state.items.length;
+      const selected = selectedItems().length;
+      box.checked = total > 0 && selected === total;
+      box.indeterminate = selected > 0 && selected < total;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('ports-table');
+      tbody.innerHTML = '';
+      if (!state.items.length) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="7"><div class="monitor-empty-card">暂无匹配端口记录。</div></td>';
+        tbody.appendChild(row);
+        updateSelectAllBox();
+        return;
+      }
+      state.items.forEach((item) => {
+        const selected = activeSelectionSet().has(item.__key);
+        const focused = activeFocusedKey() === item.__key;
+        const row = document.createElement('tr');
+        row.className = `${focused ? 'is-focused ' : ''}${selected ? 'is-selected' : ''}`.trim();
+        row.innerHTML = `
+          <td><input class="rounded" type="checkbox" data-key="${escapeHtml(item.__key)}" ${selected ? 'checked' : ''} /></td>
+          <td><span class="monitor-cell-primary monitor-ellipsis">${escapeHtml(item.protocol || '—')}</span></td>
+          <td><span class="monitor-cell-primary panel-mono monitor-break">${escapeHtml(item.local_address || '—')}</span></td>
+          <td><span class="monitor-cell-primary panel-mono monitor-break">${escapeHtml(item.remote_address || '—')}</span></td>
+          <td><span class="monitor-cell-primary monitor-ellipsis">${escapeHtml(item.status || '—')}</span></td>
+          <td><span class="monitor-cell-primary panel-mono">${item.pid == null ? '—' : item.pid}</span></td>
+          <td>
+            <span class="monitor-cell-primary monitor-ellipsis">${escapeHtml(item.process_name || '—')}</span>
+            <span class="monitor-cell-secondary monitor-ellipsis">${escapeHtml(item.username || '')}</span>
+          </td>
+        `;
+        row.addEventListener('click', () => {
+          setActiveFocusedKey(item.__key);
+          renderTable();
+          renderDetailPane();
+        });
+        row.querySelector('input[data-key]').addEventListener('click', (event) => {
+          event.stopPropagation();
+        });
+        row.querySelector('input[data-key]').addEventListener('change', (event) => {
+          toggleSelection(item.__key, event.target.checked);
+        });
+        tbody.appendChild(row);
+      });
+      updateSelectAllBox();
+    }
+
+    function renderAggregateDetail(items) {
+      const protocols = new Map();
+      const statuses = new Map();
+      let totalListen = 0;
+      let totalEntries = 0;
+      items.forEach((item) => {
+        const protocol = item.protocol || '—';
+        protocols.set(protocol, (protocols.get(protocol) || 0) + 1);
+        const status = item.status || '—';
+        statuses.set(status, (statuses.get(status) || 0) + 1);
+        totalListen += Number(item.listen_count || (String(item.status || '').toUpperCase() === 'LISTEN' ? 1 : 0));
+        totalEntries += Number(item.entry_count || 1);
+      });
+      document.getElementById('detail-title').textContent = `批量选择 ${items.length} 项`;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="monitor-primary-grid">
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">已选择</div><div class="monitor-metric-value">${items.length}</div><div class="monitor-metric-note">当前工作集</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">端口总量</div><div class="monitor-metric-value">${totalEntries}</div><div class="monitor-metric-note">聚合后端口数</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">监听数</div><div class="monitor-metric-value">${totalListen}</div><div class="monitor-metric-note">LISTEN 状态统计</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">涉及进程</div><div class="monitor-metric-value">${new Set(items.map((item) => item.pid ?? item.process_name ?? item.__key)).size}</div><div class="monitor-metric-note">当前批量覆盖范围</div></div>
+        </div>
+        <div class="monitor-detail-grid">
+          <div class="monitor-list-card">
+            <div class="monitor-list-title">协议分布</div>
+            <div class="monitor-list-body">
+              <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary monitor-break">${escapeHtml([...protocols.entries()].map(([key, value]) => `${key}:${value}`).join(' / ') || '—')}</span></div></div>
+            </div>
+          </div>
+          <div class="monitor-list-card">
+            <div class="monitor-list-title">状态分布</div>
+            <div class="monitor-list-body">
+              <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary monitor-break">${escapeHtml([...statuses.entries()].map(([key, value]) => `${key}:${value}`).join(' / ') || '—')}</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="monitor-list-card">
+          <div class="monitor-list-title">已选择项目</div>
+          <div class="monitor-list-body">
+            ${items.slice(0, 64).map((item) => `<div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary panel-mono">${escapeHtml(item.protocol || '—')}</span><span class="monitor-cell-secondary monitor-break">${escapeHtml(item.local_address || item.process_name || '—')}</span></div><span class="monitor-list-row-meta">${escapeHtml(item.status || '—')}</span></div>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSingleDetail(item) {
+      if (item.__grouped) {
+        document.getElementById('detail-title').textContent = `${item.process_name || '—'} · ${item.pid ?? '—'}`;
+        document.getElementById('detail-body').innerHTML = `
+          <div class="monitor-primary-grid">
+            <div class="monitor-metric-box"><div class="monitor-metric-kicker">PID</div><div class="monitor-metric-value panel-mono">${item.pid ?? '—'}</div><div class="monitor-metric-note">当前进程</div></div>
+            <div class="monitor-metric-box"><div class="monitor-metric-kicker">用户</div><div class="monitor-metric-value">${escapeHtml(item.username || '—')}</div><div class="monitor-metric-note">进程属主</div></div>
+            <div class="monitor-metric-box"><div class="monitor-metric-kicker">端口数</div><div class="monitor-metric-value">${item.entry_count || 0}</div><div class="monitor-metric-note">当前分组覆盖</div></div>
+            <div class="monitor-metric-box"><div class="monitor-metric-kicker">监听数</div><div class="monitor-metric-value">${item.listen_count || 0}</div><div class="monitor-metric-note">LISTEN 状态端口</div></div>
+          </div>
+          <div class="monitor-detail-grid">
+            <div class="monitor-list-card">
+              <div class="monitor-list-title">协议 / 状态</div>
+              <div class="monitor-list-body">
+                <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary monitor-break">${escapeHtml(item.protocol || '—')} · ${escapeHtml(item.status || '—')}</span></div></div>
+              </div>
+            </div>
+            <div class="monitor-list-card">
+              <div class="monitor-list-title">命令行</div>
+              <div class="monitor-list-body">
+                <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary panel-mono monitor-break">${escapeHtml((item.cmdline || []).join(' ') || '—')}</span></div></div>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      document.getElementById('detail-title').textContent = `${item.protocol || '—'} · ${item.local_address || '—'}`;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="monitor-detail-grid">
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">协议</div><div class="monitor-metric-value">${escapeHtml(item.protocol || '—')}</div><div class="monitor-metric-note">网络协议</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">状态</div><div class="monitor-metric-value">${escapeHtml(item.status || '—')}</div><div class="monitor-metric-note">连接状态</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">PID</div><div class="monitor-metric-value panel-mono">${item.pid ?? '—'}</div><div class="monitor-metric-note">所属进程</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">本地地址</div><div class="monitor-metric-value panel-mono">${escapeHtml(item.local_address || '—')}</div><div class="monitor-metric-note">监听 / 绑定地址</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">远端地址</div><div class="monitor-metric-value panel-mono">${escapeHtml(item.remote_address || '—')}</div><div class="monitor-metric-note">目标连接</div></div>
+          <div class="monitor-metric-box"><div class="monitor-metric-kicker">进程</div><div class="monitor-metric-value">${escapeHtml(item.process_name || '—')}</div><div class="monitor-metric-note">${escapeHtml(item.username || '—')}</div></div>
+        </div>
+        <div class="monitor-list-card">
+          <div class="monitor-list-title">命令行</div>
+          <div class="monitor-list-body">
+            <div class="monitor-list-row"><div class="monitor-list-row-main"><span class="monitor-cell-primary panel-mono monitor-break">${escapeHtml((item.cmdline || []).join(' ') || '—')}</span></div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEmptyDetail() {
+      document.getElementById('detail-title').textContent = '未选择端口记录';
+      document.getElementById('detail-body').innerHTML = '<div class="monitor-empty-card">当前没有可展示的端口详情。</div>';
+    }
+
+    function renderDetailPane() {
+      animateDetailStage();
+      const selected = selectedItems();
+      if (selected.length > 1) {
+        renderAggregateDetail(selected);
+        return;
+      }
+      const item = focusedItem();
+      if (!item) {
+        renderEmptyDetail();
+        return;
+      }
+      renderSingleDetail(item);
+    }
+
+    function recomputeView(meta) {
+      if (meta) state.meta = meta;
+      const protocol = (document.getElementById('protocol-filter').value || '').toLowerCase();
+      const status = document.getElementById('status-filter').value || '';
+      const viewMode = document.getElementById('port-view-mode').value || 'flat';
+      state.selectedMode = viewMode;
+      const base = normalizeFlatItems(state.rawItems).filter((item) => {
+        if (protocol && String(item.protocol || '').toLowerCase() !== protocol) return false;
+        if (status && String(item.status || '') !== status) return false;
+        return true;
+      });
+      const rendered = viewMode === 'grouped' ? groupPortsByProcess(base) : base;
+      state.items = [...rendered].sort(comparePortEntry);
+      syncSelectionAndFocus();
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    }
+
+    function toggleSelection(key, checked) {
+      const selectedKeys = activeSelectionSet();
+      if (checked) selectedKeys.add(key);
+      else selectedKeys.delete(key);
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    }
+
+    async function loadPorts() {
+      const params = new URLSearchParams();
+      const search = document.getElementById('search-input').value.trim();
+      const limit = document.getElementById('limit-input').value.trim() || '500';
+      if (search) params.set('search', search);
+      params.set('limit', limit);
+      params.set('listen_only', document.getElementById('listen-only').checked ? 'true' : 'false');
+      params.set('include_cmdline', 'false');
+      setStatus('正在读取端口列表…', true);
+      const response = await fetch(`${httpUrl('/admin/api/system/ports')}?${params.toString()}`);
+      if (!response.ok) throw new Error(await response.text() || '读取端口失败');
+      const data = await response.json();
+      state.rawItems = Array.isArray(data.items) ? data.items : [];
+      recomputeView({ total: data.total || state.rawItems.length, truncated: Boolean(data.truncated), generated_at: data.generated_at || new Date().toISOString() });
+      setStatus(`已载入 ${state.rawItems.length} 条端口记录`, true);
+    }
+
+    function restartAutoRefresh() {
+      if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+      }
+      if (!document.getElementById('auto-refresh').checked) return;
+      state.timer = window.setInterval(() => {
+        loadPorts().catch((error) => setStatus(error.message || '刷新失败', false));
+      }, 5000);
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+      loadPorts().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('search-input').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      loadPorts().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('limit-input').addEventListener('change', () => {
+      loadPorts().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('listen-only').addEventListener('change', () => {
+      loadPorts().catch((error) => setStatus(error.message || '刷新失败', false));
+    });
+    document.getElementById('protocol-filter').addEventListener('change', () => recomputeView());
+    document.getElementById('status-filter').addEventListener('change', () => recomputeView());
+    document.getElementById('port-sort').addEventListener('change', () => recomputeView());
+    document.getElementById('port-view-mode').addEventListener('change', () => recomputeView());
+    document.getElementById('auto-refresh').addEventListener('change', restartAutoRefresh);
+    document.getElementById('select-all').addEventListener('change', (event) => {
+      const selectedKeys = activeSelectionSet();
+      if (event.target.checked) state.items.forEach((item) => selectedKeys.add(item.__key));
+      else selectedKeys.clear();
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    });
+    document.getElementById('clear-selection-btn').addEventListener('click', () => {
+      activeSelectionSet().clear();
+      updateHeaderStats();
+      renderTable();
+      renderDetailPane();
+    });
+
+    initAdvancedFilterPopover();
+
+    initWorkbenchSplit({
+      rootId: 'port-workbench',
+      splitterId: 'port-splitter',
+      toggleId: 'port-split-toggle',
+      storageKey: 'proj:panel:system-ports:split',
+      defaultWidth: 404,
+      minWidth: 300,
+      maxWidth: 620,
+      collapseAt: 320,
+    });
+
+    loadPorts().catch((error) => setStatus(error.message || '初始化失败', false));
+    restartAutoRefresh();
+    window.addEventListener('beforeunload', () => state.timer && clearInterval(state.timer));
+  </script>
+</body>
+</html>

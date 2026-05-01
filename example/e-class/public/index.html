@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>数字教室 e-Class</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(18, 119, 104, .16), transparent 34rem),
+      linear-gradient(135deg, #f8efe0 0%, #eaf4ec 45%, #dfeeea 100%);
+    color: #1f2a24;
+  }
+  h1 { margin: 0 0 12px; font-size: clamp(34px, 7vw, 54px); letter-spacing: -.05em; }
+  p { margin: 0; line-height: 1.7; color: #637268; }
+</style>
+</head>
+<body>
+<builtin-card variant="elevated" style="width:min(460px, calc(100vw - 40px));">
+  <div style="padding: 32px;">
+    <h1>e-Class</h1>
+    <p id="status">正在进入数字教室...</p>
+  </div>
+</builtin-card>
+<script>
+(async () => {
+  const role = localStorage.getItem('eclass_role');
+  const token = localStorage.getItem('eclass_token');
+  if (!token) {
+    location.replace('login.html');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/auth?action=me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+    if (payload && payload.ok) {
+      location.replace(role === 'teacher' ? 'teacher.html' : 'student.html');
+      return;
+    }
+  } catch (_error) {
+  }
+
+  localStorage.removeItem('eclass_user');
+  localStorage.removeItem('eclass_role');
+  localStorage.removeItem('eclass_token');
+  location.replace('login.html');
+})();
+</script>
+</body>
+</html>

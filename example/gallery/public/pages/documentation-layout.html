@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation Layout</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-tutorial-documentation toc='[
+    {"title":"Getting Started","open":true,"children":[{"title":"Installation","anchor":"#install"},{"title":"Quick Start","anchor":"#quickstart"}]},
+    {"title":"Components","open":true,"children":[{"title":"Buttons","anchor":"#buttons"},{"title":"Forms","anchor":"#forms"}]},
+    {"title":"API","open":false,"children":[{"title":"REST","anchor":"#rest"},{"title":"WebSocket","anchor":"#ws"}]}
+  ]'>
+    <div slot="navbar"><builtin-navbar brand="Docs" items='[{"label":"Guide","href":"#"},{"label":"API","href":"#"},{"label":"Examples","href":"#"}]'></builtin-navbar></div>
+    <div slot="content">
+      <h2 id="install">Installation</h2>
+      <p>Run <code>npm install @acme/ui</code> to get started.</p>
+      <h2 id="quickstart">Quick Start</h2>
+      <p>Import the components and register them in your app.</p>
+      <h2 id="buttons">Buttons</h2>
+      <p>Use builtin-button for all button variants.</p>
+    </div>
+  </builtin-tpl-tutorial-documentation>
+</body>
+</html>

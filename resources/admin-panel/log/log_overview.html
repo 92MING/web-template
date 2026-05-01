@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>日志概览</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <link rel="stylesheet" href="/html-assets/css/log-shared.css"/>
+  <script src="/vendor/chart/chart.js"></script>
+  <script src="/html-assets/js/page-controls.js"></script>
+  <style>
+    .log-overview-hero {
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .log-overview-hero-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .log-overview-heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .log-overview-tags {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .log-overview-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.2;
+      border: 1px solid var(--log-border);
+      background: var(--log-surface-alt);
+      color: var(--log-text-secondary);
+    }
+
+    .log-overview-chip.brand {
+      background: var(--log-brand-soft);
+      color: var(--log-brand);
+      border-color: var(--log-brand-border);
+    }
+
+    .log-overview-chip.ok {
+      background: var(--log-success-bg);
+      color: #166534;
+      border-color: #bbf7d0;
+    }
+
+    .log-overview-chip.warn {
+      background: var(--log-warn-bg);
+      color: #92400e;
+      border-color: var(--log-warn-border);
+    }
+
+    .log-overview-chip.err {
+      background: var(--log-danger-bg);
+      color: #991b1b;
+      border-color: var(--log-danger-border);
+    }
+
+    html.dark .log-overview-chip.ok {
+      color: var(--proj-success-500);
+      border-color: var(--proj-success-border);
+    }
+
+    html.dark .log-overview-chip.warn {
+      color: var(--proj-warn-500);
+      border-color: var(--proj-warn-border);
+    }
+
+    html.dark .log-overview-chip.err {
+      color: var(--proj-danger-500);
+      border-color: var(--proj-danger-border);
+    }
+
+    .log-overview-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--log-text);
+    }
+
+    #page-banner {
+      margin-left: auto;
+      max-width: 520px;
+    }
+
+    .log-overview-hero-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+
+    .log-overview-summary {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .log-overview-insights {
+      display: grid;
+      gap: 8px;
+    }
+
+    .log-overview-metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-content: start;
+    }
+
+    .log-overview-metrics .log-stat {
+      min-height: 74px;
+      justify-content: flex-start;
+      padding: 10px 12px;
+    }
+
+    .log-insight-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--log-radius-sm);
+      border: 1px solid var(--log-border);
+      background: var(--log-surface-alt);
+    }
+
+    .log-insight-row.ok {
+      background: var(--log-success-bg);
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
+    .log-insight-row.warn {
+      background: var(--log-warn-bg);
+      border-color: var(--log-warn-border);
+      color: #92400e;
+    }
+
+    .log-insight-row.err {
+      background: var(--log-danger-bg);
+      border-color: var(--log-danger-border);
+      color: #991b1b;
+    }
+
+    html.dark .log-insight-row.ok {
+      color: #6ee7b7;
+      border-color: var(--proj-success-border);
+    }
+
+    html.dark .log-insight-row.warn {
+      color: #fcd34d;
+      border-color: var(--proj-warn-border);
+    }
+
+    html.dark .log-insight-row.err {
+      color: #fca5a5;
+      border-color: var(--proj-danger-border);
+    }
+
+    .log-insight-tag {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.2;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      color: inherit;
+    }
+
+    html.dark .log-insight-tag {
+      background: rgba(15, 23, 42, 0.28);
+      border-color: rgba(148, 163, 184, 0.18);
+    }
+
+    .log-insight-text {
+      min-width: 0;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 980px) {
+      .log-overview-hero-body {
+        grid-template-columns: 1fr;
+      }
+
+      #page-banner {
+        max-width: none;
+        width: 100%;
+        margin-left: 0;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .log-insight-row {
+        flex-direction: column;
+        gap: 6px;
+      }
+    }
+  </style>
+</head>
+<body class="log-page">
+  <div class="flex flex-col gap-3">
+    <section class="log-card log-overview-hero">
+      <div class="log-overview-hero-head">
+        <div class="log-overview-heading">
+          <div class="log-overview-tags">
+            <span class="log-overview-chip brand">总览</span>
+            <span id="overview-health-tag" class="log-overview-chip">分析中</span>
+            <span id="overview-source-tag" class="log-overview-chip">等待中</span>
+            <span class="log-overview-chip">30s 刷新</span>
+          </div>
+          <div class="log-overview-title">健康摘要</div>
+        </div>
+        <div id="page-banner" class="log-banner info log-hidden"></div>
+      </div>
+      <div class="log-overview-hero-body">
+        <div class="log-overview-summary">
+          <div id="insights" class="log-overview-insights"><div class="log-insight ok">加载中…</div></div>
+        </div>
+        <div class="log-metrics log-overview-metrics">
+          <div class="log-card log-stat"><div class="log-stat-value text-indigo-500" id="s-total-calls">—</div><div class="log-stat-label">服务总调用</div></div>
+          <div class="log-card log-stat"><div class="log-stat-value text-emerald-500" id="s-success-rate">—</div><div class="log-stat-label">成功率</div></div>
+          <div class="log-card log-stat"><div class="log-stat-value text-amber-500" id="s-warn-24h">—</div><div class="log-stat-label">24h 警告</div></div>
+          <div class="log-card log-stat"><div class="log-stat-value text-red-500" id="s-err-24h">—</div><div class="log-stat-label">24h 错误</div></div>
+        </div>
+      </div>
+    </section>
+
+    <details class="log-card log-fold" open>
+      <summary><div><div class="log-fold-title">分布图表</div></div></summary>
+      <div class="log-fold-body">
+        <div class="log-chart-grid">
+          <div><div class="log-section-title">按操作类型</div><div class="log-chart-wrap"><canvas id="ops-chart" height="92"></canvas><div id="ops-chart-state" class="log-chart-empty log-hidden"></div></div></div>
+          <div><div class="log-section-title">按服务类别</div><div class="log-chart-wrap"><canvas id="kind-chart" height="92"></canvas><div id="kind-chart-state" class="log-chart-empty log-hidden"></div></div></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="log-card log-fold" open>
+      <summary><div><div class="log-fold-title">最近问题</div></div></summary>
+      <div class="log-fold-body">
+        <div class="log-chart-grid">
+        <div>
+          <div class="log-section-title">最近后端错误 <span class="log-text-danger">(ERROR+)</span></div>
+          <div id="recent-be-errors" class="log-scroll-panel log-scroll-panel-lg rounded-lg border" style="border-color:var(--log-border);background:var(--log-surface-alt)"><div class="text-xs log-text-muted p-3">加载中…</div></div>
+        </div>
+        <div>
+          <div class="log-section-title">最近服务调用失败</div>
+          <div id="recent-svc-failures" class="log-scroll-panel log-scroll-panel-lg rounded-lg border" style="border-color:var(--log-border);background:var(--log-surface-alt)"><div class="text-xs log-text-muted p-3">加载中…</div></div>
+        </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+<script>
+'use strict';
+
+const COLORS = ['#6366f1','#06b6d4','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b'];
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const CACHE_PREFIX = 'proj-log-ui';
+const INSIGHT_LEVEL_RANK = { ok: 0, warn: 1, err: 2 };
+const charts = { ops:null, kind:null };
+let serverMeta = null;
+
+function setBanner(kind, message) {
+  const el = document.getElementById('page-banner');
+  if (!message) {
+    el.className = 'log-banner info log-hidden';
+    el.textContent = '';
+    return;
+  }
+  el.className = `log-banner ${kind || 'info'}`;
+  el.textContent = message;
+}
+
+function setOverviewChip(id, cls, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = `log-overview-chip ${cls || ''}`.trim();
+  el.textContent = text;
+}
+
+function cleanupOldCache(instanceUuid) {
+  const prefix = `${CACHE_PREFIX}:`;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    if (!key.startsWith(`${prefix}${instanceUuid}:`)) {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+function cacheKey(name) {
+  if (!serverMeta?.instance_uuid) return null;
+  return `${CACHE_PREFIX}:${serverMeta.instance_uuid}:${name}`;
+}
+
+function readCache(name) {
+  const key = cacheKey(name);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.instance_uuid !== serverMeta.instance_uuid) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    if (parsed.expires_at && parsed.expires_at < Date.now()) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(name, data, ttlMs) {
+  const key = cacheKey(name);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ instance_uuid: serverMeta.instance_uuid, expires_at: Date.now() + ttlMs, data }));
+  } catch {}
+}
+
+async function ensureServerMeta() {
+  if (serverMeta) return serverMeta;
+  const resp = await fetch('/admin/api/logs/meta');
+  if (!resp.ok) throw new Error(await resp.text());
+  serverMeta = await resp.json();
+  cleanupOldCache(serverMeta.instance_uuid);
+  return serverMeta;
+}
+
+function destroyChart(key) {
+  if (charts[key]) {
+    charts[key].destroy();
+    charts[key] = null;
+  }
+}
+
+function setChartState(canvasId, stateId, message) {
+  const canvas = document.getElementById(canvasId);
+  const state = document.getElementById(stateId);
+  if (message) {
+    canvas.classList.add('log-hidden');
+    state.classList.remove('log-hidden');
+    state.textContent = message;
+  } else {
+    state.classList.add('log-hidden');
+    state.textContent = '';
+    canvas.classList.remove('log-hidden');
+  }
+}
+
+function buildInsights(data) {
+  const el = document.getElementById('insights');
+  el.innerHTML = '';
+  const items = [];
+  let highestLevel = 'ok';
+
+  function pushInsight(cls, tag, text) {
+    items.push({ cls, tag, text });
+    if ((INSIGHT_LEVEL_RANK[cls] || 0) > (INSIGHT_LEVEL_RANK[highestLevel] || 0)) {
+      highestLevel = cls;
+    }
+  }
+
+  const svcStats = data.service?.stats_by_operation || [];
+  const totalCalls = svcStats.reduce((a, s) => a + Number(s.call_count || 0), 0);
+  const totalFail = svcStats.reduce((a, s) => a + Number(s.failure_count || 0), 0);
+  const failRate = totalCalls ? (totalFail / totalCalls * 100) : 0;
+
+  if (totalCalls === 0) {
+    pushInsight('ok', '空闲', '暂无 AI 服务调用记录。');
+  } else if (failRate > 10) {
+    pushInsight('err', '失败率', `服务失败率较高（${failRate.toFixed(1)}%），共 ${totalFail} 次失败。建议优先检查上游服务、网络和认证配置。`);
+  } else if (failRate > 2) {
+    pushInsight('warn', '失败率', `服务存在一定失败（${failRate.toFixed(1)}%），共 ${totalFail} 次失败。`);
+  } else {
+    pushInsight('ok', '稳定', `服务总体稳定，总调用 ${totalCalls} 次，失败率 ${failRate.toFixed(1)}%。`);
+  }
+
+  const slowOps = svcStats.filter(s => Number(s.avg_duration_ms || 0) > 10000);
+  if (slowOps.length) {
+    const names = slowOps.slice(0, 5).map(s => `${s.group}（${(Number(s.avg_duration_ms || 0) / 1000).toFixed(1)}s）`).join('、');
+    pushInsight('warn', '耗时', `以下操作平均耗时偏高：${names}`);
+  }
+
+  const be = data.backend || {};
+  if ((be.error_count_24h || 0) > 20) {
+    pushInsight('err', '错误', `过去 24 小时后端产生 ${be.error_count_24h} 条 ERROR 日志。`);
+  } else if ((be.error_count_24h || 0) > 0) {
+    pushInsight('warn', '错误', `过去 24 小时存在 ${be.error_count_24h} 条 ERROR 日志。`);
+  }
+  if ((be.warning_count_24h || 0) > 50) {
+    pushInsight('warn', '警告', `过去 24 小时存在 ${be.warning_count_24h} 条 WARNING 日志。`);
+  }
+
+  if (!items.length) pushInsight('ok', '正常', '当前未检测到明显异常。');
+  items.forEach(it => {
+    const d = document.createElement('div');
+    d.className = 'log-insight-row ' + it.cls;
+    d.innerHTML = `<span class="log-insight-tag">${esc(it.tag)}</span><div class="log-insight-text">${esc(it.text)}</div>`;
+    el.appendChild(d);
+  });
+
+  return highestLevel;
+}
+
+function renderOpsChart(stats) {
+  destroyChart('ops');
+  if (!stats.length) {
+    setChartState('ops-chart', 'ops-chart-state', '当前没有可展示的操作统计');
+    return;
+  }
+  setChartState('ops-chart', 'ops-chart-state', '');
+  charts.ops = new Chart(document.getElementById('ops-chart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: stats.map(s => s.group),
+      datasets: [{ data: stats.map(s => s.call_count || 0), backgroundColor: COLORS.slice(0, stats.length), borderWidth: 2, borderColor: '#fff', radius: '78%' }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '70%',
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 10 }, padding: 8 } } },
+    },
+  });
+}
+
+function renderKindChart(stats) {
+  destroyChart('kind');
+  if (!stats.length) {
+    setChartState('kind-chart', 'kind-chart-state', '当前没有可展示的服务类别统计');
+    return;
+  }
+  setChartState('kind-chart', 'kind-chart-state', '');
+  charts.kind = new Chart(document.getElementById('kind-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: stats.map(s => s.group),
+      datasets: [
+        { label: '成功', data: stats.map(s => s.success_count || 0), backgroundColor: '#34d399', borderRadius: 4, maxBarThickness: 12 },
+        { label: '失败', data: stats.map(s => s.failure_count || 0), backgroundColor: '#f87171', borderRadius: 4, maxBarThickness: 12 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { size: 10 } } } },
+      scales: { x: { stacked: true, ticks: { font: { size: 10 } } }, y: { stacked: true, beginAtZero: true, ticks: { font: { size: 10 } } } },
+    },
+  });
+}
+
+function renderBeErrors(errors) {
+  const el = document.getElementById('recent-be-errors');
+  if (!errors || !errors.length) {
+    el.innerHTML = '<div class="text-xs log-text-muted p-3">当前没有后端错误记录</div>';
+    return;
+  }
+  el.innerHTML = errors.map(e => `
+    <div class="log-err-row">
+      <span class="log-err-ts">${esc(e.timestamp || '—')}</span>
+      <span class="log-badge log-badge-fail">${esc(e.level || 'ERROR')}</span>
+      <span class="log-err-msg">${esc(e.message || '')}</span>
+    </div>`).join('');
+}
+
+function renderSvcFailures(failures) {
+  const el = document.getElementById('recent-svc-failures');
+  if (!failures || !failures.length) {
+    el.innerHTML = '<div class="text-xs log-text-muted p-3">当前没有服务失败记录</div>';
+    return;
+  }
+  el.innerHTML = failures.map(f => `
+    <div class="log-err-row">
+      <span class="log-err-ts">${esc(f.created_at || '—')}</span>
+      <span class="log-badge log-badge-fail">${esc(f.operation || '—')}</span>
+      <span class="log-err-msg">${esc(f.error_message || f.error_type || '未知错误')}</span>
+    </div>`).join('');
+}
+
+function renderOverview(data, fromCache = false) {
+  const svc = data.service || {};
+  const be = data.backend || {};
+  const totalCalls = Number(svc.total_calls || 0);
+  const totalSuccess = (svc.stats_by_operation || []).reduce((a, s) => a + Number(s.success_count || 0), 0);
+  const rate = totalCalls ? (totalSuccess / totalCalls * 100).toFixed(1) + '%' : '—';
+
+  document.getElementById('s-total-calls').textContent = String(totalCalls);
+  document.getElementById('s-success-rate').textContent = rate;
+  document.getElementById('s-warn-24h').textContent = String(be.warning_count_24h ?? 0);
+  document.getElementById('s-err-24h').textContent = String(be.error_count_24h ?? 0);
+
+  const highestLevel = buildInsights(data);
+  setOverviewChip('overview-health-tag', highestLevel, highestLevel === 'err' ? '异常' : highestLevel === 'warn' ? '注意' : '正常');
+  setOverviewChip('overview-source-tag', fromCache ? 'warn' : 'ok', fromCache ? '缓存' : '实时');
+  renderOpsChart(svc.stats_by_operation || []);
+  renderKindChart(svc.stats_by_kind || []);
+  renderBeErrors(be.recent_errors || []);
+  renderSvcFailures(svc.recent_failures || []);
+
+  if (fromCache) {
+    setBanner('warn', '当前先显示本地缓存数据，页面会自动刷新为最新结果。');
+  } else {
+    setBanner('', '');
+  }
+}
+
+async function loadOverview(forceFresh = false) {
+  await ensureServerMeta();
+  const cached = readCache('overview:data');
+  if (!forceFresh && cached) renderOverview(cached, true);
+  try {
+    if (!forceFresh && !cached) setBanner('info', '日志概览加载中…');
+    const resp = await fetch('/admin/api/logs/overview');
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    renderOverview(data, false);
+    writeCache('overview:data', data, 30000);
+  } catch (e) {
+    if (!cached) {
+      setOverviewChip('overview-health-tag', 'err', '失败');
+      setOverviewChip('overview-source-tag', '', '离线');
+      document.getElementById('insights').innerHTML = `<div class="log-insight err">加载概览失败：${esc(e.message || e)}</div>`;
+      setChartState('ops-chart', 'ops-chart-state', '加载失败');
+      setChartState('kind-chart', 'kind-chart-state', '加载失败');
+    }
+    setBanner('err', `日志概览刷新失败：${e.message || e}`);
+  }
+}
+
+window.addEventListener('beforeunload', () => {
+  destroyChart('ops');
+  destroyChart('kind');
+});
+
+loadOverview(false);
+setInterval(() => loadOverview(true), 30000);
+</script>
+</body>
+</html>

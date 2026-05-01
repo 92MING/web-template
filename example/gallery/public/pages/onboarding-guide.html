@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onboarding Guide</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module">
+    import { BuiltinTplTutorialOnboarding } from "/shared/templates/tutorial/onboarding-guide.js?v=20260429-4";
+
+    if (!customElements.get("builtin-tpl-tutorial-onboarding")) {
+      customElements.define("builtin-tpl-tutorial-onboarding", BuiltinTplTutorialOnboarding);
+    }
+  </script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-tutorial-onboarding id="demo-onboarding" steps='[
+    {"title":"Welcome","desc":"Let&#39;s get you set up in just a few steps."},
+    {"title":"Connect","desc":"Link your calendar and contacts."},
+    {"title":"Customize","desc":"Pick your theme and notification preferences."},
+    {"title":"Launch","desc":"You&#39;re ready to go!"}
+  ]'>
+    <div slot="illustration-0" style="width:100%;height:100%;display:grid;place-items:center;background:radial-gradient(circle at top, rgba(37,99,235,.25), transparent 60%),linear-gradient(135deg, #eff6ff, #dbeafe);">
+      <builtin-empty-state icon="rocket" title="Welcome aboard" description="A polished onboarding flow should look alive from the first step."></builtin-empty-state>
+    </div>
+    <div slot="illustration-1" style="width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg, #f5f3ff, #ede9fe);padding:24px;box-sizing:border-box;">
+      <builtin-stat-card title="Integrations" value="12" subtitle="Calendar, contacts, storage and mail" trend="up" trend-value="+3 new"></builtin-stat-card>
+    </div>
+    <div slot="illustration-2" style="width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg, #ecfeff, #cffafe);padding:24px;box-sizing:border-box;">
+      <builtin-chip text="Dark mode"></builtin-chip>
+      <builtin-chip text="Digest emails"></builtin-chip>
+      <builtin-chip text="Focus hours"></builtin-chip>
+    </div>
+    <div slot="illustration-3" style="width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg, #ecfdf5, #d1fae5);padding:24px;box-sizing:border-box;">
+      <builtin-result state="success" title="Workspace ready" description="You can start exploring the rest of the now."></builtin-result>
+    </div>
+  </builtin-tpl-tutorial-onboarding>
+</body>
+</html>

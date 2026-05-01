@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Profile</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module">
+    import { BuiltinTplSocialProfile } from "/shared/templates/social/social-profile.js?v=20260429-4";
+
+    if (!customElements.get("builtin-tpl-social-profile")) {
+      customElements.define("builtin-tpl-social-profile", BuiltinTplSocialProfile);
+    }
+  </script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-social-profile name="Sarah Chen" headline="Senior Product Manager at TechCorp" location="San Francisco, CA" avatar="https://i.pravatar.cc/150?u=sarah" cover="https://picsum.photos/seed/cover/1200/400" stats='{"connections":892,"followers":3420}' about="Passionate about building products that make a difference. 10+ years in tech." skills='["Product Strategy","User Research","Agile","Data Analysis"]' people-also-viewed='[
+    {"avatar":"https://i.pravatar.cc/120?u=maya","name":"Maya Patel","title":"VP Product at Orbit"},
+    {"avatar":"https://i.pravatar.cc/120?u=james","name":"James Liu","title":"Design Director at Northstar"},
+    {"avatar":"https://i.pravatar.cc/120?u=sofia","name":"Sofia Gomez","title":"Growth Lead at Foundry"}
+  ]' posts='[
+    {"images":["https://picsum.photos/seed/post1/400/300"],"avatar":"https://i.pravatar.cc/150?u=sarah","author":"Sarah Chen","title":"Launch week recap","content":"What a week! Our new feature went live to 100k users.","likes":124,"comments":18},
+    {"images":["https://picsum.photos/seed/post2/400/300","https://picsum.photos/seed/post3/400/300"],"avatar":"https://i.pravatar.cc/150?u=sarah","author":"Sarah Chen","title":"Design systems matter","content":"Why every team should invest in a design system early.","likes":89,"comments":12}
+  ]'></builtin-tpl-social-profile>
+</body>
+</html>

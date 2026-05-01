@@ -1,0 +1,48 @@
+# Framework AI services config example
+#
+# 加载顺序：
+#   1. 环境变量 __AI_SERVICES_CONFIG__
+#   2. 自动发现 config/ai_services.{yaml,yml,json,toml}
+#   3. 如果都没有，则 AIServicesConfig.Global() 返回 None，业务侧走默认实现/空配置
+#
+# 这份文件不属于 server.yaml；它由 AIServicesConfig 独立加载。
+
+completion:
+  # 每个 service kind 自己维护一份 clients，key 只在本分组内生效，
+  # 可以和别的 service kind 重名而不冲突。
+  clients:
+    openai:
+      type: openai-completion
+      api_key: ${OPENAI_API_KEY}
+      model: gpt-4.1-mini
+
+  default:
+    clients:
+      - openai
+      # service-local client scheduling values live on the binding, not on service init.
+      # Omit priority/strategy_lvl to use the client's own defaults.
+      # - client: openai
+      #   priority: 0.5
+      #   strategy_lvl: 1
+
+embedding:
+  clients:
+    openai:
+      type: openai-embedding
+      api_key: ${OPENAI_API_KEY}
+      model: text-embedding-3-small
+
+  default:
+    clients:
+      - openai
+
+s2t:
+  clients: {}
+  default:
+    # S2T 可以显式引用别的 service，由子类自己解析。
+    completion_service: default
+
+t2s:
+  clients: {}
+  default:
+    clients: []

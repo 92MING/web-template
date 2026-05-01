@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>课程列表 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1080px; --builtin-shell-secondary-width: 300px; }
+  .section { display: grid; gap: 1rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+  .pagination-wrap { display: flex; align-items: center; justify-content: center; }
+  button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--builtin-border, #d1d5db);
+    border-radius: var(--builtin-radius, 6px);
+    background: var(--builtin-button-bg, #ffffff);
+    color: var(--builtin-color-text, #111827);
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  button:disabled { cursor: not-allowed; opacity: 0.5; }
+  button.primary {
+    background: var(--builtin-primary, #2563eb);
+    border-color: var(--builtin-primary, #2563eb);
+    color: #fff;
+  }
+  button.primary:hover { background: var(--builtin-primary-hover, #1d4ed8); }
+  a { text-decoration: none; }
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--builtin-color-muted, #6b7280);
+    margin-top: 0.5rem;
+  }
+  @media (max-width: 720px) {
+    builtin-app-shell { --builtin-shell-padding-mobile: 16px 12px 28px; }
+  }
+</style>
+<link rel="stylesheet" href="/eclass-pages.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="section">
+    <div id="courses-state"></div>
+    <div id="courses-grid" class="grid"></div>
+    <div id="pagination-wrap" class="pagination-wrap">
+      <builtin-pagination id="pagination" type="simple" page="1" total-pages="1"></builtin-pagination>
+    </div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">课程概览</strong></div>
+    <builtin-metadata-list id="course-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const copy = {
+  'zh-cn': {
+    eyebrow: '学生端课程',
+    title: '课程列表',
+    lead: '按课程查看老师、简介和课堂资料入口，课程详情从这里继续进入。',
+    back: '返回学生端',
+    contextTitle: '课程上下文',
+    emptyTitle: '当前还没有课程',
+    emptyDescription: '老师发布课程后，这里会出现当前班级可进入的课程。',
+    loadingTitle: '正在加载课程',
+    loadingDescription: '正在获取当前班级的课程列表。',
+    errorTitle: '加载课程失败',
+    errorDescription: '请稍后重试，或返回学生端重新进入。',
+    classLabel: '当前教室',
+    totalLabel: '课程数量',
+    pageLabel: '当前页',
+    teacherLabel: '授课老师数',
+  },
+  en: {
+    eyebrow: 'Student Courses',
+    title: 'Courses',
+    lead: 'Browse course cards with teacher and overview context, then continue into the detail page.',
+    back: 'Back to Student',
+    contextTitle: 'Course Context',
+    emptyTitle: 'No courses yet',
+    emptyDescription: 'Published courses for this classroom will appear here.',
+    loadingTitle: 'Loading courses',
+    loadingDescription: 'Fetching courses for the current classroom.',
+    errorTitle: 'Failed to load courses',
+    errorDescription: 'Try again in a moment or return to the student workspace.',
+    classLabel: 'Classroom',
+    totalLabel: 'Courses',
+    pageLabel: 'Current Page',
+    teacherLabel: 'Teachers',
+  }
+};
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.courses',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'student',
+  getInvalidRoleRedirect: () => 'teacher.html',
+  onApplyI18n: async ({ lang }) => {
+    currentLang = lang;
+    applyShellCopy();
+  },
+});
+
+const { $, api, t } = shell;
+
+let page = 1;
+const perPage = 6;
+let currentLang = localStorage.getItem('eclass_lang') || 'zh-cn';
+let classId = new URLSearchParams(location.search).get('class_id') || '';
+
+async function resolveClassId() {
+  if (classId) return classId;
+  const r = await api('/classroom/list');
+  const first = (r?.classrooms || r?.items || [])[0];
+  classId = first?.class_id || first?.id || 'c1';
+  return classId;
+}
+
+function d() {
+  return copy[currentLang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'student.html';
+  appShell.backLabel = labels.back;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'student.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: currentLang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+}
+
+function renderState(mode) {
+  const labels = d();
+  const state = $('courses-state');
+  if (mode === 'idle') {
+    state.innerHTML = '';
+    return;
+  }
+  if (mode === 'loading') {
+    state.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    state.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="student.html"></builtin-empty-state>`;
+    return;
+  }
+  state.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext(total, totalPages, list) {
+  const teachers = new Set((list || []).map((item) => item.teacher).filter(Boolean));
+  $('course-context').items = [
+    { icon: 'book', label: d().classLabel, value: classId || 'c1' },
+    { icon: 'unordered-list', label: d().totalLabel, value: String(total) },
+    { icon: 'calendar', label: d().pageLabel, value: `${page} / ${totalPages}` },
+    { icon: 'team', label: d().teacherLabel, value: String(teachers.size) },
+  ];
+}
+
+const load = async () => {
+  renderState('loading');
+  const cid = await resolveClassId();
+  const r = await api('/classroom/' + cid + '/courses?page='+page+'&page_size='+perPage);
+  if (!r) {
+    $('courses-grid').innerHTML = '';
+    $('pagination-wrap').style.display = 'none';
+    updateContext(0, 1, []);
+    renderState('error');
+    return;
+  }
+
+  const list = (r.courses) || [];
+  const total = r.total || list.length;
+  const totalPages = Math.max(Math.ceil(total / perPage), 1);
+
+  const viewDetails = await t('eclass.view_details');
+  const noDescription = await t('eclass.description');
+  const unknown = await t('eclass.unknown');
+
+  $('courses-grid').innerHTML = list.length
+    ? list.map((course) => `
+      <builtin-card>
+        <div slot="header"><strong>${course.title}</strong></div>
+        <p style="margin:0;color:var(--builtin-color-muted,#666);font-size:0.875rem;line-height:1.6;">${course.description || noDescription}</p>
+        <div class="meta-row">
+          <builtin-icon name="user" size="16"></builtin-icon> ${course.teacher || unknown}
+        </div>
+        <div class="meta-row">
+          <builtin-icon name="book" size="16"></builtin-icon> ${course.id || unknown}
+        </div>
+        <div slot="footer" style="display:flex;justify-content:flex-end;">
+          <a href="course-detail.html?course_id=${course.id}&amp;class_id=${classId}"><button class="primary">${viewDetails}</button></a>
+        </div>
+      </builtin-card>
+    `).join('')
+    : '';
+
+  $('pagination').page = page;
+  $('pagination').totalPages = totalPages;
+  $('pagination').total = total;
+  $('pagination-wrap').style.display = list.length ? 'flex' : 'none';
+  updateContext(total, totalPages, list);
+  renderState(list.length ? 'idle' : 'empty');
+};
+
+$('pagination').addEventListener('builtin-page-change', (e) => {
+  page = e.detail.page;
+  load();
+});
+
+await shell.init();
+load();
+</script>
+</body>
+</html>

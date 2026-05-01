@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Company About</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-company-about company-name="Nexus Technologies" tagline="Building the future, together." mission="We believe technology should empower everyone. Our mission is to create tools that bridge the gap between complexity and usability." values='[
+    {"icon":"bulb","title":"Innovation","description":"We push boundaries and challenge the status quo."},
+    {"icon":"team","title":"Collaboration","description":"Great things happen when great minds work together."},
+    {"icon":"safety","title":"Trust","description":"We build trust through transparency and reliability."}
+  ]' stats='[
+    {"label":"Employees","value":"500+"},{"label":"Countries","value":"32"},{"label":"Customers","value":"10K+"},{"label":"Uptime","value":"99.9%"}
+  ]' team='[
+    {"name":"David Kim","role":"CEO","avatar":"https://i.pravatar.cc/150?u=david"},
+    {"name":"Maria Garcia","role":"CTO","avatar":"https://i.pravatar.cc/150?u=maria"},
+    {"name":"James Wilson","role":"Design Lead","avatar":"https://i.pravatar.cc/150?u=james"},
+    {"name":"Yuki Tanaka","role":"Engineering Lead","avatar":"https://i.pravatar.cc/150?u=yuki"}
+  ]' history='[
+    {"title":"Company Founded","time":"2018","description":"Started in a small garage with a big vision."},
+    {"title":"First Major Client","time":"2019","description":"Landed a Fortune 500 contract."},
+    {"title":"Series B Funding","time":"2021","description":"Raised $50M to scale globally."},
+    {"title":"1 Million Users","time":"2024","description":"Reached a major milestone."}
+  ]'></builtin-tpl-company-about>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cart Drawer</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <div style="max-width:880px;margin:0 auto;padding:32px 20px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--builtin-color-text,#1f2937);">
+    <header style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+      <div>
+        <h1 id="cart-page-title" style="margin:0 0 4px;font-size:22px;font-weight:600;">Your Cart Preview</h1>
+        <p id="cart-page-desc" style="margin:0;color:var(--builtin-color-muted,#6b7280);font-size:14px;">Click any item or the button to open the full drawer.</p>
+      </div>
+      <button id="open-cart-btn" style="padding:10px 18px;border-radius:8px;border:none;background:var(--builtin-primary,#2563eb);color:#fff;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:8px;">
+        <builtin-icon name="shopping-cart" set="outlined" size="18"></builtin-icon>
+        <span id="open-cart-label">Open Cart</span>
+        <span id="cart-count" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:999px;font-size:12px;">3</span>
+      </button>
+    </header>
+
+    <div id="cart-preview" style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:24px;"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:var(--builtin-surface,#f9fafb);border:1px solid var(--builtin-border,#e5e7eb);border-radius:12px;">
+      <div>
+        <div id="cart-subtotal-label" style="font-size:13px;color:var(--builtin-color-muted,#6b7280);">Subtotal (preview)</div>
+        <div id="cart-subtotal" style="font-size:22px;font-weight:600;">$0.00</div>
+      </div>
+      <button id="view-cart-btn" onclick="document.getElementById('demo-cart').openDrawer()" style="padding:10px 16px;border-radius:8px;border:1px solid var(--builtin-border,#d1d5db);background:var(--builtin-button-bg,transparent);color:var(--builtin-color-text,inherit);cursor:pointer;">View full cart</button>
+    </div>
+
+    <builtin-tpl-ecommerce-cart-drawer id="demo-cart" items='[
+      {"id":"1","title":"Premium Wireless Headphones","qty":1,"price":"$299","image":"https://picsum.photos/seed/c1/80/80"},
+      {"id":"2","title":"Travel Case","qty":2,"price":"$38","image":"https://picsum.photos/seed/c2/80/80"},
+      {"id":"3","title":"USB-C Cable (2m)","qty":1,"price":"$12","image":"https://picsum.photos/seed/c3/80/80"}
+    ]'></builtin-tpl-ecommerce-cart-drawer>
+  </div>
+
+  <script>
+    (function () {
+      const items = [
+        { id: '1', title: 'Premium Wireless Headphones', qty: 1, price: 299, image: 'https://picsum.photos/seed/c1/120/120' },
+        { id: '2', title: 'Travel Case', qty: 2, price: 38, image: 'https://picsum.photos/seed/c2/120/120' },
+        { id: '3', title: 'USB-C Cable (2m)', qty: 1, price: 12, image: 'https://picsum.photos/seed/c3/120/120' },
+      ];
+      const text = {
+        en: {
+          title: 'Your Cart Preview',
+          desc: 'Click any item or the button to open the full drawer.',
+          open: 'Open Cart',
+          subtotal: 'Subtotal (preview)',
+          view: 'View full cart',
+          qty: 'Qty',
+        },
+        zh: {
+          title: '购物车预览',
+          desc: '点击任意商品或按钮打开完整抽屉。',
+          open: '打开购物车',
+          subtotal: '小计预览',
+          view: '查看完整购物车',
+          qty: '数量',
+        },
+      };
+      const fmt = (n) => '$' + n.toFixed(2);
+      const root = document.getElementById('cart-preview');
+      function lang() {
+        const value = window.ProjectGalleryShell?.getGalleryLang?.() || document.documentElement.lang || 'en';
+        return String(value).toLowerCase().startsWith('zh') ? 'zh' : 'en';
+      }
+      function render() {
+        const dict = text[lang()] || text.en;
+        document.getElementById('cart-page-title').textContent = dict.title;
+        document.getElementById('cart-page-desc').textContent = dict.desc;
+        document.getElementById('open-cart-label').textContent = dict.open;
+        document.getElementById('cart-subtotal-label').textContent = dict.subtotal;
+        document.getElementById('view-cart-btn').textContent = dict.view;
+        root.innerHTML = items.map((it) => `
+        <div style="display:flex;gap:14px;align-items:center;padding:12px;background:var(--builtin-surface,#fff);border:1px solid var(--builtin-border,#e5e7eb);border-radius:12px;cursor:pointer;transition:transform .15s, box-shadow .15s;"
+             onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'"
+             onmouseout="this.style.transform='';this.style.boxShadow=''"
+             onclick="document.getElementById('demo-cart').openDrawer()">
+          <img src="${it.image}" alt="" style="width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
+            <div style="font-size:13px;color:var(--builtin-color-muted,#6b7280);margin-top:2px;">${dict.qty} × ${it.qty}</div>
+          </div>
+          <div style="font-weight:600;">${fmt(it.price * it.qty)}</div>
+        </div>
+        `).join('');
+        const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0);
+        document.getElementById('cart-subtotal').textContent = fmt(subtotal);
+        document.getElementById('cart-count').textContent = items.reduce((s, it) => s + it.qty, 0);
+      }
+      render();
+      document.addEventListener('builtin-lang-change', render);
+      document.addEventListener('builtin-gallery-lang-change', render);
+      document.getElementById('open-cart-btn').addEventListener('click', () => document.getElementById('demo-cart').openDrawer());
+    })();
+  </script>
+</body>
+</html>

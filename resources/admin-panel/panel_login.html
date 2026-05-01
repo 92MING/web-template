@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理面板登录</title>
+  <link rel="stylesheet" href="/html-assets/css/panel-shell.css" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+
+    body.login-page-body {
+      margin: 0;
+      min-height: 100dvh;
+      padding: 24px;
+      overflow: auto;
+      position: relative;
+      color: #1a1d26;
+      font-family: "Inter", "SF Pro Text", "Segoe UI Variable Text", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      background: #eef0f4;
+    }
+
+    /* very subtle pastel wash so backdrop-filter has something to blur */
+    body.login-page-body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(620px 420px at 22% 28%, rgba(120, 150, 255, 0.18), transparent 60%),
+        radial-gradient(540px 380px at 82% 78%, rgba(255, 170, 200, 0.16), transparent 62%),
+        radial-gradient(480px 340px at 70% 18%, rgba(170, 230, 220, 0.14), transparent 64%);
+    }
+
+    html.dark body.login-page-body {
+      background: #0b0c10;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    html.dark body.login-page-body::before {
+      background:
+        radial-gradient(620px 420px at 22% 28%, rgba(80, 120, 220, 0.14), transparent 60%),
+        radial-gradient(540px 380px at 82% 78%, rgba(180, 80, 140, 0.12), transparent 62%),
+        radial-gradient(480px 340px at 70% 18%, rgba(60, 160, 160, 0.10), transparent 64%);
+    }
+
+    .login-stage {
+      position: relative;
+      z-index: 1;
+      min-height: calc(100dvh - 48px);
+      width: 100%;
+      display: grid;
+      place-items: center;
+    }
+
+    .login-layout {
+      width: min(280px, 100%);
+      display: grid;
+      gap: 8px;
+      justify-items: end;
+    }
+
+    .login-toolbar {
+      display: flex;
+      gap: 6px;
+    }
+
+    .login-toolbar .nav-item {
+      width: auto;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      justify-content: center;
+      padding: 5px 9px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.35);
+      backdrop-filter: blur(20px) saturate(1.6);
+      -webkit-backdrop-filter: blur(20px) saturate(1.6);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+      color: #3a3f4d;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 500;
+      line-height: 1;
+      cursor: pointer;
+      transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+    .login-toolbar .nav-item:hover {
+      background: rgba(255, 255, 255, 0.55);
+      color: #1a1d26;
+    }
+
+    html.dark .login-toolbar .nav-item {
+      border-color: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    html.dark .login-toolbar .nav-item:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .login-card {
+      width: 100%;
+      padding: 18px 18px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.42);
+      backdrop-filter: blur(32px) saturate(1.7);
+      -webkit-backdrop-filter: blur(32px) saturate(1.7);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.7) inset,
+        0 12px 36px rgba(20, 25, 50, 0.08);
+    }
+
+    html.dark .login-card {
+      border-color: rgba(255, 255, 255, 0.08);
+      background: rgba(20, 22, 28, 0.5);
+      backdrop-filter: blur(32px) saturate(1.4);
+      -webkit-backdrop-filter: blur(32px) saturate(1.4);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 12px 36px rgba(0, 0, 0, 0.45);
+    }
+
+    .login-title {
+      margin: 0 0 12px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+      color: #1a1d26;
+    }
+
+    html.dark .login-title {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .login-form {
+      display: grid;
+      gap: 8px;
+    }
+
+      .login-password-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+    .login-input,
+    .login-button {
+      width: 100%;
+      min-height: 32px;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 11px;
+    }
+
+    .login-input {
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.4);
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      color: #1a1d26;
+      padding: 7px 10px;
+      outline: none;
+      font-weight: 500;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+      transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+
+    .login-password-row .login-input {
+      padding-right: 36px;
+    }
+
+    .login-input::placeholder {
+      color: rgba(26, 29, 38, 0.42);
+      font-weight: 400;
+    }
+
+    .login-input:focus {
+      border-color: rgba(120, 140, 220, 0.55);
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.6) inset,
+        0 0 0 3px rgba(120, 140, 220, 0.15);
+    }
+
+    html.dark .login-input {
+      border-color: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    }
+
+    html.dark .login-input::placeholder {
+      color: rgba(255, 255, 255, 0.32);
+    }
+
+    html.dark .login-input:focus {
+      border-color: rgba(140, 170, 255, 0.4);
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.04) inset,
+        0 0 0 3px rgba(140, 170, 255, 0.16);
+    }
+
+    .login-password-toggle {
+      position: absolute;
+      right: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: rgba(26, 29, 38, 0.55);
+      cursor: pointer;
+      transition: background-color .15s ease, color .15s ease;
+    }
+
+    .login-password-toggle:hover {
+      background: rgba(26, 29, 38, 0.06);
+      color: #1a1d26;
+    }
+
+    .login-password-toggle:focus-visible {
+      outline: 0;
+      background: rgba(120, 140, 220, 0.12);
+      color: #1a1d26;
+      box-shadow: 0 0 0 2px rgba(120, 140, 220, 0.2);
+    }
+
+    html.dark .login-password-toggle {
+      color: rgba(255, 255, 255, 0.56);
+    }
+
+    html.dark .login-password-toggle:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    html.dark .login-password-toggle:focus-visible {
+      background: rgba(140, 170, 255, 0.14);
+      color: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 0 0 2px rgba(140, 170, 255, 0.22);
+    }
+
+    .login-button {
+      padding: 7px 10px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      color: #1a1d26;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.32));
+      backdrop-filter: blur(20px) saturate(1.6);
+      -webkit-backdrop-filter: blur(20px) saturate(1.6);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.7) inset,
+        0 6px 18px rgba(20, 25, 50, 0.06);
+      transition: background-color .15s ease, opacity .15s ease, transform .1s ease;
+    }
+
+    .login-button:hover {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.45));
+    }
+
+    .login-button:active { transform: translateY(0.5px); }
+
+    html.dark .login-button {
+      color: rgba(255, 255, 255, 0.92);
+      border-color: rgba(255, 255, 255, 0.1);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.06) inset,
+        0 6px 18px rgba(0, 0, 0, 0.3);
+    }
+
+    html.dark .login-button:hover {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+    }
+
+    .login-button[disabled] {
+      opacity: 0.6;
+      cursor: progress;
+    }
+
+    .login-error {
+      min-height: 14px;
+      margin: 0;
+      color: #ef4444;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 520px) {
+      body.login-page-body { padding: 16px; }
+    }
+  </style>
+</head>
+<body class="login-page-body">
+  <div class="login-stage">
+    <main class="login-layout">
+      <div class="login-toolbar">
+        <button type="button" onclick="toggleLang()" class="nav-item" id="lang-toggle" title="Language">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="lang-label">简</span>
+        </button>
+        <button type="button" onclick="toggleDark()" class="nav-item" id="dark-toggle" title="Theme">
+          <svg id="dark-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <span id="dark-label">深色</span>
+        </button>
+      </div>
+      <section class="login-card">
+        <h1 class="login-title" id="login-title">管理面板登录</h1>
+        <form id="admin-login-form" class="login-form">
+          <div class="login-password-row">
+            <input
+              id="admin-password"
+              class="login-input"
+              type="password"
+              autocomplete="current-password"
+              placeholder="输入 admin password"
+              aria-label="Admin password"
+              required
+            />
+            <button
+              id="admin-password-toggle"
+              class="login-password-toggle"
+              type="button"
+              aria-label="显示密码"
+              aria-pressed="false"
+              title="显示密码"
+            >
+              <svg id="admin-password-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+            </button>
+          </div>
+          <button id="admin-login-submit" class="login-button" type="submit">登录</button>
+          <p id="admin-login-error" class="login-error" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const ADMIN_NEXT_PATH = __ADMIN_NEXT_PATH__;
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    const PANEL_DARK_KEY = 'panel-dark';
+    const PANEL_LANG_KEY = 'proj-lang';
+    const PANEL_LANGS = ['zh-cn', 'zh-tw', 'en'];
+    const PANEL_LANG_LABELS = { 'zh-cn': '简', 'zh-tw': '繁', en: 'EN' };
+    const LOGIN_I18N = {
+      title: { 'zh-cn': '管理面板登录', 'zh-tw': '管理面板登入', en: 'Admin Sign In' },
+      placeholder: { 'zh-cn': '输入 admin password', 'zh-tw': '輸入 admin password', en: 'Enter admin password' },
+      submit: { 'zh-cn': '登录', 'zh-tw': '登入', en: 'Sign In' },
+      failed: { 'zh-cn': '登录失败', 'zh-tw': '登入失敗', en: 'Sign in failed' },
+      'show-password': { 'zh-cn': '显示密码', 'zh-tw': '顯示密碼', en: 'Show password' },
+      'hide-password': { 'zh-cn': '隐藏密码', 'zh-tw': '隱藏密碼', en: 'Hide password' },
+      'dark-on': { 'zh-cn': '浅色', 'zh-tw': '淺色', en: 'Light' },
+      'dark-off': { 'zh-cn': '深色', 'zh-tw': '深色', en: 'Dark' },
+    };
+    let darkMode = localStorage.getItem(PANEL_DARK_KEY) !== 'false';
+    let passwordVisible = false;
+    let panelLang = (() => {
+      const stored = localStorage.getItem(PANEL_LANG_KEY);
+      return PANEL_LANGS.includes(stored) ? stored : 'zh-cn';
+    })();
+
+    function t(key) {
+      const entry = LOGIN_I18N[key];
+      return entry ? (entry[panelLang] || entry['zh-cn'] || key) : key;
+    }
+
+    function applyDark() {
+      document.documentElement.classList.toggle('dark', darkMode);
+      localStorage.setItem(PANEL_DARK_KEY, String(darkMode));
+      document.getElementById('dark-label').textContent = darkMode ? t('dark-on') : t('dark-off');
+      const icon = document.getElementById('dark-icon');
+      if (icon) icon.innerHTML = darkMode
+        ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+        : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    }
+
+    function toggleDark() {
+      darkMode = !darkMode;
+      applyDark();
+    }
+
+    function renderPasswordToggle() {
+      const input = document.getElementById('admin-password');
+      const toggle = document.getElementById('admin-password-toggle');
+      const icon = document.getElementById('admin-password-toggle-icon');
+      if (!input || !toggle || !icon) return;
+      input.type = passwordVisible ? 'text' : 'password';
+      const label = passwordVisible ? t('hide-password') : t('show-password');
+      toggle.setAttribute('aria-label', label);
+      toggle.setAttribute('title', label);
+      toggle.setAttribute('aria-pressed', passwordVisible ? 'true' : 'false');
+      icon.innerHTML = passwordVisible
+        ? '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.89 1 12c.92-2.6 2.6-4.79 4.77-6.32"/><path d="M10.58 10.58a2 2 0 1 0 2.83 2.83"/><path d="M9.88 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a11.8 11.8 0 0 1-1.67 2.99"/><path d="M1 1l22 22"/>'
+        : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>';
+    }
+
+    function togglePasswordVisibility() {
+      passwordVisible = !passwordVisible;
+      renderPasswordToggle();
+    }
+
+    function applyPanelLang() {
+      localStorage.setItem(PANEL_LANG_KEY, panelLang);
+      document.documentElement.lang = panelLang === 'zh-tw' ? 'zh-TW' : panelLang === 'en' ? 'en' : 'zh-CN';
+      document.getElementById('lang-label').textContent = PANEL_LANG_LABELS[panelLang] || panelLang;
+      document.getElementById('login-title').textContent = t('title');
+      document.getElementById('admin-password').placeholder = t('placeholder');
+      document.getElementById('admin-login-submit').textContent = t('submit');
+      document.getElementById('dark-label').textContent = darkMode ? t('dark-on') : t('dark-off');
+      renderPasswordToggle();
+    }
+
+    function toggleLang() {
+      const idx = PANEL_LANGS.indexOf(panelLang);
+      panelLang = PANEL_LANGS[(idx + 1) % PANEL_LANGS.length];
+      applyPanelLang();
+    }
+
+    function writeAdminApiKey(apiKey, ttlSeconds) {
+      const safeApiKey = String(apiKey || '').trim();
+      if (!safeApiKey) return;
+      try {
+        localStorage.setItem(ADMIN_APIKEY_LOCALSTORAGE_KEY, safeApiKey);
+      } catch {}
+      const maxAge = Math.max(1, Number(ttlSeconds) || 0);
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=${encodeURIComponent(safeApiKey)}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
+    }
+
+    function clearAdminApiKey() {
+      try {
+        localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    applyDark();
+    applyPanelLang();
+    document.getElementById('admin-password-toggle').addEventListener('click', togglePasswordVisibility);
+
+    document.getElementById('admin-login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('admin-password');
+      const error = document.getElementById('admin-login-error');
+      const submit = document.getElementById('admin-login-submit');
+      error.textContent = '';
+      submit.disabled = true;
+      try {
+        const response = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ password: input.value, next_path: ADMIN_NEXT_PATH || '/admin/panel' }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.api_key) {
+          throw new Error(data.detail || t('failed'));
+        }
+        writeAdminApiKey(data.api_key, data.ttl_seconds || 0);
+        location.replace(data.redirect_to || ADMIN_NEXT_PATH || '/admin/panel');
+      } catch (errorObj) {
+        clearAdminApiKey();
+        error.textContent = errorObj?.message || t('failed');
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

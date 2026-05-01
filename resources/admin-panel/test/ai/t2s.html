@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>T2S 文字转语音</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <link rel="stylesheet" href="/html-assets/css/ai-test-shared.css"/>
+  <style>
+    .tts-error {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #fecaca;
+      background: rgba(239, 68, 68, 0.12);
+      color: #991b1b;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    html.dark .tts-error { color: #fecaca; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.18); }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="ai-page">
+  <div class="ai-shell">
+    <a href="/admin/test/ai" class="ai-back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      <span data-i18n="t2s.backLink">返回 AI 测试中心</span>
+    </a>
+
+    <div class="ai-header">
+      <div class="ai-header-main">
+        <h1 data-i18n="t2s.title">T2S 文字转语音</h1>
+      </div>
+      <div class="ai-pills">
+        <span class="ai-pill"><strong id="mode-pill">普通模式</strong></span>
+        <span class="ai-pill"><span data-i18n="t2s.history.keep">历史保留</span><strong>&nbsp;8&nbsp;</strong><span data-i18n="t2s.history.items">条</span></span>
+      </div>
+    </div>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="t2s.quick.title">快速文本</h2>
+      </div>
+      <div class="ai-toolbar">
+        <button class="ai-button ai-button-secondary" type="button" data-i18n="t2s.quick.chinese" data-quick="你好，世界。欢迎来到语音测试页面。">中文问候</button>
+        <button class="ai-button ai-button-secondary" type="button" data-i18n="t2s.quick.english" data-quick="Hello, this is a quick text-to-speech verification sample.">English Sample</button>
+        <button class="ai-button ai-button-secondary" type="button" data-i18n="t2s.quick.japanese" data-quick="こんにちは。これは音声合成の動作確認サンプルです。">日本語样本</button>
+        <button class="ai-button ai-button-secondary" type="button" data-i18n="t2s.quick.long" data-quick="人工智能正在深刻改变学习、创作与协作方式。请用自然清晰的语速朗读这一段落，以便检查长文本合成效果。">长段落</button>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="t2s.request.title">请求参数</h2>
+      </div>
+      <div class="ai-grid-3">
+        <div class="ai-field" style="grid-column: span 2;">
+          <label for="input-text" data-i18n="t2s.input.label">输入文本</label>
+          <textarea id="input-text" class="ai-textarea" data-i18n-placeholder="t2s.input.placeholder" placeholder="请输入要合成的文本"></textarea>
+        </div>
+        <div class="ai-field">
+          <label for="service-instance" data-i18n="t2s.serviceInstance">Service Instance</label>
+          <select id="service-instance" class="ai-select">
+            <option value="default">default</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="playback-rate" data-i18n="t2s.playbackRate">回放速度</label>
+          <select id="playback-rate" class="ai-select">
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="mode-select" data-i18n="t2s.requestMode">请求方式</label>
+          <select id="mode-select" class="ai-select">
+            <option value="normal" selected data-i18n="t2s.mode.option.normal">普通接口 /ai/t2s</option>
+            <option value="stream" data-i18n="t2s.mode.option.stream">流式接口 /ai/t2s/stream</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="chunk-size" data-i18n="t2s.chunkSize">流式块大小</label>
+          <input id="chunk-size" class="ai-input" type="number" min="1024" step="1024" value="16384"/>
+        </div>
+        <div class="ai-field" style="grid-column: span 3;">
+          <label class="ai-label" data-i18n="t2s.actions">操作</label>
+          <div class="ai-toolbar">
+            <button id="run-btn" class="ai-button ai-button-primary" type="button">开始合成</button>
+            <button id="clear-btn" class="ai-button ai-button-secondary" type="button" data-i18n="t2s.action.clear">清空输入</button>
+            <span class="ai-pill"><strong id="char-pill">0</strong><span id="char-pill-label">&nbsp;字符</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="t2s.result.title">结果</h2>
+        <div class="ai-toolbar">
+          <span id="result-badge" class="ai-badge ai-badge-muted">等待请求</span>
+          <button id="download-btn" class="ai-button ai-button-secondary" type="button" disabled data-i18n="t2s.action.download">下载音频</button>
+        </div>
+      </div>
+      <div class="ai-metric-grid" style="margin-bottom:16px;">
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-elapsed">—</div><div class="ai-metric-label" data-i18n="t2s.metric.elapsed">耗时</div></div>
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-bytes">—</div><div class="ai-metric-label" data-i18n="t2s.metric.bytes">音频大小</div></div>
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-format">—</div><div class="ai-metric-label" data-i18n="t2s.metric.format">格式</div></div>
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-mode">—</div><div class="ai-metric-label" data-i18n="t2s.metric.mode">请求模式</div></div>
+      </div>
+      <div id="error-box" class="tts-error"></div>
+      <audio id="audio-player" controls style="width:100%;"></audio>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="t2s.inspector.title">调试检查器</h2>
+      </div>
+      <div id="inspector" class="ai-grid-2">
+        <div>
+          <div class="ai-card-subtitle">Request</div>
+          <pre class="ai-json" data-kind="request">—</pre>
+        </div>
+        <div>
+          <div class="ai-card-subtitle">Response</div>
+          <pre class="ai-json" data-kind="response">—</pre>
+        </div>
+        <div>
+          <div class="ai-card-subtitle">Error</div>
+          <pre class="ai-json" data-kind="error">—</pre>
+        </div>
+        <div>
+          <div class="ai-card-subtitle">Timing</div>
+          <pre class="ai-json" data-kind="timing">—</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2 data-i18n="t2s.history.title">本地历史</h2>
+        <button id="history-clear-btn" class="ai-button ai-button-secondary" type="button" data-i18n="t2s.history.clear">清空历史</button>
+      </div>
+      <div id="history-list"></div>
+    </section>
+  </div>
+
+  <script src="/html-assets/js/ai-test-shared.js"></script>
+  <script>
+  'use strict';
+
+  const I18N = {
+    'common.emptyHistory': { 'zh-cn': '暂无历史记录', 'zh-tw': '暫無歷史記錄', en: 'No history yet' },
+    't2s.docTitle': { 'zh-cn': 'T2S 文字转语音', 'zh-tw': 'T2S 文字轉語音', en: 'T2S Text to Speech' },
+    't2s.backLink': { 'zh-cn': '返回 AI 测试中心', 'zh-tw': '返回 AI 測試中心', en: 'Back to AI Test Hub' },
+    't2s.title': { 'zh-cn': 'T2S 文字转语音', 'zh-tw': 'T2S 文字轉語音', en: 'T2S Text to Speech' },
+    't2s.mode.normal': { 'zh-cn': '普通模式', 'zh-tw': '普通模式', en: 'Normal Mode' },
+    't2s.mode.stream': { 'zh-cn': '流式模式', 'zh-tw': '流式模式', en: 'Streaming Mode' },
+    't2s.mode.short.normal': { 'zh-cn': '普通', 'zh-tw': '普通', en: 'Normal' },
+    't2s.mode.short.stream': { 'zh-cn': '流式', 'zh-tw': '流式', en: 'Stream' },
+    't2s.mode.option.normal': { 'zh-cn': '普通接口 /ai/t2s', 'zh-tw': '普通介面 /ai/t2s', en: 'Standard Endpoint /ai/t2s' },
+    't2s.mode.option.stream': { 'zh-cn': '流式接口 /ai/t2s/stream', 'zh-tw': '流式介面 /ai/t2s/stream', en: 'Streaming Endpoint /ai/t2s/stream' },
+    't2s.history.keep': { 'zh-cn': '历史保留', 'zh-tw': '歷史保留', en: 'History Limit' },
+    't2s.history.items': { 'zh-cn': '条', 'zh-tw': '條', en: 'items' },
+    't2s.quick.title': { 'zh-cn': '快速文本', 'zh-tw': '快速文本', en: 'Quick Samples' },
+    't2s.quick.chinese': { 'zh-cn': '中文问候', 'zh-tw': '中文問候', en: 'Chinese Greeting' },
+    't2s.quick.english': { 'zh-cn': '英文样本', 'zh-tw': '英文樣本', en: 'English Sample' },
+    't2s.quick.japanese': { 'zh-cn': '日语样本', 'zh-tw': '日語樣本', en: 'Japanese Sample' },
+    't2s.quick.long': { 'zh-cn': '长段落', 'zh-tw': '長段落', en: 'Long Paragraph' },
+    't2s.request.title': { 'zh-cn': '请求参数', 'zh-tw': '請求參數', en: 'Request Parameters' },
+    't2s.input.label': { 'zh-cn': '输入文本', 'zh-tw': '輸入文本', en: 'Input Text' },
+    't2s.input.placeholder': { 'zh-cn': '请输入要合成的文本', 'zh-tw': '請輸入要合成的文本', en: 'Enter the text to synthesize' },
+    't2s.serviceInstance': { 'zh-cn': 'Service Instance', 'zh-tw': 'Service Instance', en: 'Service Instance' },
+    't2s.playbackRate': { 'zh-cn': '回放速度', 'zh-tw': '回放速度', en: 'Playback Rate' },
+    't2s.requestMode': { 'zh-cn': '请求方式', 'zh-tw': '請求方式', en: 'Request Mode' },
+    't2s.chunkSize': { 'zh-cn': '流式块大小', 'zh-tw': '流式區塊大小', en: 'Streaming Chunk Size' },
+    't2s.actions': { 'zh-cn': '操作', 'zh-tw': '操作', en: 'Actions' },
+    't2s.action.run': { 'zh-cn': '开始合成', 'zh-tw': '開始合成', en: 'Synthesize' },
+    't2s.action.running': { 'zh-cn': '合成中…', 'zh-tw': '合成中…', en: 'Synthesizing...' },
+    't2s.action.clear': { 'zh-cn': '清空输入', 'zh-tw': '清空輸入', en: 'Clear Input' },
+    't2s.action.download': { 'zh-cn': '下载音频', 'zh-tw': '下載音訊', en: 'Download Audio' },
+    't2s.result.title': { 'zh-cn': '结果', 'zh-tw': '結果', en: 'Result' },
+    't2s.result.waiting': { 'zh-cn': '等待请求', 'zh-tw': '等待請求', en: 'Waiting' },
+    't2s.result.loadingNormal': { 'zh-cn': '正在请求音频', 'zh-tw': '正在請求音訊', en: 'Requesting Audio' },
+    't2s.result.loadingStream': { 'zh-cn': '正在拉取音频流', 'zh-tw': '正在拉取音訊流', en: 'Streaming Audio' },
+    't2s.result.success': { 'zh-cn': '合成成功', 'zh-tw': '合成成功', en: 'Synthesis Complete' },
+    't2s.result.error': { 'zh-cn': '请求失败', 'zh-tw': '請求失敗', en: 'Request Failed' },
+    't2s.result.historyLoaded': { 'zh-cn': '已载入历史音频', 'zh-tw': '已載入歷史音訊', en: 'Loaded from History' },
+    't2s.metric.elapsed': { 'zh-cn': '耗时', 'zh-tw': '耗時', en: 'Elapsed' },
+    't2s.metric.bytes': { 'zh-cn': '音频大小', 'zh-tw': '音訊大小', en: 'Audio Size' },
+    't2s.metric.format': { 'zh-cn': '格式', 'zh-tw': '格式', en: 'Format' },
+    't2s.metric.mode': { 'zh-cn': '请求模式', 'zh-tw': '請求模式', en: 'Request Mode' },
+    't2s.inspector.title': { 'zh-cn': '调试检查器', 'zh-tw': '偵錯檢查器', en: 'Inspector' },
+    't2s.history.title': { 'zh-cn': '本地历史', 'zh-tw': '本地歷史', en: 'Local History' },
+    't2s.history.clear': { 'zh-cn': '清空历史', 'zh-tw': '清空歷史', en: 'Clear History' },
+    't2s.history.unnamed': { 'zh-cn': '未命名请求', 'zh-tw': '未命名請求', en: 'Untitled Request' },
+    't2s.history.replay': { 'zh-cn': '复播', 'zh-tw': '復播', en: 'Replay' },
+    't2s.history.copyJson': { 'zh-cn': '复制 JSON', 'zh-tw': '複製 JSON', en: 'Copy JSON' },
+    't2s.history.copied': { 'zh-cn': '历史 JSON 已复制', 'zh-tw': '歷史 JSON 已複製', en: 'History JSON copied' },
+    't2s.error.empty': { 'zh-cn': '请输入要合成的文本。', 'zh-tw': '請輸入要合成的文本。', en: 'Enter text to synthesize.' },
+    't2s.count.chars': { 'zh-cn': '字符', 'zh-tw': '字元', en: 'chars' },
+  };
+  const historyStore = AITestShared.createHistoryStore('t2s', 8);
+  const inputText = document.getElementById('input-text');
+  const serviceInstance = document.getElementById('service-instance');
+  const playbackRate = document.getElementById('playback-rate');
+  const modeSelect = document.getElementById('mode-select');
+  const chunkSizeInput = document.getElementById('chunk-size');
+  const runBtn = document.getElementById('run-btn');
+  const downloadBtn = document.getElementById('download-btn');
+  const audioPlayer = document.getElementById('audio-player');
+  const resultBadge = document.getElementById('result-badge');
+  const errorBox = document.getElementById('error-box');
+  const modePill = document.getElementById('mode-pill');
+  const charPillLabel = document.getElementById('char-pill-label');
+
+  function t(key, fallback) {
+    return AITestShared.t(key, fallback);
+  }
+
+  function modeLabel(mode, shortMode) {
+    const suffix = shortMode ? 'short.' : '';
+    return t(`t2s.mode.${suffix}${mode === 'stream' ? 'stream' : 'normal'}`);
+  }
+
+  function syncDocumentTitle() {
+    document.title = t('t2s.docTitle');
+  }
+
+  function syncRunButton() {
+    runBtn.textContent = runBtn.disabled ? t('t2s.action.running') : t('t2s.action.run');
+  }
+
+  function setResultState(kind, badgeClass) {
+    resultBadge.dataset.state = kind;
+    resultBadge.dataset.variant = badgeClass;
+    resultBadge.className = `ai-badge ${badgeClass}`;
+    resultBadge.textContent = t(`t2s.result.${kind}`);
+  }
+
+  let currentAudioUrl = '';
+  let currentBlob = null;
+  let currentFilename = '';
+
+  AITestShared.bindFormState('t2s', [
+    { id: 'input-text' },
+    { id: 'service-instance' },
+    { id: 'playback-rate' },
+    { id: 'mode-select' },
+    { id: 'chunk-size' },
+  ]);
+  AITestShared.loadServiceInstances('t2s', serviceInstance);
+
+  function setError(message) {
+    errorBox.style.display = message ? 'block' : 'none';
+    errorBox.textContent = message || '';
+  }
+
+  function setBusy(busy) {
+    runBtn.disabled = busy;
+    syncRunButton();
+  }
+
+  function setMetrics({ elapsed, bytes, format, mode }) {
+    document.getElementById('metric-elapsed').textContent = elapsed || '—';
+    document.getElementById('metric-bytes').textContent = bytes || '—';
+    document.getElementById('metric-format').textContent = format || '—';
+    document.getElementById('metric-mode').textContent = mode || '—';
+  }
+
+  function bytesLabel(size) {
+    const value = Number(size || 0);
+    if (!value) return '—';
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function updateCharCount() {
+    document.getElementById('char-pill').textContent = String(inputText.value.length);
+    charPillLabel.innerHTML = `&nbsp;${AITestShared.escapeHtml(t('t2s.count.chars'))}`;
+  }
+
+  function revokeCurrentAudio() {
+    if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = '';
+    currentBlob = null;
+    currentFilename = '';
+  }
+
+  function setAudio(blob, filename) {
+    revokeCurrentAudio();
+    currentBlob = blob;
+    currentFilename = filename || `tts_${Date.now()}.wav`;
+    currentAudioUrl = URL.createObjectURL(blob);
+    audioPlayer.src = currentAudioUrl;
+    audioPlayer.playbackRate = Number(playbackRate.value || 1);
+    downloadBtn.disabled = false;
+  }
+
+  function renderHistory() {
+    const container = document.getElementById('history-list');
+    const items = historyStore.load();
+    AITestShared.renderHistoryList(container, items, (item) => `
+      <div class="ai-card" style="padding:14px; margin-top:12px;">
+        <div class="ai-card-title" style="margin-bottom:8px;">
+          <h3 style="text-transform:none; letter-spacing:0; font-size:14px; color:var(--ai-text);">${AITestShared.escapeHtml(item.text_preview || t('t2s.history.unnamed'))}</h3>
+          <span class="ai-badge ${item.mode === 'stream' ? 'ai-badge-warning' : 'ai-badge-primary'}">${AITestShared.escapeHtml(modeLabel(item.mode, true))}</span>
+        </div>
+        <div class="ai-toolbar" style="justify-content:space-between; align-items:flex-start;">
+          <div class="ai-card-subtitle" style="margin:0;">${AITestShared.toLocaleTime(item.ts)} · ${AITestShared.formatDuration(item.elapsed_ms)} · ${AITestShared.escapeHtml(item.format || 'wav')}</div>
+          <div class="ai-toolbar">
+            <button class="ai-button ai-button-secondary" type="button" onclick="replayHistory('${item.id}')">${AITestShared.escapeHtml(t('t2s.history.replay'))}</button>
+            <button class="ai-button ai-button-secondary" type="button" onclick="copyHistoryPayload('${item.id}')">${AITestShared.escapeHtml(t('t2s.history.copyJson'))}</button>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+
+  AITestShared.wireI18n(I18N, () => {
+    syncDocumentTitle();
+    syncRunButton();
+    syncModePill();
+    updateCharCount();
+    renderHistory();
+    if (resultBadge.dataset.state) {
+      setResultState(resultBadge.dataset.state, resultBadge.dataset.variant || 'ai-badge-muted');
+    }
+    const metricMode = document.getElementById('metric-mode');
+    if (metricMode.dataset.mode) {
+      metricMode.textContent = modeLabel(metricMode.dataset.mode, true);
+    }
+  });
+
+  window.replayHistory = function(id) {
+    const item = historyStore.load().find((entry) => entry.id === id);
+    if (!item?.audio_base64) return;
+    const mime = item.mime_type || 'audio/wav';
+    const bytes = Uint8Array.from(atob(item.audio_base64), (ch) => ch.charCodeAt(0));
+    const blob = new Blob([bytes], { type: mime });
+    setAudio(blob, `tts_history_${id}.${item.format || 'wav'}`);
+    inputText.value = item.text || '';
+    updateCharCount();
+    setMetrics({
+      elapsed: AITestShared.formatDuration(item.elapsed_ms),
+      bytes: bytesLabel(item.audio_bytes),
+      format: item.format || 'wav',
+      mode: modeLabel(item.mode, true),
+    });
+    setResultState('historyLoaded', 'ai-badge-success');
+    AITestShared.setInspector('inspector', item.inspector || {});
+  };
+
+  window.copyHistoryPayload = function(id) {
+    const item = historyStore.load().find((entry) => entry.id === id);
+    if (!item) return;
+    AITestShared.copyText(AITestShared.prettyJson(item), t('t2s.history.copied'));
+  };
+
+  function syncModePill() {
+    modePill.textContent = modeLabel(modeSelect.value, false);
+  }
+
+  async function synthesize() {
+    const text = inputText.value.trim();
+    if (!text) {
+      setError(t('t2s.error.empty'));
+      return;
+    }
+
+    const mode = modeSelect.value;
+    const requestPayload = { text, chunk_size: Number(chunkSizeInput.value || 16384), service_key: serviceInstance.value || 'default' };
+    const timing = { started_at: AITestShared.nowIso(), mode };
+
+    setBusy(true);
+    setError('');
+  setResultState(mode === 'stream' ? 'loadingStream' : 'loadingNormal', 'ai-badge-warning');
+    AITestShared.setInspector('inspector', { request: requestPayload, response: null, error: null, timing });
+
+    try {
+      const t0 = performance.now();
+      let responseMeta = null;
+      let blob = null;
+      let mimeType = 'audio/wav';
+      let format = 'wav';
+      let audioBytes = 0;
+      let audioBase64 = null;
+
+      if (mode === 'stream') {
+        const resp = await fetch('/ai/t2s/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestPayload),
+        });
+        if (!resp.ok) {
+          const err = await AITestShared.parseErrorResponse(resp);
+          throw new Error(err.message || `HTTP ${resp.status}`);
+        }
+        mimeType = resp.headers.get('content-type') || 'audio/wav';
+        blob = await resp.blob();
+        audioBytes = blob.size;
+        responseMeta = {
+          mode: 'stream',
+          mime_type: mimeType,
+          chunk_size: Number(chunkSizeInput.value || 16384),
+          header_mode: resp.headers.get('X-AI-Mode') || 't2s-stream',
+        };
+      } else {
+        const resp = await fetch('/ai/t2s', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestPayload),
+        });
+        if (!resp.ok) {
+          const err = await AITestShared.parseErrorResponse(resp);
+          throw new Error(err.message || `HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        audioBase64 = data.audio_base64;
+        mimeType = data.mime_type || 'audio/wav';
+        format = data.format || 'wav';
+        audioBytes = Number(data.audio_bytes || 0);
+        responseMeta = data;
+        const bytes = Uint8Array.from(atob(audioBase64), (ch) => ch.charCodeAt(0));
+        blob = new Blob([bytes], { type: mimeType });
+      }
+
+      const elapsedMs = Math.round(performance.now() - t0);
+      const finalFormat = format || (mimeType.split('/')[1] || 'wav');
+      setAudio(blob, `tts_${Date.now()}.${finalFormat}`);
+      setMetrics({
+        elapsed: AITestShared.formatDuration(elapsedMs),
+        bytes: bytesLabel(audioBytes || blob.size),
+        format: finalFormat,
+        mode: modeLabel(mode, true),
+      });
+      setResultState('success', 'ai-badge-success');
+      timing.elapsed_ms = elapsedMs;
+      timing.finished_at = AITestShared.nowIso();
+      const inspector = { request: requestPayload, response: responseMeta, error: null, timing };
+      AITestShared.setInspector('inspector', inspector);
+
+      historyStore.push({
+        text,
+        text_preview: text.length > 26 ? `${text.slice(0, 26)}…` : text,
+        mode,
+        format: finalFormat,
+        mime_type: mimeType,
+        audio_bytes: audioBytes || blob.size,
+        audio_base64: audioBase64,
+        elapsed_ms: elapsedMs,
+        inspector,
+      });
+      renderHistory();
+    } catch (error) {
+      setError(error.message || t('t2s.result.error'));
+      setResultState('error', 'ai-badge-danger');
+      AITestShared.setInspector('inspector', {
+        request: requestPayload,
+        response: null,
+        error: { message: error.message || String(error) },
+        timing,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  runBtn.addEventListener('click', synthesize);
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    inputText.value = '';
+    updateCharCount();
+    setError('');
+    revokeCurrentAudio();
+    audioPlayer.removeAttribute('src');
+    downloadBtn.disabled = true;
+    setMetrics({});
+    setResultState('waiting', 'ai-badge-muted');
+    AITestShared.setInspector('inspector', { request: null, response: null, error: null, timing: null });
+  });
+  downloadBtn.addEventListener('click', () => {
+    if (!currentBlob) return;
+    const link = document.createElement('a');
+    link.href = currentAudioUrl;
+    link.download = currentFilename || `tts_${Date.now()}.wav`;
+    link.click();
+  });
+  document.getElementById('history-clear-btn').addEventListener('click', () => {
+    historyStore.clear();
+    renderHistory();
+  });
+  playbackRate.addEventListener('change', () => {
+    audioPlayer.playbackRate = Number(playbackRate.value || 1);
+  });
+  modeSelect.addEventListener('change', () => {
+    const stream = modeSelect.value === 'stream';
+    chunkSizeInput.disabled = !stream;
+    syncModePill();
+  });
+  inputText.addEventListener('input', updateCharCount);
+  document.querySelectorAll('[data-quick]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      inputText.value = btn.dataset.quick || '';
+      updateCharCount();
+      inputText.focus();
+    });
+  });
+
+  modeSelect.dispatchEvent(new Event('change'));
+  setResultState('waiting', 'ai-badge-muted');
+  updateCharCount();
+  renderHistory();
+  syncDocumentTitle();
+  syncRunButton();
+  AITestShared.setInspector('inspector', { request: null, response: null, error: null, timing: null });
+  </script>
+</body>
+</html>

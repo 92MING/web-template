@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f5f5f5">
+<title>商品详情 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
+  .page-wrap { max-width: 1140px; margin: 0 auto; padding: 1rem; }
+  .review-item { padding: 0.75rem 0; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  .review-item:last-child { border-bottom: none; }
+  .star-rating { color: #f59e0b; letter-spacing: 2px; }
+  .review-form { display: grid; gap: 0.75rem; margin-top: 1rem; }
+  .review-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-input-bg, #ffffff); color: inherit; font: inherit; min-height: 80px; box-sizing: border-box; }
+  .review-form select { padding: 8px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px); background: var(--builtin-input-bg, #ffffff); color: inherit; font: inherit; }
+  .btn-submit { display: inline-flex; align-items: center; gap: 4px; padding: 8px 16px; border-radius: var(--builtin-radius, 6px); border: none; background: var(--builtin-primary, #2563eb); color: #fff; font-weight: 600; cursor: pointer; font: inherit; }
+  .btn-submit:hover { background: var(--builtin-primary-hover, #1d4ed8); }
+  @media (max-width: 720px) {
+    .page-wrap { padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem max(0.5rem, env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <builtin-tpl-ecommerce-product-detail id="product-tpl">
+    <builtin-navbar slot="navbar" id="navbar" brand="e-Shop">
+      <div slot="brand" style="display:flex;align-items:center;gap:8px;">
+        <builtin-icon name="shopping" size="20"></builtin-icon>
+        <span>e-Shop</span>
+      </div>
+      <div slot="actions" style="display:flex;gap:0.5rem;align-items:center;">
+        <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
+        <builtin-theme-toggle></builtin-theme-toggle>
+        <a href="index.html" class="nav-btn" data-i18n="eshop.back_to_mall">返回商城</a>
+        <a href="cart.html" class="nav-btn" data-i18n="eshop.cart">购物车</a>
+      </div>
+    </builtin-navbar>
+  </builtin-tpl-ecommerce-product-detail>
+
+  <builtin-card style="margin-top:1rem;">
+    <div slot="header" data-i18n="eshop.user_reviews">用户评价</div>
+    <div id="reviews-list"></div>
+    <div class="review-form">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span data-i18n="eshop.rating">评分</span>
+        <select id="review-rating">
+          <option value="5">★★★★★</option>
+          <option value="4">★★★★☆</option>
+          <option value="3">★★★☆☆</option>
+          <option value="2">★★☆☆☆</option>
+          <option value="1">★☆☆☆☆</option>
+        </select>
+      </div>
+      <textarea id="review-comment" data-i18n-placeholder="eshop.review_placeholder" placeholder="分享您的使用体验..."></textarea>
+      <button id="btn-submit-review" class="btn-submit" data-i18n="eshop.submit_review">提交评价</button>
+    </div>
+  </builtin-card>
+</div>
+
+<script type="module">
+import { initEshop, api, t, applyI18n, USER_ID, BuiltinToast } from './eshop-utils.js';
+
+await initEshop();
+
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const productId = params.get('id') || 'p1';
+
+(async () => {
+  const r = await api('/shop/products/' + productId);
+  if (!r || r.error) {
+    $('product-tpl').style.display = 'none';
+    const alertEl = document.createElement('builtin-alert');
+    alertEl.variant = 'error';
+    alertEl.setAttribute('data-i18n', 'eshop.product_not_found');
+    alertEl.textContent = '商品不存在';
+    document.querySelector('.page-wrap').insertBefore(alertEl, $('product-tpl'));
+    await applyI18n();
+    return;
+  }
+  const p = r.product;
+  const tpl = $('product-tpl');
+  tpl.title = p.name;
+  tpl.price = '¥' + p.price;
+  tpl.oldPrice = p.old_price ? '¥' + p.old_price : '';
+  tpl.image = p.image;
+  tpl.description = p.description;
+  tpl.rating = String(p.rating || 0);
+  tpl.labels = {
+    'product.addToCart': await t('eshop.add_to_cart'),
+    'product.buyNow': await t('eshop.buy_now'),
+    'product.description': await t('eshop.description'),
+    'product.specs': await t('eshop.specs'),
+    'product.reviews': await t('eshop.user_reviews'),
+    'product.noDescription': await t('eshop.no_description'),
+    'product.size': await t('eshop.size'),
+    'product.relatedTitle': await t('eshop.related_products'),
+    'product.noImage': await t('eshop.no_image'),
+  };
+
+  renderReviews(r.reviews || []);
+  await applyI18n();
+
+  tpl.addEventListener('builtin-add-cart', async (e) => {
+    await api('/shop/cart', { method: 'POST', body: JSON.stringify({ user_id: USER_ID, product_id: p.id, quantity: e.detail.quantity || 1 }) });
+    BuiltinToast.show(await t('eshop.added_to_cart'), { type: 'success' });
+  });
+
+  tpl.addEventListener('builtin-buy-now', async (e) => {
+    await api('/shop/cart', { method: 'POST', body: JSON.stringify({ user_id: USER_ID, product_id: p.id, quantity: e.detail.quantity || 1 }) });
+    BuiltinToast.show(await t('eshop.added_to_cart'), { type: 'success' });
+    location.href = 'cart.html';
+  });
+})();
+
+function renderReviews(reviews) {
+  const container = $('reviews-list');
+  if (!reviews.length) {
+    container.innerHTML = `<builtin-alert variant="info">${t('eshop.no_reviews')}</builtin-alert>`;
+    return;
+  }
+  container.innerHTML = reviews.map(rv => `
+    <div class="review-item">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div class="star-rating">${'★'.repeat(rv.rating)}${'☆'.repeat(5 - rv.rating)}</div>
+        <span style="font-size:12px;color:var(--builtin-color-muted);">${rv.user}</span>
+      </div>
+      <div style="font-size:0.875rem;color:var(--builtin-color-muted, #666);margin-top:4px;">${rv.comment}</div>
+    </div>
+  `).join('');
+}
+
+$('btn-submit-review').addEventListener('click', async () => {
+  const rating = parseInt($('review-rating').value);
+  const comment = $('review-comment').value.trim();
+  if (!comment) {
+    BuiltinToast.show('请输入评价内容', { type: 'warning' });
+    return;
+  }
+  try {
+    const res = await api('/shop/products/' + productId + '/reviews', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: USER_ID, rating, comment })
+    });
+    if (res?.ok) {
+      BuiltinToast.show('评价提交成功', { type: 'success' });
+      $('review-comment').value = '';
+      renderReviews(res.reviews);
+    } else {
+      BuiltinToast.show(res?.error || '提交失败', { type: 'error' });
+    }
+  } catch (e) {
+    BuiltinToast.show('提交失败', { type: 'error' });
+  }
+});
+</script>
+</body>
+</html>

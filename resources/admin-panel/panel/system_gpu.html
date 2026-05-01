@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPU 监控</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
+  <link rel="stylesheet" href="/html-assets/css/panel-monitoring-shared.css" />
+  <script src="/vendor/chart/chart.js"></script>
+  <style>
+    html { font-size: 11px; height: 100%; }
+    :root {
+      --monitor-accent-1: rgba(14, 165, 233, 0.12);
+      --monitor-accent-2: rgba(59, 130, 246, 0.10);
+      --monitor-accent-3: rgba(14, 116, 144, 0.07);
+    }
+
+    .panel-page {
+      padding: 6px;
+    }
+
+    .monitor-shell {
+      gap: 6px;
+    }
+
+    .panel-hero {
+      gap: 8px;
+      padding: 8px 10px;
+      grid-template-columns: minmax(0, 1.35fr) minmax(220px, auto);
+      align-items: start;
+    }
+
+    .panel-kicker {
+      font-size: 10px;
+      letter-spacing: .14em;
+    }
+
+    .panel-title {
+      margin-top: 3px;
+      font-size: 16px;
+      line-height: 1.05;
+    }
+
+    .panel-hero-actions {
+      gap: 6px;
+      justify-content: flex-start;
+    }
+
+    .monitor-hero-pills {
+      gap: 5px;
+    }
+
+    #gpu-updated.panel-pill {
+      min-height: 24px;
+      padding: 0 8px;
+      font-size: 11px;
+    }
+
+    #gpu-summary.monitor-status {
+      min-height: 0;
+      padding: 5px 8px;
+      line-height: 1.35;
+      font-size: 10px;
+    }
+
+    .monitor-metric-grid {
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+      gap: 6px;
+    }
+
+    .panel-stat-card {
+      min-height: 38px;
+      padding: 6px 8px;
+      border-radius: var(--proj-radius-md);
+    }
+
+    .panel-stat-kicker,
+    .panel-card-kicker {
+      font-size: 9px;
+      letter-spacing: .12em;
+      line-height: 1;
+    }
+
+    .panel-stat-value {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .gpu-layout-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .92fr) minmax(420px, 1.08fr);
+      gap: 6px;
+      align-items: start;
+    }
+
+    .gpu-layout-column {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .panel-card {
+      border-radius: var(--proj-radius-lg);
+      padding: 9px;
+    }
+
+    .panel-card-header {
+      gap: 6px;
+    }
+
+    .panel-card-title {
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .panel-card-body {
+      margin-top: 6px;
+    }
+
+    .monitor-chart-shell {
+      padding: 6px;
+      border-radius: var(--proj-radius-md);
+    }
+
+    .monitor-chart-area {
+      height: 126px;
+    }
+
+    .gpu-device-scroll {
+      max-height: calc(100vh - 238px);
+      min-height: 0;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .monitor-device-grid {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 6px;
+    }
+
+    #gpu-cards .monitor-device-card {
+      gap: 8px;
+      padding: 9px;
+      border-radius: var(--proj-radius-lg);
+    }
+
+    #gpu-cards .monitor-device-header {
+      gap: 8px;
+    }
+
+    #gpu-cards .monitor-device-title-row {
+      gap: 5px;
+    }
+
+    #gpu-cards .monitor-device-title {
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    #gpu-cards .monitor-chip {
+      min-height: 20px;
+      padding: 2px 6px;
+      font-size: 10px;
+    }
+
+    #gpu-cards .monitor-device-meta {
+      margin-top: 2px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    #gpu-cards .monitor-primary-grid,
+    #gpu-cards .monitor-sparkline-grid,
+    #gpu-cards .monitor-detail-grid {
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 6px;
+    }
+
+    #gpu-cards .monitor-metric-box {
+      padding: 7px 8px;
+      border-radius: var(--proj-radius-md);
+    }
+
+    #gpu-cards .monitor-metric-kicker {
+      font-size: 9px;
+      letter-spacing: .06em;
+    }
+
+    #gpu-cards .monitor-metric-value {
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    #gpu-cards .monitor-metric-note {
+      margin-top: 3px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    #gpu-cards .monitor-meter-track {
+      margin-top: 5px;
+      height: 5px;
+    }
+
+    #gpu-cards .monitor-history-strip {
+      gap: 4px;
+    }
+
+    #gpu-cards .monitor-sparkline {
+      height: 38px;
+    }
+
+    #gpu-cards .monitor-sparkline-empty {
+      min-height: 38px;
+      font-size: 10px;
+    }
+
+    #gpu-cards .monitor-detail-fold > summary {
+      padding: 5px 8px;
+      font-size: 10px;
+    }
+
+    #gpu-cards .monitor-detail-body {
+      padding: 6px 8px 8px;
+    }
+
+    @media (max-width: 980px) {
+      .gpu-layout-grid,
+      .panel-hero {
+        grid-template-columns: 1fr;
+      }
+
+      .gpu-device-scroll {
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
+      }
+    }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+  <script src="/html-assets/js/core-ui-utils.js"></script>
+  <script src="/html-assets/js/panel-monitoring-shared.js"></script>
+</head>
+<body class="panel-page-body monitor-page-body">
+  <main class="panel-page monitor-page">
+    <div class="panel-page-shell monitor-shell">
+      <section class="panel-hero">
+        <div class="panel-hero-main">
+          <div class="panel-kicker">Accelerator</div>
+          <div class="panel-title">GPU 监控</div>
+        </div>
+        <div class="panel-hero-actions">
+          <div class="panel-action-row monitor-hero-pills">
+            <span id="gpu-updated" class="panel-pill panel-mono">更新时间：—</span>
+          </div>
+          <div id="gpu-summary" class="status-box monitor-status" data-kind="info">暂无 GPU 数据。</div>
+        </div>
+      </section>
+
+      <section class="panel-stat-grid monitor-metric-grid">
+        <div class="panel-stat-card"><div class="panel-stat-kicker">设备总数</div><div id="gpu-total" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">活跃设备</div><div id="gpu-active" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">平均利用率</div><div id="gpu-avg-util" class="panel-stat-value">—%</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">总显存利用率</div><div id="gpu-avg-mem" class="panel-stat-value">—%</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">最高利用率</div><div id="gpu-max-util" class="panel-stat-value">—%</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">最高显存占用</div><div id="gpu-max-mem" class="panel-stat-value">—%</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">总显存</div><div id="gpu-total-memory" class="panel-stat-value">—</div></div>
+        <div class="panel-stat-card"><div class="panel-stat-kicker">已用显存</div><div id="gpu-used-memory" class="panel-stat-value">—</div></div>
+      </section>
+
+      <section class="gpu-layout-grid">
+        <div class="gpu-layout-column">
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div>
+                <div class="panel-card-kicker">History</div>
+                <div class="panel-card-title">GPU 历史曲线</div>
+              </div>
+              <div id="gpu-history-summary" class="panel-pill">等待首批采样…</div>
+            </div>
+            <div class="panel-card-body">
+              <div class="monitor-chart-shell">
+                <div class="monitor-chart-area"><canvas id="gpu-history-chart"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="gpu-layout-column">
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div>
+                <div class="panel-card-kicker">Inventory</div>
+                <div class="panel-card-title">设备状态</div>
+              </div>
+              <div id="gpu-card-count" class="panel-pill">0 张设备</div>
+            </div>
+            <div class="panel-card-body">
+              <div class="gpu-device-scroll">
+                <div id="gpu-cards" class="monitor-device-grid"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const MAX_POINTS = 60;
+    const history = [];
+    const deviceHistory = new Map();
+    const monitorShared = window.ProjPanelMonitoring || {};
+    const escapeHtml = window.ProjUtils?.escapeHtml || ((value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;'));
+    const clampPercent = monitorShared.clampPercent || ((value) => Math.max(0, Math.min(100, Number(value || 0))));
+    const formatPercent = monitorShared.formatPercent || ((value) => `${Number(value || 0).toFixed(1)}%`);
+    const percentTone = monitorShared.percentTone || ((value) => (clampPercent(value) < 60 ? 'ok' : clampPercent(value) < 80 ? 'warn' : 'danger'));
+    const percentToneClass = monitorShared.percentToneClass || ((value) => {
+      const tone = percentTone(value);
+      return tone === 'ok' ? 'monitor-meter-fill-ok' : tone === 'warn' ? 'monitor-meter-fill-warn' : 'monitor-meter-fill-danger';
+    });
+    const statusKindForPercent = monitorShared.statusKindForPercent || ((value) => {
+      const tone = percentTone(value);
+      return tone === 'ok' ? 'success' : tone === 'warn' ? 'warn' : 'error';
+    });
+    const formatHistoryLabel = monitorShared.formatHistoryLabel || ((value) => String(value || ''));
+    const expandedDeviceDetails = new Set();
+    let gpuChart = null;
+    let timer = null;
+
+    function startPolling() {
+      if (timer) return;
+      timer = window.setInterval(refreshGpu, 3000);
+    }
+
+    function stopPolling() {
+      if (!timer) return;
+      window.clearInterval(timer);
+      timer = null;
+    }
+
+    function formatMemory(bytes) {
+      const num = Number(bytes || 0);
+      if (!Number.isFinite(num) || num <= 0) return '—';
+      const gib = num / (1024 * 1024 * 1024);
+      if (gib >= 1) return `${gib.toFixed(gib >= 10 ? 1 : 2)} GiB`;
+      const mib = num / (1024 * 1024);
+      if (mib >= 1) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MiB`;
+      return `${Math.round(num / 1024)} KiB`;
+    }
+
+    function memoryPercent(device) {
+      const total = Number(device.memory_total_bytes || 0);
+      const used = Number(device.memory_used_bytes || 0);
+      return total > 0 ? (used / total) * 100 : 0;
+    }
+
+    function listLabel(values) {
+      const items = Array.isArray(values)
+        ? values.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+      return items.length ? items.join(' / ') : '—';
+    }
+
+    function compactDetails(device) {
+      const items = Array.isArray(device.details) ? device.details.slice(0, 4) : [];
+      return items
+        .map((item) => `${item.key}: ${item.value}`)
+        .filter(Boolean)
+        .join(' · ') || '无附加信息';
+    }
+
+    function historyKey(device, index) {
+      const candidates = [
+        device.uuid,
+        device.bus_id,
+        device.pci_bus_id,
+        device.serial,
+        device.index != null ? `index:${device.index}` : '',
+        `${device.name || 'gpu'}:${index}`,
+      ];
+      return candidates
+        .map((item) => String(item || '').trim())
+        .find(Boolean) || `gpu:${index}`;
+    }
+
+    function deriveMetrics(data) {
+      const summary = data && typeof data === 'object' ? (data.summary || {}) : {};
+      const devices = Array.isArray(data.devices) ? data.devices : [];
+      const total = Number(summary.gpu_count || devices.length || 0);
+      const active = devices.filter((item) => Number(item.utilization_percent || 0) > 0 || Number(item.memory_used_bytes || 0) > 0).length;
+      const avgUtil = summary.avg_utilization_percent != null
+        ? Number(summary.avg_utilization_percent || 0)
+        : (total ? devices.reduce((acc, item) => acc + Number(item.utilization_percent || 0), 0) / total : 0);
+      const totalMemory = Number(summary.total_memory_bytes || devices.reduce((acc, item) => acc + Number(item.memory_total_bytes || 0), 0));
+      const usedMemory = Number(summary.used_memory_bytes || devices.reduce((acc, item) => acc + Number(item.memory_used_bytes || 0), 0));
+      const avgMem = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
+      const maxUtil = total ? Math.max(...devices.map((item) => Number(item.utilization_percent || 0))) : 0;
+      const maxMem = total ? Math.max(...devices.map((item) => memoryPercent(item))) : 0;
+      const vendorLabel = listLabel(summary.vendors);
+      return {
+        devices,
+        total,
+        active,
+        avgUtil,
+        totalMemory,
+        usedMemory,
+        avgMem,
+        maxUtil,
+        maxMem,
+        vendorLabel,
+        timestamp: data.timestamp || '—',
+        message: data.message || '',
+      };
+    }
+
+    function ensureChart() {
+      if (gpuChart) return;
+      gpuChart = new Chart(document.getElementById('gpu-history-chart').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'GPU 利用率',
+              data: [],
+              borderColor: '#22d3ee',
+              backgroundColor: 'rgba(34, 211, 238, 0.15)',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: true,
+              tension: 0.28,
+            },
+            {
+              label: '显存占用',
+              data: [],
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.08)',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.24,
+            },
+          ],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
+          plugins: {
+            legend: {
+              display: true,
+              labels: {
+                color: '#94a3b8',
+                boxWidth: 10,
+                boxHeight: 10,
+                usePointStyle: true,
+              },
+            },
+          },
+          scales: {
+            x: {
+              display: false,
+            },
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#94a3b8', callback: (value) => `${value}%` },
+              grid: { color: 'rgba(148, 163, 184, 0.12)' },
+            },
+          },
+        },
+      });
+    }
+
+    function renderChart() {
+      if (!gpuChart) return;
+      gpuChart.data.labels = history.map((item) => item.label);
+      gpuChart.data.datasets[0].data = history.map((item) => item.util);
+      gpuChart.data.datasets[1].data = history.map((item) => item.mem);
+      gpuChart.update('none');
+      const latest = history[history.length - 1];
+      document.getElementById('gpu-history-summary').textContent = latest
+        ? `最近 ${history.length} 次采样 · 利用率 ${formatPercent(latest.util)} · 显存 ${formatPercent(latest.mem)}`
+        : '等待首批采样…';
+    }
+
+    function pushHistory(metrics) {
+      history.push({
+        label: formatHistoryLabel(metrics.timestamp),
+        util: clampPercent(metrics.avgUtil),
+        mem: clampPercent(metrics.avgMem),
+      });
+      while (history.length > MAX_POINTS) history.shift();
+
+      const seen = new Set();
+      metrics.devices.forEach((device, index) => {
+        const key = historyKey(device, index);
+        seen.add(key);
+        const bucket = deviceHistory.get(key) || { util: [], mem: [] };
+        bucket.util.push(clampPercent(device.utilization_percent));
+        bucket.mem.push(clampPercent(memoryPercent(device)));
+        while (bucket.util.length > MAX_POINTS) bucket.util.shift();
+        while (bucket.mem.length > MAX_POINTS) bucket.mem.shift();
+        deviceHistory.set(key, bucket);
+      });
+      Array.from(deviceHistory.keys()).forEach((key) => {
+        if (!seen.has(key)) deviceHistory.delete(key);
+      });
+    }
+
+    function renderSparkline(values, stroke, fill) {
+      if (!Array.isArray(values) || !values.length) {
+        return '<div class="monitor-sparkline-empty">等待采样…</div>';
+      }
+      const width = 100;
+      const height = 38;
+      const step = values.length === 1 ? width : width / (values.length - 1);
+      const points = values.map((value, index) => {
+        const x = (step * index).toFixed(2);
+        const y = (height - (clampPercent(value) / 100) * height).toFixed(2);
+        return `${x},${y}`;
+      }).join(' ');
+      const area = `0,${height} ${points} ${width},${height}`;
+      const latest = values[values.length - 1];
+      return `
+        <div class="monitor-history-strip">
+          <svg class="monitor-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+            <polygon points="${area}" fill="${fill}"></polygon>
+            <polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          </svg>
+          <div class="monitor-metric-note">最新 ${formatPercent(latest)}</div>
+        </div>`;
+    }
+
+    function deviceSparklines(device, index) {
+      const bucket = deviceHistory.get(historyKey(device, index));
+      return {
+        util: renderSparkline(bucket?.util || [], '#22d3ee', 'rgba(34, 211, 238, 0.16)'),
+        mem: renderSparkline(bucket?.mem || [], '#f59e0b', 'rgba(245, 158, 11, 0.14)'),
+      };
+    }
+
+    function syncExpandedDeviceDetailsFromDom() {
+      document.querySelectorAll('#gpu-cards details.monitor-detail-fold[data-device-key]').forEach((detailEl) => {
+        const key = String(detailEl.dataset.deviceKey || '').trim();
+        if (!key) return;
+        if (detailEl.open) expandedDeviceDetails.add(key);
+        else expandedDeviceDetails.delete(key);
+      });
+    }
+
+    function bindDeviceDetailToggles() {
+      document.querySelectorAll('#gpu-cards details.monitor-detail-fold[data-device-key]').forEach((detailEl) => {
+        detailEl.addEventListener('toggle', () => {
+          const key = String(detailEl.dataset.deviceKey || '').trim();
+          if (!key) return;
+          if (detailEl.open) expandedDeviceDetails.add(key);
+          else expandedDeviceDetails.delete(key);
+        });
+      });
+    }
+
+    function renderDevice(device, index) {
+      const util = Number(device.utilization_percent || 0);
+      const memPct = memoryPercent(device);
+      const sparklines = deviceSparklines(device, index);
+      const activityTone = percentTone(Math.max(util, memPct));
+      const activityLabel = util > 0 || memPct > 0 ? '活跃' : '空闲';
+      const freeMemory = formatMemory(device.memory_free_bytes);
+      const usedMemory = formatMemory(device.memory_used_bytes);
+      const totalMemory = formatMemory(device.memory_total_bytes);
+      const temperature = device.temperature_c == null ? '—' : `${Number(device.temperature_c).toFixed(0)}°C`;
+      const power = device.power_watts == null ? '—' : `${Number(device.power_watts).toFixed(1)} W`;
+      const fan = device.fan_percent == null ? '—' : `${device.fan_percent}%`;
+      const coreClock = device.core_clock_mhz == null ? '—' : `${device.core_clock_mhz} MHz`;
+      const memoryClock = device.memory_clock_mhz == null ? '—' : `${device.memory_clock_mhz} MHz`;
+      const detailKey = historyKey(device, index);
+      return `
+        <article class="monitor-device-card">
+          <div class="monitor-device-header">
+            <div>
+              <div class="monitor-device-title-row">
+                <span class="monitor-device-title">GPU ${escapeHtml(device.index ?? index)}</span>
+                <span class="monitor-chip">${escapeHtml(device.name || 'Unknown')}</span>
+                <span class="monitor-chip">${escapeHtml(device.vendor || 'Unknown vendor')}</span>
+              </div>
+              <div class="monitor-device-meta">驱动 ${escapeHtml(device.driver_version || '—')} · ${escapeHtml(device.bus_id || 'Bus —')}</div>
+            </div>
+            <span class="monitor-chip is-${activityTone}">${activityLabel}</span>
+          </div>
+
+          <div class="monitor-primary-grid">
+            <div class="monitor-metric-box">
+              <div class="monitor-metric-kicker">利用率</div>
+              <div class="monitor-metric-value">${formatPercent(util)}</div>
+              <div class="monitor-meter-track"><div class="monitor-meter-fill ${percentToneClass(util)}" style="width:${clampPercent(util)}%"></div></div>
+            </div>
+            <div class="monitor-metric-box">
+              <div class="monitor-metric-kicker">显存占用</div>
+              <div class="monitor-metric-value">${formatPercent(memPct)}</div>
+              <div class="monitor-metric-note">${usedMemory} / ${totalMemory}</div>
+              <div class="monitor-meter-track"><div class="monitor-meter-fill ${percentToneClass(memPct)}" style="width:${clampPercent(memPct)}%"></div></div>
+            </div>
+            <div class="monitor-metric-box">
+              <div class="monitor-metric-kicker">热 / 功耗</div>
+              <div class="monitor-metric-value">${temperature}</div>
+              <div class="monitor-metric-note">功耗 ${power}</div>
+            </div>
+          </div>
+
+          <div class="monitor-sparkline-grid">
+            <div class="monitor-metric-box">
+              <div class="monitor-metric-kicker">利用率曲线</div>
+              ${sparklines.util}
+            </div>
+            <div class="monitor-metric-box">
+              <div class="monitor-metric-kicker">显存曲线</div>
+              ${sparklines.mem}
+            </div>
+          </div>
+
+          <details class="monitor-detail-fold" data-device-key="${escapeHtml(detailKey)}" ${expandedDeviceDetails.has(detailKey) ? 'open' : ''}>
+            <summary>
+              <span>设备详情</span>
+            </summary>
+            <div class="monitor-detail-body">
+              <div class="monitor-detail-grid">
+                <div class="monitor-metric-box">
+                  <div class="monitor-metric-kicker">显存拆分</div>
+                  <div class="monitor-metric-value">${usedMemory}</div>
+                  <div class="monitor-metric-note">总量 ${totalMemory}</div>
+                  <div class="monitor-metric-note">空闲 ${freeMemory}</div>
+                </div>
+                <div class="monitor-metric-box">
+                  <div class="monitor-metric-kicker">风扇 / 时钟</div>
+                  <div class="monitor-metric-value">${fan}</div>
+                  <div class="monitor-metric-note">核心时钟 ${coreClock}</div>
+                  <div class="monitor-metric-note">显存时钟 ${memoryClock}</div>
+                </div>
+                <div class="monitor-metric-box">
+                  <div class="monitor-metric-kicker">附加信息</div>
+                  <div class="monitor-metric-note">${escapeHtml(compactDetails(device))}</div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </article>
+      `;
+    }
+
+    function updateSummary(metrics) {
+      document.getElementById('gpu-total').textContent = `${metrics.total}`;
+      document.getElementById('gpu-active').textContent = `${metrics.active}`;
+      document.getElementById('gpu-avg-util').textContent = formatPercent(metrics.avgUtil);
+      document.getElementById('gpu-avg-mem').textContent = formatPercent(metrics.avgMem);
+      document.getElementById('gpu-max-util').textContent = formatPercent(metrics.maxUtil);
+      document.getElementById('gpu-max-mem').textContent = formatPercent(metrics.maxMem);
+      document.getElementById('gpu-total-memory').textContent = formatMemory(metrics.totalMemory);
+      document.getElementById('gpu-used-memory').textContent = formatMemory(metrics.usedMemory);
+      document.getElementById('gpu-updated').textContent = `更新时间：${metrics.timestamp}`;
+      const summaryEl = document.getElementById('gpu-summary');
+      summaryEl.dataset.kind = metrics.total ? statusKindForPercent(Math.max(metrics.avgUtil, metrics.avgMem)) : 'info';
+      summaryEl.textContent = metrics.total
+        ? `${metrics.message || `已识别 ${metrics.total} 张 GPU`} · 活跃 ${metrics.active} 张 · 厂商 ${metrics.vendorLabel}`
+        : (metrics.message || '暂无 GPU 数据。');
+      document.getElementById('gpu-card-count').textContent = `${metrics.total} 张设备`;
+
+      const cards = document.getElementById('gpu-cards');
+      syncExpandedDeviceDetailsFromDom();
+      const currentKeys = new Set(metrics.devices.map((device, index) => historyKey(device, index)));
+      Array.from(expandedDeviceDetails).forEach((key) => {
+        if (!currentKeys.has(key)) expandedDeviceDetails.delete(key);
+      });
+      cards.innerHTML = metrics.total
+        ? metrics.devices.map((device, index) => renderDevice(device, index)).join('')
+        : '<div class="proj-empty-state monitor-empty-state">当前没有 GPU 指标。</div>';
+      bindDeviceDetailToggles();
+    }
+
+    function renderErrorState(message) {
+      const summaryEl = document.getElementById('gpu-summary');
+      summaryEl.dataset.kind = 'error';
+      summaryEl.textContent = message || 'GPU 数据加载失败。';
+      document.getElementById('gpu-updated').textContent = '更新时间：失败';
+      document.getElementById('gpu-total').textContent = '—';
+      document.getElementById('gpu-active').textContent = '—';
+      document.getElementById('gpu-avg-util').textContent = '—%';
+      document.getElementById('gpu-avg-mem').textContent = '—%';
+      document.getElementById('gpu-max-util').textContent = '—%';
+      document.getElementById('gpu-max-mem').textContent = '—%';
+      document.getElementById('gpu-total-memory').textContent = '—';
+      document.getElementById('gpu-used-memory').textContent = '—';
+      document.getElementById('gpu-card-count').textContent = '0 张设备';
+      document.getElementById('gpu-history-summary').textContent = 'GPU 数据读取失败';
+      document.getElementById('gpu-cards').innerHTML = `<div class="proj-empty-state monitor-empty-state">${escapeHtml(message || 'GPU 数据加载失败。')}</div>`;
+    }
+
+    const ADMIN_LOGIN_PATH = '/admin/login';
+    const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+    const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+    let adminAuthRedirectPending = false;
+
+    function clearAdminAuthArtifacts() {
+      try {
+        window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+      } catch {}
+      document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    }
+
+    function redirectToAdminLogin() {
+      if (adminAuthRedirectPending) return;
+      adminAuthRedirectPending = true;
+      clearAdminAuthArtifacts();
+      const nextPath = window.parent && window.parent !== window
+        ? '/admin/panel'
+        : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+          return;
+        }
+      } catch {}
+      window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+    }
+
+    async function fetchAdminJson(path, options = {}) {
+      const response = await fetch(path, { credentials: 'same-origin', ...options });
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      const data = contentType.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : await response.text().catch(() => '');
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        if (typeof data === 'string') {
+          throw new Error(data || `HTTP ${response.status}`);
+        }
+        throw new Error(data.detail || data.message || `HTTP ${response.status}`);
+      }
+      if (typeof data === 'string') {
+        throw new Error('接口未返回 JSON。');
+      }
+      return data;
+    }
+
+    async function refreshGpu() {
+      try {
+        const data = await fetchAdminJson('/admin/api/system/gpu', { cache: 'no-store' });
+        const metrics = deriveMetrics(data || {});
+        pushHistory(metrics);
+        renderChart();
+        updateSummary(metrics);
+      } catch (error) {
+        console.error(error);
+        renderErrorState(error?.message || String(error || 'GPU 数据加载失败。'));
+      }
+    }
+
+    ensureChart();
+    refreshGpu();
+    startPolling();
+    window.addEventListener('pagehide', stopPolling);
+    window.addEventListener('beforeunload', stopPolling);
+  </script>
+</body>
+</html>

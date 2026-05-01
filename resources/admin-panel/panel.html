@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>管理面板</title>
+  <script src="/vendor/tailwindcss/tailwindcss-cdn.js"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/html-assets/css/panel-shell.css" />
+</head>
+<body class="panel-shell-body">
+
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════════ -->
+<aside id="sidebar" class="flex flex-col gap-px">
+  <div class="panel-brand">
+    <div class="panel-brand-row">
+      <span id="health-dot" class="h-2.5 w-2.5 rounded-full bg-slate-400 transition-colors"></span>
+      <div id="server-addr" class="font-mono truncate">—</div>
+    </div>
+  </div>
+
+  <button class="nav-item active" id="nav-system" onclick="toggleSystemGroup()">
+    <span class="icon"></span><span data-i18n="nav.system">系统</span>
+    <svg id="system-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+  </button>
+  <div id="system-sub-group" class="pl-3.5 space-y-px">
+    <button class="nav-item text-xs active" id="nav-system-overview" onclick="showSystemSub('overview')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.sys.overview">概览</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-system-cpu" onclick="showSystemSub('cpu')">
+      <span class="icon" style="width:5px;height:5px;"></span><span>CPU</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-system-gpu" onclick="showSystemSub('gpu')">
+      <span class="icon" style="width:5px;height:5px;"></span><span>GPU</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-system-terminal" onclick="showSystemSub('terminal')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.sys.terminal">终端</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-system-files" onclick="showSystemSub('files')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.sys.files">文件</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-system-processes" onclick="showSystemSub('processes')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.sys.processes">进程</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-system-ports" onclick="showSystemSub('ports')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.sys.ports">占用端口</span>
+    </button>
+  </div>
+  <button class="nav-item" id="nav-rooms" onclick="toggleRoomsGroup()">
+    <span class="icon"></span><span data-i18n="nav.rooms">RTC聊天室</span>
+    <svg id="rooms-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+  </button>
+  <div id="rooms-sub-group" class="hidden pl-3.5 space-y-px">
+    <button class="nav-item text-xs" id="nav-rooms-manage" onclick="showRoomsSub('manage')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.rooms.manage">管理</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-rooms-test" onclick="showRoomsSub('test')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.rooms.test">测试</span>
+    </button>
+  </div>
+
+  <!-- 日志 (expandable group) -->
+  <button class="nav-item" id="nav-loglab" onclick="toggleLogGroup()">
+    <span class="icon"></span><span data-i18n="nav.log">日志</span>
+    <svg id="log-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+  </button>
+  <div id="log-sub-group" class="hidden pl-3.5 space-y-px">
+    <button class="nav-item text-xs" id="nav-log-overview" onclick="showLogSub('overview')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.log.overview">概览</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-log-analysis" onclick="showLogSub('analysis')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.log.analysis">分析</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-log-detail" onclick="showLogSub('detail')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.log.detail">详情</span>
+    </button>
+  </div>
+
+  <!-- AI服务 (expandable group) -->
+  <button class="nav-item" id="nav-ailab" onclick="toggleAIServiceGroup()">
+    <span class="icon"></span><span data-i18n="nav.ai">AI 服务</span>
+    <svg id="ai-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+  </button>
+  <div id="ai-sub-group" class="hidden pl-3.5 space-y-px">
+    <button class="nav-item text-xs" id="nav-ai-overview" onclick="showAIServiceSub('overview')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.ai.overview">概览</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-ai-settings" onclick="showAIServiceSub('settings')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.ai.settings">实例</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-ai-test" onclick="showAIServiceSub('test')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.ai.test">测试</span>
+    </button>
+  </div>
+
+  <!-- 存储 (expandable group) -->
+  <button class="nav-item" id="nav-storagelab" onclick="toggleStorageGroup()">
+    <span class="icon"></span><span data-i18n="nav.storage">存储</span>
+    <svg id="storage-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+  </button>
+  <div id="storage-sub-group" class="hidden pl-3.5 space-y-px">
+    <button class="nav-item text-xs" id="nav-storage-kv" onclick="showStorageSub('kv')">
+      <span class="icon" style="width:5px;height:5px;"></span><span>KV</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-storage-object" onclick="showStorageSub('object')">
+      <span class="icon" style="width:5px;height:5px;"></span><span>Object</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-storage-orm" onclick="showStorageSub('orm')">
+      <span class="icon" style="width:5px;height:5px;"></span><span>ORM</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-storage-vector" onclick="showStorageSub('vector')">
+      <span class="icon" style="width:5px;height:5px;"></span><span>Vector</span>
+    </button>
+  </div>
+
+  <button class="nav-item" id="nav-api" onclick="showTab('api')">
+    <span class="icon"></span><span data-i18n="nav.api">API 文档</span>
+  </button>
+
+  <button class="nav-item" id="nav-backendlab" onclick="toggleBackendGroup()">
+    <span class="icon"></span><span data-i18n="nav.backend">后端</span>
+    <svg id="backend-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+  </button>
+  <div id="backend-sub-group" class="hidden pl-3.5 space-y-px">
+    <button class="nav-item text-xs" id="nav-backend-overview" onclick="showBackendSub('overview')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.overview">概览</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-backend-settings" onclick="showBackendSub('settings')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.settings">设置</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-backend-apikey" onclick="showBackendSub('apikey')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.apikey">APIKey</span>
+    </button>
+    <button class="nav-item text-xs" id="nav-backend-role" onclick="showBackendSub('role')">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.role">Role</span>
+    </button>
+  </div>
+
+  <div class="flex-1"></div>
+  <button onclick="toggleLang()" class="nav-item" id="lang-toggle" title="Language">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span id="lang-label">简</span>
+  </button>
+  <button onclick="toggleDark()" class="nav-item">
+    <svg id="dark-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span id="dark-label">深色</span>
+  </button>
+  <button onclick="requestPanelLogout()" class="nav-item" id="panel-logout-btn" title="Logout">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span data-i18n="nav.logout">退出登录</span>
+  </button>
+</aside>
+
+<!-- ═══════════════════════ SIDEBAR RESIZER ══════════════════ -->
+<div id="sidebar-resizer" role="separator" aria-orientation="vertical">
+  <button id="sidebar-toggle" type="button" aria-label="折叠侧栏">‹</button>
+</div>
+
+<!-- ═══════════════════════ MAIN ══════════════════════════════ -->
+<div id="main">
+
+  <div id="page-stage">
+
+  <!-- ── SYSTEM TAB ───────────────────────────────────────── -->
+  <div id="page-system" class="flex-1 overflow-hidden">
+    <div id="system-view-overview" class="system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-overview-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-overview-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">系统概览载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接系统概览页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-view-cpu" class="hidden system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-cpu-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-cpu-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">CPU 页面载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接 CPU 监控页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-view-gpu" class="hidden system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-gpu-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-gpu-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">GPU 页面载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接 GPU 监控页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-view-terminal" class="hidden system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-terminal-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-terminal-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">系统终端载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接系统终端页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-view-files" class="hidden system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-files-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-files-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">系统文件页载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接系统文件页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-view-processes" class="hidden system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-processes-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-processes-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">系统进程页载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接系统进程页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="system-view-ports" class="hidden system-frame overflow-hidden">
+      <div class="iframe-shell h-full">
+        <iframe id="system-ports-iframe" src="about:blank" class="iframe-panel"></iframe>
+        <div id="system-ports-frame-state" class="iframe-fallback hidden">
+          <div>
+            <div class="text-sm font-semibold">系统端口页载入中</div>
+            <div class="text-xs mt-2 opacity-80" data-role="message">正在连接系统端口页面…</div>
+            <div class="iframe-actions">
+              <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ROOMS TAB ────────────────────────────────────────── -->
+  <div id="page-rooms" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="rooms-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="rooms-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">RTC 房间管理载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接房间管理页面…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LOG LAB TAB (iframe container for log sub-pages) ────── -->
+  <div id="page-loglab" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="loglab-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="loglab-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">日志页面载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接日志分析页…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── AI SERVICES TAB (iframe container for AI service sub-pages) ─── -->
+  <div id="page-ailab" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="ailab-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="ailab-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">AI 服务页面载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接 AI 服务概览…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STORAGE LAB TAB (iframe container for storage sub-pages) ─── -->
+  <div id="page-storagelab" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="storagelab-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="storagelab-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">存储页面载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接存储工作台…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── API DOC TAB ──────────────────────────────────────── -->
+  <div id="page-api" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="api-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="api-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">API 文档载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在打开 Swagger 文档…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BACKEND TAB (iframe container for backend sub-pages) ─── -->
+  <div id="page-backendlab" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="backendlab-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="backendlab-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">后端页面载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接后端概览 / 设置页面…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div>
+
+  <!-- ── Room Detail Modal ────────────────────────────────── -->
+  <div id="room-detail-modal" class="hidden fixed inset-0 z-40 bg-black/35 items-center justify-center p-4">
+    <div class="w-full max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-xl">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10">
+        <div class="text-sm font-semibold" id="room-detail-title">房间详情</div>
+        <button onclick="closeRoomDetailModal()" class="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700">关闭</button>
+      </div>
+      <div class="p-4 space-y-3 text-sm">
+        <div class="grid grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-300">
+          <div><span class="text-slate-400">房间ID</span><div id="room-detail-id" class="font-mono break-all mt-0.5">—</div></div>
+          <div><span class="text-slate-400">Worker</span><div id="room-detail-worker" class="mt-0.5">—</div></div>
+          <div><span class="text-slate-400">房间名称</span><div id="room-detail-name" class="mt-0.5">—</div></div>
+          <div><span class="text-slate-400">成员数</span><div id="room-detail-count" class="mt-0.5">0</div></div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 mb-1">成员列表</div>
+          <div id="room-detail-members" class="max-h-48 overflow-y-auto rounded border border-slate-200 dark:border-white/10 divide-y divide-slate-100 dark:divide-white/5"></div>
+        </div>
+      </div>
+      <div class="px-4 py-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+        <button id="room-detail-copy" class="text-xs px-3 py-1.5 rounded bg-slate-100 dark:bg-slate-800">复制ID</button>
+        <button id="room-detail-stop" class="text-xs px-3 py-1.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">强制停止</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="terminal-leave-modal" class="hidden fixed inset-0 z-50 bg-black/45 items-center justify-center p-4 backdrop-blur-[1px]">
+    <div class="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-white/10">
+        <div class="text-[11px] font-bold tracking-[0.18em] uppercase text-slate-400">System Terminal</div>
+        <div id="terminal-leave-modal-title" class="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">终端会话仍在运行</div>
+      </div>
+      <div class="px-5 py-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
+        <div id="terminal-leave-modal-summary" class="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/70 px-4 py-3 text-sm leading-6"></div>
+        <p id="terminal-leave-modal-body" class="leading-6"></p>
+        <p id="terminal-leave-modal-note" class="text-xs leading-5 text-slate-500 dark:text-slate-400"></p>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-end gap-2 bg-slate-50/80 dark:bg-slate-950/40">
+        <button id="terminal-leave-keep-btn" type="button" class="px-3.5 py-2 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">保留并离开</button>
+        <button id="terminal-leave-close-btn" type="button" class="px-3.5 py-2 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-500">关闭全部并离开</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end #main -->
+
+<script src="/vendor/chart/chart.js"></script>
+<script src="/html-assets/js/core-ui-utils.js"></script>
+<script src="/html-assets/js/core-url-state-sync.js"></script>
+<script>
+'use strict';
+
+// ── Dark mode ─────────────────────────────────────────────────────────────────
+const CoreUtils = window.ProjUtils || null;
+const panelStore = CoreUtils ? CoreUtils.persist('proj-panel') : null;
+const PANEL_ADMIN_MARKER = '/admin/panel';
+let adminBasePath = (() => {
+  const pathname = window.location.pathname || '';
+  const markerIndex = pathname.lastIndexOf(PANEL_ADMIN_MARKER);
+  return markerIndex >= 0 ? pathname.slice(0, markerIndex) + '/admin' : '/admin';
+})();
+
+function adminPath(path) {
+  if (!path) return adminBasePath;
+  return path.startsWith('/admin') ? adminBasePath + path.slice('/admin'.length) : path;
+}
+
+function panelRootPath() {
+  return adminPath('/admin/panel');
+}
+
+let darkMode = (() => {
+  const stored = panelStore?.get('dark', null);
+  if (typeof stored === 'boolean') return stored;
+  return localStorage.getItem('panel-dark') !== 'false';
+})();
+const PANEL_STATE_KEY = 'proj-panel-state-v2';
+function applyDark() {
+  document.documentElement.classList.toggle('dark', darkMode);
+  document.getElementById('dark-label').textContent = darkMode ? t('dark-on') : t('dark-off');
+  const icon = document.getElementById('dark-icon');
+  if (icon) icon.innerHTML = darkMode
+    ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  panelStore?.set('dark', darkMode);
+  localStorage.setItem('panel-dark', darkMode);
+  syncToIframes();
+}
+function syncToIframes() {
+  document.querySelectorAll('iframe.iframe-panel').forEach(iframe => {
+    try {
+      iframe.contentWindow.postMessage({ type: 'proj-sync', dark: darkMode, lang: panelLang }, '*');
+    } catch {}
+  });
+}
+function toggleDark() { darkMode = !darkMode; applyDark(); }
+
+// ── Language ──────────────────────────────────────────────────────────────────
+const PANEL_LANGS = ['zh-cn', 'zh-tw', 'en'];
+const PANEL_LANG_LABELS = { 'zh-cn': '简', 'zh-tw': '繁', en: 'EN' };
+const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
+const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
+let panelLang = (() => {
+  const stored = panelStore?.get('lang', localStorage.getItem('proj-lang'));
+  return PANEL_LANGS.includes(stored) ? stored : 'zh-cn';
+})();
+const PANEL_I18N = {
+  'nav.system':     { 'zh-cn':'系统','zh-tw':'系統',en:'System' },
+  'nav.sys.overview':{ 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
+  'nav.sys.terminal':{ 'zh-cn':'终端','zh-tw':'終端',en:'Terminal' },
+  'nav.sys.files':   { 'zh-cn':'文件','zh-tw':'文件',en:'Files' },
+  'nav.sys.processes':{ 'zh-cn':'进程','zh-tw':'進程',en:'Processes' },
+  'nav.sys.ports':   { 'zh-cn':'占用端口','zh-tw':'佔用端口',en:'Ports' },
+  'nav.rooms':       { 'zh-cn':'RTC聊天室','zh-tw':'RTC聊天室',en:'RTC Chatroom' },
+  'nav.rooms.manage':{ 'zh-cn':'管理','zh-tw':'管理',en:'Manage' },
+  'nav.rooms.test':  { 'zh-cn':'测试','zh-tw':'測試',en:'Test' },
+  'nav.log':         { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
+  'nav.log.overview':{ 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
+  'nav.log.service': { 'zh-cn':'服务日志','zh-tw':'服務日誌',en:'Service Logs' },
+  'nav.log.backend': { 'zh-cn':'后端日志','zh-tw':'後端日誌',en:'Backend Logs' },
+  'nav.log.analysis':{ 'zh-cn':'分析','zh-tw':'分析',en:'Analysis' },
+  'nav.log.detail':  { 'zh-cn':'详情','zh-tw':'詳情',en:'Detail' },
+  'nav.test.ai':     { 'zh-cn':'AI 服务测试','zh-tw':'AI 服務測試',en:'AI Test' },
+  'nav.storage':     { 'zh-cn':'存储','zh-tw':'存儲',en:'Storage' },
+  'nav.api':         { 'zh-cn':'API 文档','zh-tw':'API 文檔',en:'API Docs' },
+  'nav.backend':     { 'zh-cn':'后端','zh-tw':'後端',en:'Backend' },
+  'nav.backend.overview': { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
+  'nav.backend.settings': { 'zh-cn':'设置','zh-tw':'設置',en:'Settings' },
+  'nav.backend.apikey': { 'zh-cn':'APIKey','zh-tw':'APIKey',en:'APIKey' },
+  'nav.backend.role': { 'zh-cn':'Role','zh-tw':'Role',en:'Role' },
+  'nav.logout':      { 'zh-cn':'退出登录','zh-tw':'退出登入',en:'Sign Out' },
+  'dark-on':         { 'zh-cn':'浅色','zh-tw':'淺色',en:'Light' },
+  'dark-off':        { 'zh-cn':'深色','zh-tw':'深色',en:'Dark' },
+  'tab.system':      { 'zh-cn':'系统','zh-tw':'系統',en:'System' },
+  'tab.rooms':       { 'zh-cn':'RTC聊天室','zh-tw':'RTC聊天室',en:'RTC Chatroom' },
+  'tab.loglab':      { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
+  'tab.storagelab':  { 'zh-cn':'存储','zh-tw':'存儲',en:'Storage' },
+  'tab.api':         { 'zh-cn':'API 文档','zh-tw':'API 文檔',en:'API Docs' },
+  'tab.backendlab':  { 'zh-cn':'后端','zh-tw':'後端',en:'Backend' },
+  'title.sys.overview':  { 'zh-cn':'系统 · 概览','zh-tw':'系統 · 概覽',en:'System · Overview' },
+  'title.sys.cpu':       { 'zh-cn':'系统 · CPU','zh-tw':'系統 · CPU',en:'System · CPU' },
+  'title.sys.gpu':       { 'zh-cn':'系统 · GPU','zh-tw':'系統 · GPU',en:'System · GPU' },
+  'title.sys.terminal':  { 'zh-cn':'系统 · 终端','zh-tw':'系統 · 終端',en:'System · Terminal' },
+  'title.sys.files':     { 'zh-cn':'系统 · 文件','zh-tw':'系統 · 文件',en:'System · Files' },
+  'title.sys.processes': { 'zh-cn':'系统 · 进程','zh-tw':'系統 · 進程',en:'System · Processes' },
+  'title.sys.ports':     { 'zh-cn':'系统 · 占用端口','zh-tw':'系統 · 佔用端口',en:'System · Ports' },
+  'title.rooms.manage': { 'zh-cn':'RTC聊天室 · 管理','zh-tw':'RTC聊天室 · 管理',en:'RTC Chatroom · Manage' },
+  'title.rooms.test':   { 'zh-cn':'RTC聊天室 · 测试','zh-tw':'RTC聊天室 · 測試',en:'RTC Chatroom · Test' },
+  'title.test.ai':       { 'zh-cn':'AI 服务测试','zh-tw':'AI 服務測試',en:'AI Test' },
+  'title.log.overview':  { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
+  'title.log.service':   { 'zh-cn':'服务日志','zh-tw':'服務日誌',en:'Service Logs' },
+  'title.log.backend':   { 'zh-cn':'后端日志','zh-tw':'後端日誌',en:'Backend Logs' },
+  'title.log.analysis':  { 'zh-cn':'日志 · 分析','zh-tw':'日誌 · 分析',en:'Logs · Analysis' },
+  'title.log.detail':    { 'zh-cn':'日志 · 详情','zh-tw':'日誌 · 詳情',en:'Logs · Detail' },
+  'title.storage.kv':    { 'zh-cn':'KV 存储','zh-tw':'KV 存儲',en:'KV Storage' },
+  'title.storage.object':{ 'zh-cn':'Object 存储','zh-tw':'Object 存儲',en:'Object Storage' },
+  'title.storage.orm':   { 'zh-cn':'ORM 数据','zh-tw':'ORM 數據',en:'ORM Data' },
+  'title.storage.vector':{ 'zh-cn':'Vector 数据','zh-tw':'Vector 數據',en:'Vector Data' },
+  'title.backend.overview': { 'zh-cn':'后端 · 概览','zh-tw':'後端 · 概覽',en:'Backend · Overview' },
+  'title.backend.settings': { 'zh-cn':'后端 · 设置','zh-tw':'後端 · 設置',en:'Backend · Settings' },
+  'title.backend.apikey': { 'zh-cn':'后端 · APIKey','zh-tw':'後端 · APIKey',en:'Backend · APIKey' },
+  'title.backend.role': { 'zh-cn':'后端 · Role','zh-tw':'後端 · Role',en:'Backend · Role' },
+  'nav.ai':          { 'zh-cn':'AI服务','zh-tw':'AI服務',en:'AI Services' },
+  'nav.ai.overview': { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
+  'nav.ai.logs':     { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
+  'nav.ai.settings': { 'zh-cn':'实例','zh-tw':'實例',en:'Instances' },
+  'nav.ai.test':     { 'zh-cn':'测试','zh-tw':'測試',en:'Tests' },
+  'tab.ailab':       { 'zh-cn':'AI服务','zh-tw':'AI服務',en:'AI Services' },
+  'title.ai.overview':  { 'zh-cn':'AI服务 · 概览','zh-tw':'AI服務 · 概覽',en:'AI Services · Overview' },
+  'title.ai.logs':      { 'zh-cn':'AI服务 · 日志','zh-tw':'AI服務 · 日誌',en:'AI Services · Logs' },
+  'title.ai.settings':  { 'zh-cn':'AI服务 · 实例','zh-tw':'AI服務 · 實例',en:'AI Services · Instances' },
+  'title.ai.test':      { 'zh-cn':'AI服务 · 测试','zh-tw':'AI服務 · 測試',en:'AI Services · Tests' },
+  'terminal.leave.title': { 'zh-cn':'终端会话仍在运行','zh-tw':'終端會話仍在運行',en:'Terminal sessions are still running' },
+  'terminal.leave.summary': { 'zh-cn':'当前终端页还有 {count} 个标签，其中 {connected} 个在线连接。','zh-tw':'目前終端頁還有 {count} 個標籤，其中 {connected} 個在線連線。',en:'The terminal page still has {count} tab(s), {connected} of them connected.' },
+  'terminal.leave.body': { 'zh-cn':'你现在离开“系统-终端”时，可以直接关闭这些 session，也可以把它们保留在后台继续运行。','zh-tw':'你現在離開「系統-終端」時，可以直接關閉這些 session，也可以把它們保留在背景繼續運行。',en:'When leaving System Terminal, you can either close these sessions now or keep them running in the background.' },
+  'terminal.leave.note': { 'zh-cn':'这次选择会在当前 panel 页面里记住，后续离开终端时直接沿用。','zh-tw':'這次選擇會在目前 panel 頁面裡記住，之後離開終端時直接沿用。',en:'This choice will be remembered for the current panel page and reused the next time you leave the terminal.' },
+  'terminal.leave.keep': { 'zh-cn':'保留并离开','zh-tw':'保留並離開',en:'Keep running and leave' },
+  'terminal.leave.close': { 'zh-cn':'关闭全部并离开','zh-tw':'關閉全部並離開',en:'Close all sessions and leave' },
+  'logout.confirm.title': { 'zh-cn':'退出登录','zh-tw':'退出登入',en:'Sign Out' },
+  'logout.confirm.text': { 'zh-cn':'确认退出当前 admin 会话吗？\n\n退出后会清除本地 APIKey，并回到独立登录页。','zh-tw':'確認退出目前 admin 會話嗎？\n\n退出後會清除本地 APIKey，並回到獨立登入頁。',en:'Sign out of the current admin session?\n\nThis clears the local API key and returns to the standalone login page.' },
+  'logout.confirm.ok': { 'zh-cn':'退出','zh-tw':'退出',en:'Sign Out' },
+  'logout.failed': { 'zh-cn':'退出请求失败，已直接回到登录页。','zh-tw':'退出請求失敗，已直接回到登入頁。',en:'Logout request failed. Returning to the login page anyway.' },
+  'loading.open':    { 'zh-cn':'正在打开','zh-tw':'正在開啟',en:'Opening' },
+  'loading.slow':    { 'zh-cn':'加载较慢，可直接重试。','zh-tw':'載入較慢，可直接重試。',en:'Loading is slow. Try retrying.' },
+};
+function t(key) {
+  const e = PANEL_I18N[key];
+  return e ? (e[panelLang] || e['zh-cn'] || key) : key;
+}
+function tf(key, params = {}) {
+  return Object.entries(params).reduce((text, [paramKey, paramValue]) => {
+    return text.replaceAll(`{${paramKey}}`, String(paramValue));
+  }, t(key));
+}
+function applyPanelLang() {
+  localStorage.setItem('proj-lang', panelLang);
+  panelStore?.set('lang', panelLang);
+  document.documentElement.lang = panelLang === 'zh-tw' ? 'zh-TW' : panelLang === 'en' ? 'en' : 'zh-CN';
+  document.getElementById('lang-label').textContent = PANEL_LANG_LABELS[panelLang] || panelLang;
+  document.getElementById('dark-label').textContent = darkMode ? t('dark-on') : t('dark-off');
+  // Update data-i18n elements
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const val = t(key);
+    if (val !== key) el.textContent = val;
+  });
+  if (terminalLeaveModalOpen) renderTerminalLeaveModal();
+  syncToIframes();
+}
+function toggleLang() {
+  const idx = PANEL_LANGS.indexOf(panelLang);
+  panelLang = PANEL_LANGS[(idx + 1) % PANEL_LANGS.length];
+  applyPanelLang();
+}
+// Listen for child iframe dark/lang changes
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || typeof d !== 'object') return;
+  if (d.type === 'proj-dark-changed') { darkMode = !!d.value; applyDark(); }
+  if (d.type === 'proj-lang-changed' && PANEL_LANGS.includes(d.value)) { panelLang = d.value; applyPanelLang(); }
+  if (d.type === 'proj-admin-auth-expired') {
+    handlePanelAuthExpired(typeof d.nextPath === 'string' ? d.nextPath : panelRootPath());
+  }
+  if (d.type === 'proj-terminal-state') {
+    setTerminalSessionState({
+      sessionCount: d.sessionCount,
+      connectedCount: d.connectedCount,
+    });
+  }
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const TABS = ['system','rooms','loglab','ailab','storagelab','api','backendlab'];
+const SYSTEM_SUB_KEYS = ['overview', 'cpu', 'gpu', 'terminal', 'files', 'processes', 'ports'];
+const ROOMS_SUB_KEYS = ['manage','test'];
+const ROOMS_SUB_URLS = { manage:'/admin/rtc_room/manage', test:'/admin/test/chatroom' };
+const LOG_SUB_KEYS = ['overview','analysis','detail'];
+const AI_SUB_KEYS = ['overview','settings','test'];
+const AI_SUB_URLS = { overview:'/admin/panel/ai-services/overview', settings:'/admin/panel/ai-services/settings', test:'/admin/test/ai' };
+const STORAGE_SUB_KEYS = ['kv','object','orm','vector'];
+const BACKEND_SUB_KEYS = ['overview','settings','apikey','role'];
+let activeTab = 'system';
+let activeSystemSub = 'overview';
+let systemGroupOpen = true;
+let activeRoomsSub = null;
+let roomsGroupOpen = false;
+let activeLogSub = null;
+let logGroupOpen = false;
+let activeAISub = null;
+let aiGroupOpen = false;
+let activeStorageSub = null;
+let storageGroupOpen = false;
+let activeBackendSub = null;
+let backendGroupOpen = false;
+const TERMINAL_IFRAME_ID = 'system-terminal-iframe';
+const PANEL_RELEASABLE_IFRAME_IDS = [
+  'system-overview-iframe',
+  'system-cpu-iframe',
+  'system-gpu-iframe',
+  TERMINAL_IFRAME_ID,
+  'system-processes-iframe',
+  'system-ports-iframe',
+];
+let activeIframeResourceId = null;
+const warmIframeResourceIds = [];
+let terminalLeavePreference = null;
+let terminalSessionState = {
+  sessionCount: 0,
+  connectedCount: 0,
+  hasSessions: false,
+  hasConnectedSessions: false,
+};
+let terminalLeavePendingAction = null;
+let terminalLeaveModalOpen = false;
+
+applyDark();
+applyPanelLang();
+
+function savePanelState() {
+  const state = {
+    activeTab,
+    activeSystemSub,
+    systemGroupOpen,
+    activeRoomsSub,
+    roomsGroupOpen,
+    activeLogSub,
+    logGroupOpen,
+    activeAISub,
+    aiGroupOpen,
+    activeStorageSub,
+    storageGroupOpen,
+    activeBackendSub,
+    backendGroupOpen,
+  };
+  try {
+    panelStore?.set('state', state);
+    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+function restorePanelState() {
+  try {
+    return panelStore?.get('state', JSON.parse(localStorage.getItem(PANEL_STATE_KEY) || '{}') || {}) || {};
+  } catch {
+    return {};
+  }
+}
+
+function clearPanelState() {
+  try {
+    panelStore?.remove('state');
+  } catch {}
+  try {
+    localStorage.removeItem(PANEL_STATE_KEY);
+  } catch {}
+}
+
+function clearAdminSessionArtifacts() {
+  try {
+    localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
+  } catch {}
+  document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+function buildAdminLoginUrl(nextPath) {
+  const fallback = panelRootPath();
+  const normalized = typeof nextPath === 'string' && nextPath.startsWith('/') ? nextPath : fallback;
+  return `${adminPath('/admin/login')}?next=${encodeURIComponent(normalized)}`;
+}
+
+function redirectToStandaloneLogin(nextPath) {
+  window.location.assign(buildAdminLoginUrl(nextPath));
+}
+
+let panelAuthRedirectPending = false;
+
+function handlePanelAuthExpired(nextPath = panelRootPath()) {
+  if (panelAuthRedirectPending) return;
+  panelAuthRedirectPending = true;
+  clearAdminSessionArtifacts();
+  clearPanelState();
+  redirectToStandaloneLogin(nextPath);
+}
+
+async function runPanelLogout() {
+  let requestFailed = false;
+  try {
+    const response = await fetch(adminPath('/admin/logout'), {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      requestFailed = true;
+    }
+  } catch {
+    requestFailed = true;
+  }
+  clearAdminSessionArtifacts();
+  clearPanelState();
+  if (requestFailed) {
+    CoreUtils?.showToast?.(t('logout.failed'), 'warn', 2400);
+  }
+  redirectToStandaloneLogin(panelRootPath());
+}
+
+async function requestPanelLogout() {
+  if (CoreUtils?.confirmDialog) {
+    const confirmed = await CoreUtils.confirmDialog({
+      title: t('logout.confirm.title'),
+      text: t('logout.confirm.text'),
+      okText: t('logout.confirm.ok'),
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+  }
+  withTerminalLeaveGuard(false, () => {
+    void runPanelLogout();
+  });
+}
+
+function setIframeState(stateId, message, visible = true) {
+  const state = document.getElementById(stateId);
+  if (!state) return;
+  const label = state.querySelector('[data-role="message"]');
+  if (label) label.textContent = message || '';
+  state.classList.toggle('hidden', !visible);
+}
+
+function buildSyncedIframeUrl(url) {
+  if (!window.ProjUrlStateSync) return url;
+  return window.ProjUrlStateSync.withUiState(url, {
+    dark: darkMode,
+    lang: panelLang,
+    controls: false,
+  });
+}
+
+function ensureIframeLoaded(iframeId, stateId, url, title) {
+  const iframe = document.getElementById(iframeId);
+  if (!iframe || !url) return;
+  const syncedUrl = buildSyncedIframeUrl(url);
+  const current = iframe.dataset.targetUrl || '';
+  if (current === syncedUrl && iframe.src && iframe.src !== 'about:blank') {
+    setIframeState(stateId, '', false);
+    return;
+  }
+  iframe.dataset.targetUrl = syncedUrl;
+  setIframeState(stateId, `${t('loading.open')}${title}…`, true);
+  if (iframe.dataset.pendingTimer) clearTimeout(Number(iframe.dataset.pendingTimer));
+  if (iframe.dataset.pollTimer) clearInterval(Number(iframe.dataset.pollTimer));
+  iframe.dataset.pendingTimer = String(window.setTimeout(() => {
+    setIframeState(stateId, t('loading.slow'), true);
+  }, 8000));
+  // Capture old document reference to avoid false positive from stale readyState
+  let oldDoc = null;
+  try { oldDoc = iframe.contentDocument; } catch {}
+  iframe.src = syncedUrl;
+  // Poll as safety net: detect when iframe has loaded even if 'load' event is missed
+  iframe.dataset.pollTimer = String(window.setInterval(() => {
+    try {
+      const doc = iframe.contentDocument;
+      if (doc && doc !== oldDoc && doc.readyState === 'complete') {
+        if (iframe.dataset.pendingTimer) clearTimeout(Number(iframe.dataset.pendingTimer));
+        clearInterval(Number(iframe.dataset.pollTimer));
+        delete iframe.dataset.pollTimer;
+        setIframeState(stateId, '', false);
+      }
+    } catch { /* cross-origin — rely on load event */ clearInterval(Number(iframe.dataset.pollTimer)); delete iframe.dataset.pollTimer; }
+  }, 400));
+}
+
+function releaseIframeResource(iframeId) {
+  if (!iframeId) return;
+  const iframe = document.getElementById(iframeId);
+  if (!iframe) return;
+  if (iframe.dataset.pendingTimer) {
+    clearTimeout(Number(iframe.dataset.pendingTimer));
+    delete iframe.dataset.pendingTimer;
+  }
+  if (iframe.dataset.pollTimer) {
+    clearInterval(Number(iframe.dataset.pollTimer));
+    delete iframe.dataset.pollTimer;
+  }
+  const stateId = iframe.dataset.stateId;
+  if (stateId) setIframeState(stateId, '', false);
+  if ((iframe.getAttribute('src') || '') !== 'about:blank') {
+    iframe.src = 'about:blank';
+  }
+  if (iframeId === TERMINAL_IFRAME_ID) {
+    terminalSessionState = {
+      sessionCount: 0,
+      connectedCount: 0,
+      hasSessions: false,
+      hasConnectedSessions: false,
+    };
+  }
+}
+
+function setTerminalSessionState(nextState = {}) {
+  const sessionCount = Math.max(0, Number(nextState.sessionCount) || 0);
+  const connectedCount = Math.max(0, Math.min(sessionCount, Number(nextState.connectedCount) || 0));
+  terminalSessionState = {
+    sessionCount,
+    connectedCount,
+    hasSessions: sessionCount > 0,
+    hasConnectedSessions: connectedCount > 0,
+  };
+  if (!terminalSessionState.hasSessions && terminalLeaveModalOpen) {
+    resolveTerminalLeaveChoice(null);
+    return;
+  }
+  syncTerminalIframeRetention();
+}
+
+function terminalShouldStayPinned() {
+  return terminalLeavePreference === 'keep' && terminalSessionState.hasSessions;
+}
+
+function syncTerminalIframeRetention() {
+  if (terminalShouldStayPinned()) return;
+  if (activeIframeResourceId === TERMINAL_IFRAME_ID || warmIframeResourceIds.includes(TERMINAL_IFRAME_ID)) return;
+  releaseIframeResource(TERMINAL_IFRAME_ID);
+}
+
+function requestTerminalCloseAllSessions() {
+  const iframe = document.getElementById(TERMINAL_IFRAME_ID);
+  try {
+    iframe?.contentWindow?.postMessage({ type: 'proj-terminal-close-all' }, '*');
+  } catch {}
+  setTerminalSessionState({ sessionCount: 0, connectedCount: 0 });
+}
+
+function renderTerminalLeaveModal() {
+  const summary = document.getElementById('terminal-leave-modal-summary');
+  const title = document.getElementById('terminal-leave-modal-title');
+  const body = document.getElementById('terminal-leave-modal-body');
+  const note = document.getElementById('terminal-leave-modal-note');
+  const keepBtn = document.getElementById('terminal-leave-keep-btn');
+  const closeBtn = document.getElementById('terminal-leave-close-btn');
+  if (title) title.textContent = t('terminal.leave.title');
+  if (summary) {
+    summary.textContent = tf('terminal.leave.summary', {
+      count: terminalSessionState.sessionCount,
+      connected: terminalSessionState.connectedCount,
+    });
+  }
+  if (body) body.textContent = t('terminal.leave.body');
+  if (note) note.textContent = t('terminal.leave.note');
+  if (keepBtn) keepBtn.textContent = t('terminal.leave.keep');
+  if (closeBtn) closeBtn.textContent = t('terminal.leave.close');
+}
+
+function setTerminalLeaveModalOpen(open) {
+  const modal = document.getElementById('terminal-leave-modal');
+  if (!modal) return;
+  terminalLeaveModalOpen = !!open;
+  modal.classList.toggle('hidden', !terminalLeaveModalOpen);
+  modal.classList.toggle('flex', terminalLeaveModalOpen);
+  modal.setAttribute('aria-hidden', terminalLeaveModalOpen ? 'false' : 'true');
+  if (terminalLeaveModalOpen) {
+    renderTerminalLeaveModal();
+    window.requestAnimationFrame(() => document.getElementById('terminal-leave-close-btn')?.focus());
+  }
+}
+
+function resolveTerminalLeaveChoice(decision) {
+  const nextAction = terminalLeavePendingAction;
+  terminalLeavePendingAction = null;
+  setTerminalLeaveModalOpen(false);
+  if (decision === 'close') {
+    terminalLeavePreference = 'close';
+    requestTerminalCloseAllSessions();
+  } else if (decision === 'keep') {
+    terminalLeavePreference = 'keep';
+  }
+  if (typeof nextAction === 'function') nextAction();
+}
+
+function withTerminalLeaveGuard(nextIsTerminalView, onContinue) {
+  if (nextIsTerminalView) {
+    onContinue();
+    return;
+  }
+  if (activeTab !== 'system' || activeSystemSub !== 'terminal' || !terminalSessionState.hasSessions) {
+    onContinue();
+    return;
+  }
+  if (terminalLeavePreference === 'close') {
+    requestTerminalCloseAllSessions();
+    onContinue();
+    return;
+  }
+  if (terminalLeavePreference === 'keep') {
+    onContinue();
+    return;
+  }
+  terminalLeavePendingAction = onContinue;
+  setTerminalLeaveModalOpen(true);
+}
+
+function activateIframeResource(iframeId) {
+  if (!iframeId || activeIframeResourceId === iframeId) return;
+  const previousActive = activeIframeResourceId;
+  activeIframeResourceId = iframeId;
+  if (previousActive && previousActive !== iframeId) {
+    warmIframeResourceIds.unshift(previousActive);
+    if (warmIframeResourceIds.length > 2) warmIframeResourceIds.length = 2;
+  }
+  const keepAlive = new Set([activeIframeResourceId]);
+  warmIframeResourceIds.forEach((id) => {
+    if (id && id !== activeIframeResourceId) keepAlive.add(id);
+  });
+  if (terminalShouldStayPinned()) {
+    keepAlive.add(TERMINAL_IFRAME_ID);
+  }
+  PANEL_RELEASABLE_IFRAME_IDS.forEach((candidateId) => {
+    if (!keepAlive.has(candidateId)) releaseIframeResource(candidateId);
+  });
+}
+
+function bindIframeState(iframeId, stateId, title) {
+  const iframe = document.getElementById(iframeId);
+  const state = document.getElementById(stateId);
+  if (!iframe || !state) return;
+  iframe.dataset.stateId = stateId;
+  iframe.addEventListener('load', () => {
+    if (iframe.dataset.pendingTimer) clearTimeout(Number(iframe.dataset.pendingTimer));
+    if (iframe.dataset.pollTimer) { clearInterval(Number(iframe.dataset.pollTimer)); delete iframe.dataset.pollTimer; }
+    setIframeState(stateId, '', false);
+    try { iframe.contentWindow.postMessage({ type: 'proj-sync', dark: darkMode, lang: panelLang }, '*'); } catch {}
+  });
+  state.querySelector('[data-role="retry"]')?.addEventListener('click', () => {
+    const url = iframe.dataset.targetUrl;
+    if (!url) return;
+    iframe.src = 'about:blank';
+    ensureIframeLoaded(iframeId, stateId, url, title);
+  });
+}
+
+function showSystemSub(key, options = {}) {
+  const nextSystemSub = SYSTEM_SUB_KEYS.includes(key) ? key : 'overview';
+  const run = () => {
+    activeSystemSub = nextSystemSub;
+    if (activeTab !== 'system') showTab('system', { skipSave: true, skipTerminalGuard: true });
+    if (!systemGroupOpen) {
+      systemGroupOpen = true;
+      document.getElementById('system-sub-group').classList.remove('hidden');
+      document.getElementById('system-arrow').style.transform = 'rotate(180deg)';
+    }
+    SYSTEM_SUB_KEYS.forEach((item) => {
+      document.getElementById('system-view-' + item)?.classList.toggle('hidden', item !== activeSystemSub);
+      document.getElementById('nav-system-' + item)?.classList.toggle('active', item === activeSystemSub);
+    });
+    let iframeId = null;
+    if (activeSystemSub === 'overview') {
+      iframeId = 'system-overview-iframe';
+      ensureIframeLoaded('system-overview-iframe', 'system-overview-frame-state', adminPath('/admin/panel/system/overview'), t('title.sys.overview'));
+    } else if (activeSystemSub === 'cpu') {
+      iframeId = 'system-cpu-iframe';
+      ensureIframeLoaded('system-cpu-iframe', 'system-cpu-frame-state', adminPath('/admin/panel/system/cpu'), t('title.sys.cpu'));
+    } else if (activeSystemSub === 'gpu') {
+      iframeId = 'system-gpu-iframe';
+      ensureIframeLoaded('system-gpu-iframe', 'system-gpu-frame-state', adminPath('/admin/panel/system/gpu'), t('title.sys.gpu'));
+    } else if (activeSystemSub === 'terminal') {
+      iframeId = 'system-terminal-iframe';
+      ensureIframeLoaded('system-terminal-iframe', 'system-terminal-frame-state', adminPath('/admin/panel/system/terminal'), t('title.sys.terminal'));
+    } else if (activeSystemSub === 'files') {
+      iframeId = 'system-files-iframe';
+      ensureIframeLoaded('system-files-iframe', 'system-files-frame-state', adminPath('/admin/panel/system/files'), t('title.sys.files'));
+    } else if (activeSystemSub === 'processes') {
+      iframeId = 'system-processes-iframe';
+      ensureIframeLoaded('system-processes-iframe', 'system-processes-frame-state', adminPath('/admin/panel/system/processes'), t('title.sys.processes'));
+    } else if (activeSystemSub === 'ports') {
+      iframeId = 'system-ports-iframe';
+      ensureIframeLoaded('system-ports-iframe', 'system-ports-frame-state', adminPath('/admin/panel/system/ports'), t('title.sys.ports'));
+    }
+    activateIframeResource(iframeId);
+    if (!options.skipSave) savePanelState();
+  };
+  if (options.skipTerminalGuard) {
+    run();
+    return;
+  }
+  withTerminalLeaveGuard(nextSystemSub === 'terminal', run);
+}
+
+function showSystemRoot() {
+  showSystemSub(SYSTEM_SUB_KEYS[0] || 'overview');
+}
+
+function toggleSystemGroup() {
+  systemGroupOpen = !systemGroupOpen;
+  document.getElementById('system-sub-group').classList.toggle('hidden', !systemGroupOpen);
+  document.getElementById('system-arrow').style.transform = systemGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function showTab(name, options = {}) {
+  const run = () => {
+    document.querySelectorAll('#sidebar .nav-item.active').forEach(el => el.classList.remove('active'));
+    TABS.forEach(tab => {
+      document.getElementById('page-'+tab).classList.toggle('hidden', tab!==name);
+    });
+    const nav = document.getElementById('nav-'+name);
+    if (nav) nav.classList.add('active');
+    activeTab = name;
+    if (name==='system')  { showSystemSub(activeSystemSub || 'overview', { skipSave: true, skipTerminalGuard: true }); }
+    else if (name==='api')     {
+      ensureIframeLoaded('api-iframe', 'api-frame-state', adminPath('/admin/panel/api'), t('tab.api'));
+      activateIframeResource('api-iframe');
+    }
+    if (!options.skipSave) savePanelState();
+  };
+  if (options.skipTerminalGuard) {
+    run();
+    return;
+  }
+  withTerminalLeaveGuard(name === 'system' && activeSystemSub === 'terminal', run);
+}
+
+function showRoomsRoot() {
+  showRoomsSub(ROOMS_SUB_KEYS[0] || 'manage');
+}
+
+function toggleRoomsGroup() {
+  roomsGroupOpen = !roomsGroupOpen;
+  document.getElementById('rooms-sub-group').classList.toggle('hidden', !roomsGroupOpen);
+  document.getElementById('rooms-arrow').style.transform = roomsGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function showRoomsSub(key) {
+  const run = () => {
+    activeRoomsSub = ROOMS_SUB_KEYS.includes(key) ? key : 'manage';
+    showTab('rooms', { skipSave: true, skipTerminalGuard: true });
+    document.getElementById('nav-rooms').classList.add('active');
+    ROOMS_SUB_KEYS.forEach(k => {
+      document.getElementById('nav-rooms-' + k)?.classList.toggle('active', k === activeRoomsSub);
+    });
+    if (!roomsGroupOpen) {
+      roomsGroupOpen = true;
+      document.getElementById('rooms-sub-group').classList.remove('hidden');
+      document.getElementById('rooms-arrow').style.transform = 'rotate(180deg)';
+    }
+    ensureIframeLoaded('rooms-iframe', 'rooms-frame-state', adminPath(ROOMS_SUB_URLS[activeRoomsSub]), t('title.rooms.' + activeRoomsSub));
+    activateIframeResource('rooms-iframe');
+    savePanelState();
+  };
+  withTerminalLeaveGuard(false, run);
+}
+
+function toggleLogGroup() {
+  logGroupOpen = !logGroupOpen;
+  document.getElementById('log-sub-group').classList.toggle('hidden', !logGroupOpen);
+  document.getElementById('log-arrow').style.transform = logGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function showLogRoot() {
+  showLogSub(LOG_SUB_KEYS[0] || 'overview');
+}
+
+function showLogSub(key) {
+  const run = () => {
+    activeLogSub = key;
+    showTab('loglab', { skipSave: true, skipTerminalGuard: true });
+    document.getElementById('nav-loglab').classList.add('active');
+    LOG_SUB_KEYS.forEach(k => {
+      const el = document.getElementById('nav-log-'+k);
+      if (el) el.classList.toggle('active', k===key);
+    });
+    if (!logGroupOpen) {
+      logGroupOpen = true;
+      document.getElementById('log-sub-group').classList.remove('hidden');
+      document.getElementById('log-arrow').style.transform = 'rotate(180deg)';
+    }
+    ensureIframeLoaded('loglab-iframe', 'loglab-frame-state', adminPath('/admin/log/' + key), t('title.log.' + key));
+    activateIframeResource('loglab-iframe');
+    savePanelState();
+  };
+  withTerminalLeaveGuard(false, run);
+}
+
+function showStorageRoot() {
+  showStorageSub(STORAGE_SUB_KEYS[0] || 'kv');
+}
+
+function toggleStorageGroup() {
+  storageGroupOpen = !storageGroupOpen;
+  document.getElementById('storage-sub-group').classList.toggle('hidden', !storageGroupOpen);
+  document.getElementById('storage-arrow').style.transform = storageGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function showStorageSub(key) {
+  const run = () => {
+    activeStorageSub = key;
+    showTab('storagelab', { skipSave: true, skipTerminalGuard: true });
+    document.getElementById('nav-storagelab').classList.add('active');
+    STORAGE_SUB_KEYS.forEach(k => {
+      const el = document.getElementById('nav-storage-'+k);
+      if (el) el.classList.toggle('active', k===key);
+    });
+    if (!storageGroupOpen) {
+      storageGroupOpen = true;
+      document.getElementById('storage-sub-group').classList.remove('hidden');
+      document.getElementById('storage-arrow').style.transform = 'rotate(180deg)';
+    }
+    ensureIframeLoaded('storagelab-iframe', 'storagelab-frame-state', adminPath('/admin/storage/' + key), t('title.storage.' + key));
+    activateIframeResource('storagelab-iframe');
+    savePanelState();
+  };
+  withTerminalLeaveGuard(false, run);
+}
+
+function toggleBackendGroup() {
+  backendGroupOpen = !backendGroupOpen;
+  document.getElementById('backend-sub-group').classList.toggle('hidden', !backendGroupOpen);
+  document.getElementById('backend-arrow').style.transform = backendGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function showBackendRoot() {
+  showBackendSub(BACKEND_SUB_KEYS[0] || 'overview');
+}
+
+function showBackendSub(key, options = {}) {
+  const nextBackendSub = BACKEND_SUB_KEYS.includes(key) ? key : 'overview';
+  const run = () => {
+    activeBackendSub = nextBackendSub;
+    showTab('backendlab', { skipSave: true, skipTerminalGuard: true });
+    document.getElementById('nav-backendlab').classList.add('active');
+    BACKEND_SUB_KEYS.forEach(k => {
+      const el = document.getElementById('nav-backend-'+k);
+      if (el) el.classList.toggle('active', k===activeBackendSub);
+    });
+    if (!backendGroupOpen) {
+      backendGroupOpen = true;
+      document.getElementById('backend-sub-group').classList.remove('hidden');
+      document.getElementById('backend-arrow').style.transform = 'rotate(180deg)';
+    }
+    ensureIframeLoaded('backendlab-iframe', 'backendlab-frame-state', adminPath('/admin/panel/backend/' + activeBackendSub), t('title.backend.' + activeBackendSub));
+    activateIframeResource('backendlab-iframe');
+    if (!options.skipSave) savePanelState();
+  };
+  if (options.skipTerminalGuard) {
+    run();
+    return;
+  }
+  withTerminalLeaveGuard(false, run);
+}
+
+function toggleAIServiceGroup() {
+  aiGroupOpen = !aiGroupOpen;
+  document.getElementById('ai-sub-group').classList.toggle('hidden', !aiGroupOpen);
+  document.getElementById('ai-arrow').style.transform = aiGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function showAIServiceRoot() {
+  showAIServiceSub(AI_SUB_KEYS[0] || 'overview');
+}
+
+function showAIServiceSub(key, options = {}) {
+  const nextAISub = AI_SUB_KEYS.includes(key) ? key : 'overview';
+  const run = () => {
+    activeAISub = nextAISub;
+    showTab('ailab', { skipSave: true, skipTerminalGuard: true });
+    document.getElementById('nav-ailab').classList.add('active');
+    AI_SUB_KEYS.forEach(k => {
+      const el = document.getElementById('nav-ai-'+k);
+      if (el) el.classList.toggle('active', k===activeAISub);
+    });
+    if (!aiGroupOpen) {
+      aiGroupOpen = true;
+      document.getElementById('ai-sub-group').classList.remove('hidden');
+      document.getElementById('ai-arrow').style.transform = 'rotate(180deg)';
+    }
+    const url = adminPath(AI_SUB_URLS[activeAISub] || ('/admin/panel/ai-services/' + activeAISub));
+    ensureIframeLoaded('ailab-iframe', 'ailab-frame-state', url, t('title.ai.' + activeAISub));
+    activateIframeResource('ailab-iframe');
+    if (!options.skipSave) savePanelState();
+  };
+  if (options.skipTerminalGuard) {
+    run();
+    return;
+  }
+  withTerminalLeaveGuard(false, run);
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return CoreUtils ? CoreUtils.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function fetchPanelJson(url, options = {}) {
+  const response = await fetch(url, { credentials: 'same-origin', ...options });
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      if (contentType.includes('application/json')) {
+        const payload = await response.json();
+        detail = payload?.detail || payload?.message || detail;
+      } else {
+        const text = await response.text();
+        detail = text || detail;
+      }
+    } catch {}
+    if (response.status === 401) {
+      handlePanelAuthExpired(panelRootPath());
+      throw new Error('登录状态已失效，正在跳转登录页。');
+    }
+    throw new Error(detail);
+  }
+  if (!contentType.includes('application/json')) {
+    throw new Error('接口未返回 JSON。');
+  }
+  return response.json();
+}
+
+// ── Rooms ─────────────────────────────────────────────────────────────────────
+let _roomsPageData = [], _roomsPage = 1, _roomsTotal = 0;
+const _ROOMS_PAGE_SIZE = 10;
+
+async function loadRooms(page) {
+  if (page != null) _roomsPage = page;
+  const list = document.getElementById('rooms-list');
+  list.innerHTML = '<div class="text-slate-400 text-sm">加载中…</div>';
+  document.getElementById('rooms-pagination').innerHTML = '';
+  try {
+    const resp = await fetchPanelJson(`/admin/api/rooms?page=${_roomsPage}`);
+    _roomsPageData = resp.items || []; _roomsTotal = resp.total || 0; _roomsPage = resp.page || 1;
+    if (!_roomsTotal) { list.innerHTML = '<div class="text-slate-400 text-sm">暂无活跃房间。</div>'; return; }
+    const detailById = new Map();
+    const results = await Promise.allSettled(_roomsPageData.map(r => fetchPanelJson(`/admin/api/rooms/${encodeURIComponent(r.id)}`)));
+    results.forEach(r => { if (r.status==='fulfilled' && r.value?.id) detailById.set(r.value.id, r.value); });
+    _roomsPageData = _roomsPageData.map(r => ({ ...r, _full: detailById.get(r.id) || r }));
+    renderRoomPage();
+  } catch(e) { list.innerHTML = `<div class="text-red-400 text-sm">加载失败: ${e.message}</div>`; }
+}
+
+function renderRoomPage() {
+  const list = document.getElementById('rooms-list');
+  const q = (document.getElementById('rooms-search')?.value||'').trim().toLowerCase();
+  const filtered = q ? _roomsPageData.filter(r => { const f=r._full||r; return ((f.name||r.name||'')+' '+(r.id||'')).toLowerCase().includes(q); }) : _roomsPageData;
+  list.innerHTML = '';
+  if (!filtered.length) { list.innerHTML = '<div class="text-slate-400 text-sm">暂无匹配房间。</div>'; renderPagination(); return; }
+  filtered.forEach(room => {
+    const full = room._full || room;
+    const cnt = Number(full.candidate_count || Object.keys(full.candidates||{}).length || 0);
+    const card = document.createElement('div');
+    card.className = 'room-card card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10';
+    card.innerHTML = `<div class="flex items-start justify-between mb-2"><div><div class="font-semibold">${escHtml(full.name||room.name||'未命名')}</div><div class="text-xs text-slate-400 font-mono mt-0.5">${(room.id||'').substring(0,16)}…</div></div><span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full px-2 py-0.5">${cnt} 成员</span></div>
+      <div class="text-xs text-slate-500 flex gap-3 flex-wrap"><span>PID: ${full.worker||room.worker||'—'}</span><span>${full.password?'有密码':'公开'}</span></div>
+      <div class="mt-2 flex items-center gap-3 text-xs"><button class="room-copy text-slate-500 hover:text-slate-400">复制 ID</button><button class="room-detail text-slate-600 dark:text-slate-300 hover:text-slate-500">详情</button><button class="room-stop text-red-500 hover:text-red-400">强制停止</button></div>`;
+    card.querySelector('.room-copy')?.addEventListener('click', async () => { await navigator.clipboard.writeText(full.id||room.id||''); });
+    card.querySelector('.room-detail')?.addEventListener('click', () => showRoomDetail(full.id||room.id));
+    card.querySelector('.room-stop')?.addEventListener('click', () => forceStopRoom(full.id||room.id, full.name||room.name));
+    list.appendChild(card);
+  });
+  renderPagination();
+}
+
+function renderPagination() {
+  const pagEl = document.getElementById('rooms-pagination'); pagEl.innerHTML = '';
+  const totalPages = Math.max(1, Math.ceil(_roomsTotal / _ROOMS_PAGE_SIZE));
+  if (totalPages <= 1) { pagEl.innerHTML = `<span class="text-xs text-slate-400">共 ${_roomsTotal} 个房间</span>`; return; }
+  const mkBtn = (label, page, disabled, active) => {
+    const b = document.createElement('button'); b.textContent = label; b.disabled = disabled;
+    b.className = active ? 'px-2.5 py-1 rounded text-xs font-bold bg-indigo-600 text-white' : 'px-2.5 py-1 rounded text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-40';
+    if (!disabled && !active) b.onclick = () => loadRooms(page); return b;
+  };
+  pagEl.appendChild(mkBtn('«',1,_roomsPage===1,false)); pagEl.appendChild(mkBtn('‹',_roomsPage-1,_roomsPage===1,false));
+  let lo=Math.max(1,_roomsPage-3), hi=Math.min(totalPages,lo+6); if(hi-lo<6) lo=Math.max(1,hi-6);
+  for (let p=lo;p<=hi;p++) pagEl.appendChild(mkBtn(String(p),p,false,p===_roomsPage));
+  pagEl.appendChild(mkBtn('›',_roomsPage+1,_roomsPage===totalPages,false)); pagEl.appendChild(mkBtn('»',totalPages,_roomsPage===totalPages,false));
+}
+
+async function showRoomDetail(roomId) {
+  if (!roomId) return;
+  try {
+    const room = await fetchPanelJson(`/admin/api/rooms/${encodeURIComponent(roomId)}`);
+    document.getElementById('room-detail-title').textContent = `房间详情 · ${room.name||'未命名'}`;
+    document.getElementById('room-detail-id').textContent = room.id||roomId;
+    document.getElementById('room-detail-worker').textContent = `PID ${room.worker||'—'} · 创建者 ${room.creator||'—'}`;
+    document.getElementById('room-detail-name').textContent = room.name||'未命名';
+    document.getElementById('room-detail-count').textContent = String(room.candidate_count||0);
+    const membersEl = document.getElementById('room-detail-members'); membersEl.innerHTML = '';
+    const ids = Object.keys(room.candidates||{});
+    if (!ids.length) { membersEl.innerHTML = '<div class="px-3 py-2 text-xs text-slate-400">暂无成员</div>'; } else {
+      ids.forEach(id => {
+        const c = room.candidates[id]||{};
+        const row = document.createElement('div'); row.className = 'px-3 py-2 text-xs flex items-center justify-between gap-2';
+        row.innerHTML = `<div class="min-w-0"><div class="font-mono truncate">${escHtml(id)}</div><div class="text-slate-500 truncate mt-0.5">${escHtml(c.name||'未命名')} ${c.is_admin?'· Admin':''} ${c.muted?'· 静音':''}</div></div><div class="text-slate-400 shrink-0">${escHtml(c.join_time?new Date(c.join_time).toLocaleString('zh-CN'):'—')}</div>`;
+        membersEl.appendChild(row);
+      });
+    }
+    document.getElementById('room-detail-copy').onclick = async () => { await navigator.clipboard.writeText(room.id||roomId); };
+    document.getElementById('room-detail-stop').onclick = () => forceStopRoom(room.id||roomId, room.name||roomId, true);
+    const modal = document.getElementById('room-detail-modal'); modal.classList.remove('hidden'); modal.classList.add('flex');
+  } catch(e) { console.error(e); }
+}
+function closeRoomDetailModal() { const m=document.getElementById('room-detail-modal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+async function forceStopRoom(roomId, name, fromModal=false) {
+  if (!confirm(`确认强制停止房间"${name||roomId}"？`)) return;
+  try { await fetchPanelJson(`/admin/api/rooms/${encodeURIComponent(roomId)}`,{method:'DELETE'}); if(fromModal) closeRoomDetailModal(); await loadRooms(); } catch{}
+}
+function filterRooms() { _roomsPage=1; renderRoomPage(); }
+
+// ── Server config ─────────────────────────────────────────────────────────────
+function setPanelHealth(status) {
+  const dot = document.getElementById('health-dot');
+  if (!dot) return;
+  const tone = status === 'ok'
+    ? 'bg-green-500'
+    : status === 'warn'
+      ? 'bg-yellow-400'
+      : 'bg-red-500';
+  dot.className = `h-2.5 w-2.5 rounded-full transition-colors ${tone}`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+  }
+  if (typeof AbortController === 'undefined') {
+    return fetch(url, options);
+  }
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function loadServerConfig() {
+  try {
+    const resp = await fetchWithTimeout('/api/server/config', { cache: 'no-store' }, 6000);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const cfg = await resp.json();
+    adminBasePath = `${cfg.internal_path_prefix || ''}/admin`;
+    document.getElementById('server-addr').textContent = `${cfg.host}:${cfg.port}`;
+    _healthFailCount = 0;
+    setPanelHealth('ok');
+  } catch {
+    _healthFailCount = Math.max(_healthFailCount, 1);
+    setPanelHealth(_healthFailCount >= HEALTH_FAIL_THRESHOLD ? 'red' : 'warn');
+  }
+}
+
+// ── Health polling ────────────────────────────────────────────────────────────
+let _healthFailCount = 0;
+let _healthPollInFlight = false;
+const HEALTH_FAIL_THRESHOLD = 2;
+const HEALTH_POLL_INTERVAL_MS = 1000;
+const HEALTH_POLL_TIMEOUT_MS = 1200;
+async function pollHealth(force = false) {
+  if (_healthPollInFlight) return;
+  if (!force && document.visibilityState === 'hidden') return;
+  _healthPollInFlight = true;
+  try {
+    const r = await fetchWithTimeout('/api/server/config', { cache: 'no-store' }, HEALTH_POLL_TIMEOUT_MS);
+    if (r.ok) { _healthFailCount = 0; }
+    else { _healthFailCount++; }
+  } catch {
+    _healthFailCount++;
+  } finally {
+    _healthPollInFlight = false;
+  }
+  setPanelHealth(_healthFailCount === 0 ? 'ok' : _healthFailCount < HEALTH_FAIL_THRESHOLD ? 'warn' : 'red');
+}
+window.setInterval(() => { void pollHealth(); }, HEALTH_POLL_INTERVAL_MS);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    void pollHealth(true);
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('room-detail-modal')?.addEventListener('click', e => { if(e.target.id==='room-detail-modal') closeRoomDetailModal(); });
+document.getElementById('terminal-leave-keep-btn')?.addEventListener('click', () => resolveTerminalLeaveChoice('keep'));
+document.getElementById('terminal-leave-close-btn')?.addEventListener('click', () => resolveTerminalLeaveChoice('close'));
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !terminalLeaveModalOpen) return;
+  event.preventDefault();
+  resolveTerminalLeaveChoice('keep');
+});
+bindIframeState('rooms-iframe', 'rooms-frame-state', 'RTC 房间管理');
+bindIframeState('system-overview-iframe', 'system-overview-frame-state', '系统概览');
+bindIframeState('system-cpu-iframe', 'system-cpu-frame-state', 'CPU 页面');
+bindIframeState('system-gpu-iframe', 'system-gpu-frame-state', 'GPU 页面');
+bindIframeState('system-terminal-iframe', 'system-terminal-frame-state', '系统终端');
+bindIframeState('system-files-iframe', 'system-files-frame-state', '系统文件页');
+bindIframeState('system-processes-iframe', 'system-processes-frame-state', '系统进程页');
+bindIframeState('system-ports-iframe', 'system-ports-frame-state', '系统端口页');
+bindIframeState('loglab-iframe', 'loglab-frame-state', '日志页面');
+bindIframeState('storagelab-iframe', 'storagelab-frame-state', '存储页面');
+bindIframeState('api-iframe', 'api-frame-state', 'API 文档');
+bindIframeState('backendlab-iframe', 'backendlab-frame-state', '后端页面');
+bindIframeState('ailab-iframe', 'ailab-frame-state', 'AI 服务');
+loadServerConfig();
+const restoredPanelState = restorePanelState();
+activeSystemSub = SYSTEM_SUB_KEYS.includes(restoredPanelState.activeSystemSub) ? restoredPanelState.activeSystemSub : 'overview';
+systemGroupOpen = restoredPanelState.systemGroupOpen !== false;
+activeRoomsSub = ROOMS_SUB_KEYS.includes(restoredPanelState.activeRoomsSub)
+  ? restoredPanelState.activeRoomsSub
+  : restoredPanelState.activeTestSub === 'chatroom'
+    ? 'test'
+    : null;
+roomsGroupOpen = restoredPanelState.roomsGroupOpen != null
+  ? !!restoredPanelState.roomsGroupOpen
+  : activeRoomsSub != null;
+logGroupOpen = !!restoredPanelState.logGroupOpen;
+storageGroupOpen = !!restoredPanelState.storageGroupOpen;
+activeLogSub = restoredPanelState.activeLogSub || null;
+activeStorageSub = restoredPanelState.activeStorageSub || null;
+activeBackendSub = BACKEND_SUB_KEYS.includes(restoredPanelState.activeBackendSub) ? restoredPanelState.activeBackendSub : null;
+backendGroupOpen = !!restoredPanelState.backendGroupOpen;
+activeAISub = AI_SUB_KEYS.includes(restoredPanelState.activeAISub) ? restoredPanelState.activeAISub : null;
+aiGroupOpen = !!restoredPanelState.aiGroupOpen;
+document.getElementById('system-sub-group').classList.toggle('hidden', !systemGroupOpen);
+document.getElementById('system-arrow').style.transform = systemGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('rooms-sub-group').classList.toggle('hidden', !roomsGroupOpen);
+document.getElementById('rooms-arrow').style.transform = roomsGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('log-sub-group').classList.toggle('hidden', !logGroupOpen);
+document.getElementById('log-arrow').style.transform = logGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('storage-sub-group').classList.toggle('hidden', !storageGroupOpen);
+document.getElementById('storage-arrow').style.transform = storageGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('backend-sub-group').classList.toggle('hidden', !backendGroupOpen);
+document.getElementById('backend-arrow').style.transform = backendGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('ai-sub-group').classList.toggle('hidden', !aiGroupOpen);
+document.getElementById('ai-arrow').style.transform = aiGroupOpen ? 'rotate(180deg)' : '';
+if (activeRoomsSub) ROOMS_SUB_KEYS.forEach(k => document.getElementById('nav-rooms-'+k)?.classList.toggle('active', k===activeRoomsSub));
+if (activeLogSub) LOG_SUB_KEYS.forEach(k => document.getElementById('nav-log-'+k)?.classList.toggle('active', k===activeLogSub));
+if (activeStorageSub) STORAGE_SUB_KEYS.forEach(k => document.getElementById('nav-storage-'+k)?.classList.toggle('active', k===activeStorageSub));
+if (activeBackendSub) BACKEND_SUB_KEYS.forEach(k => document.getElementById('nav-backend-'+k)?.classList.toggle('active', k===activeBackendSub));
+if (activeAISub) AI_SUB_KEYS.forEach(k => document.getElementById('nav-ai-'+k)?.classList.toggle('active', k===activeAISub));
+const restoredActiveTab = restoredPanelState.activeTab === 'testlab'
+  ? 'rooms'
+  : restoredPanelState.activeTab;
+const initialTab = TABS.includes(restoredActiveTab) ? restoredActiveTab : (activeRoomsSub ? 'rooms' : activeLogSub ? 'loglab' : activeAISub ? 'ailab' : activeStorageSub ? 'storagelab' : activeBackendSub ? 'backendlab' : 'system');
+showTab(initialTab, { skipSave: true, skipTerminalGuard: true });
+if (initialTab === 'system') showSystemSub(activeSystemSub, { skipSave: true, skipTerminalGuard: true });
+if (initialTab === 'rooms') showRoomsSub(activeRoomsSub || 'manage');
+if (initialTab === 'loglab' && activeLogSub) showLogSub(activeLogSub);
+if (initialTab === 'storagelab' && activeStorageSub) showStorageSub(activeStorageSub);
+if (initialTab === 'backendlab') showBackendSub(activeBackendSub || 'overview');
+if (initialTab === 'ailab') showAIServiceSub(activeAISub || 'overview');
+savePanelState();
+
+// ── Sidebar resizer + 折叠 ──
+(function setupSidebarResizer() {
+  const resizer = document.getElementById('sidebar-resizer');
+  const toggleBtn = document.getElementById('sidebar-toggle');
+  if (!resizer || !toggleBtn) return;
+
+  const STORAGE_KEY_W = 'proj.panel.sidebar_w';
+  const STORAGE_KEY_C = 'proj.panel.sidebar_collapsed';
+  const MIN_W = 160;
+  const MAX_W = 420;
+  const DEFAULT_W = 224;
+
+  function applyWidth(px) {
+    const clamped = Math.max(MIN_W, Math.min(MAX_W, Math.round(px)));
+    document.documentElement.style.setProperty('--panel-shell-w', clamped + 'px');
+    try { localStorage.setItem(STORAGE_KEY_W, String(clamped)); } catch {}
+  }
+  function applyCollapsed(collapsed) {
+    document.body.classList.toggle('sidebar-collapsed', !!collapsed);
+    toggleBtn.textContent = collapsed ? '›' : '‹';
+    toggleBtn.setAttribute('aria-label', collapsed ? '展开侧栏' : '折叠侧栏');
+    try { localStorage.setItem(STORAGE_KEY_C, collapsed ? '1' : '0'); } catch {}
+  }
+  function restore() {
+    let w = DEFAULT_W;
+    let c = false;
+    try {
+      const sw = parseInt(localStorage.getItem(STORAGE_KEY_W) || '', 10);
+      if (Number.isFinite(sw) && sw > 0) w = sw;
+      c = localStorage.getItem(STORAGE_KEY_C) === '1';
+    } catch {}
+    applyWidth(w);
+    applyCollapsed(c);
+  }
+
+  let dragging = false;
+  let startX = 0;
+  let startW = DEFAULT_W;
+
+  function onMove(ev) {
+    if (!dragging) return;
+    applyWidth(startW + (ev.clientX - startX));
+  }
+  function onUp() {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  }
+
+  resizer.addEventListener('pointerdown', (ev) => {
+    if (ev.target === toggleBtn) return;
+    if (document.body.classList.contains('sidebar-collapsed')) return;
+    dragging = true;
+    startX = ev.clientX;
+    const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--panel-shell-w'), 10);
+    startW = Number.isFinite(cur) && cur > 0 ? cur : DEFAULT_W;
+    resizer.classList.add('dragging');
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    ev.preventDefault();
+  });
+
+  toggleBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    applyCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+  });
+
+  restore();
+})();
+</script>
+</body>
+</html>

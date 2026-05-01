@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>老师端 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body {
+    margin: 0;
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+    background: var(--builtin-header-bg, #f9fafb);
+    color: var(--builtin-color-text, #111827);
+  }
+  .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .logout-btn {
+    padding: 6px 12px; border: 1px solid var(--builtin-border, #d1d5db); border-radius: var(--builtin-radius, 6px);
+    background: var(--builtin-button-bg, #ffffff); color: var(--builtin-color-text, #111827); cursor: pointer; font: inherit; min-height: 34px;
+  }
+  .logout-btn:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  .sidebar-nav { display: grid; gap: 4px; }
+  .sidebar-nav a {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--builtin-radius, 6px);
+    color: var(--builtin-color-text, #111827); text-decoration: none; font-size: 14px;
+  }
+  .sidebar-nav a:hover { background: var(--builtin-row-hover-bg, #f9fafb); }
+  .workspace-eyebrow {
+    display: block;
+    color: var(--builtin-primary, #2563eb);
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+  .workspace-title {
+    display: block;
+    margin: 0 0 16px;
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: .95;
+    letter-spacing: -.05em;
+    color: var(--builtin-color-text, #111827);
+    font-weight: 800;
+  }
+  .workspace-lead {
+    display: block;
+    margin: 0;
+    color: var(--builtin-color-muted, #6b7280);
+    font-size: 16px;
+    line-height: 1.7;
+  }
+  .workspace-profile-name {
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -.04em;
+    color: var(--builtin-color-text, #111827);
+  }
+  .workspace-profile-role {
+    display: block;
+    color: var(--builtin-color-muted, #6b7280);
+    font-size: 14px;
+    margin-top: 6px;
+  }
+  .workspace-tile-title { font-size: 20px; font-weight: 800; letter-spacing: -.04em; }
+  .workspace-tile-title { color: var(--builtin-color-text, #111827); }
+  .workspace-tile-desc { margin: 8px 0 0; color: var(--builtin-color-muted, #6b7280); line-height: 1.55; font-family: system-ui, sans-serif; font-size: 13px; }
+  .workspace-tile {
+    min-height: 160px;
+    padding: 20px;
+    border: 1px solid var(--builtin-border, #d1d5db);
+    border-radius: var(--builtin-radius-lg, 8px);
+    background: var(--builtin-surface, #ffffff);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    transition: transform .18s ease, border-color .18s ease;
+    box-sizing: border-box;
+  }
+  .workspace-tile:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--builtin-primary, #2563eb), transparent 35%);
+  }
+</style>
+</head>
+<body>
+<builtin-tpl-dashboard-workspace id="dashboard">
+  <div slot="header" class="header-actions">
+    <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn" display="buttons"></builtin-lang-switcher>
+    <builtin-theme-toggle></builtin-theme-toggle>
+    <button id="btn-logout" class="logout-btn" data-i18n="eclass.logout">退出</button>
+  </div>
+  <div slot="sidebar" class="sidebar-nav">
+    <a href="teacher-classrooms.html"><builtin-icon name="team" size="16"></builtin-icon> <span data-i18n="eclass.classroom_management">教室管理</span></a>
+    <a href="teacher-announcements.html"><builtin-icon name="notification" size="16"></builtin-icon> <span data-i18n="eclass.post_announcement">发布通告</span></a>
+    <a href="teacher-homework.html"><builtin-icon name="file-text" size="16"></builtin-icon> <span data-i18n="eclass.assign_homework">布置作业</span></a>
+    <a href="teacher-materials.html"><builtin-icon name="book" size="16"></builtin-icon> <span data-i18n="eclass.upload_material">上传教材</span></a>
+    <a href="teacher-courses.html"><builtin-icon name="read" size="16"></builtin-icon> <span data-i18n="eclass.course_management">课程管理</span></a>
+    <a href="teacher-check-in.html"><builtin-icon name="check-circle" size="16"></builtin-icon> <span data-i18n="eclass.check_in_management">签到管理</span></a>
+    <a href="grades.html"><builtin-icon name="bar-chart" size="16"></builtin-icon> <span data-i18n="eclass.grades">成绩</span></a>
+    <a href="classroom.html"><builtin-icon name="message" size="16"></builtin-icon> <span data-i18n="eclass.live_classroom">教室聊天室</span></a>
+  </div>
+  <div slot="hero">
+    <div class="workspace-eyebrow" data-i18n="eclass.teacher_console">Teacher Console</div>
+    <div class="workspace-title" data-i18n="eclass.teacher_headline">管理课堂，不要把工具都堆在首页。</div>
+    <div class="workspace-lead" data-i18n="eclass.teacher_lead">老师端首页只保留导航和身份状态。教室、公告、作业、课程资料分别进入对应子页面维护。</div>
+  </div>
+  <div slot="profile">
+    <div class="workspace-profile-name" id="profile-name">Teacher</div>
+    <div class="workspace-profile-role" data-i18n="eclass.teacher">老师端</div>
+  </div>
+  <nav slot="tiles" class="workspace-tile-grid teacher-tiles" aria-label="Teacher pages">
+      <a class="workspace-tile" href="teacher-classrooms.html">
+        <builtin-icon name="team" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.classroom_management">教室管理</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_classrooms_desc">创建教室，管理班级成员。</p></div>
+      </a>
+      <a class="workspace-tile" href="teacher-announcements.html">
+        <builtin-icon name="notification" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.post_announcement">发布通告</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_announcements_desc">进入独立表单页发布课堂通知。</p></div>
+      </a>
+      <a class="workspace-tile" href="teacher-homework.html">
+        <builtin-icon name="file-text" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.assign_homework">布置作业</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_homework_desc">进入独立表单页创建作业。</p></div>
+      </a>
+      <a class="workspace-tile" href="teacher-materials.html">
+        <builtin-icon name="book" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.upload_material">上传教材</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_materials_desc">进入独立页面上传课程资料。</p></div>
+      </a>
+      <a class="workspace-tile" href="teacher-courses.html">
+        <builtin-icon name="read" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.course_management">课程管理</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_courses_desc">创建、编辑和管理班级课程。</p></div>
+      </a>
+      <a class="workspace-tile" href="teacher-check-in.html">
+        <builtin-icon name="check-circle" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.check_in_management">签到管理</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_checkin_desc">发起签到，查看出勤统计。</p></div>
+      </a>
+      <a class="workspace-tile" href="grades.html">
+        <builtin-icon name="bar-chart" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.grades">成绩</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_grades_desc">查看学生成绩概览。</p></div>
+      </a>
+      <a class="workspace-tile" href="classroom.html">
+        <builtin-icon name="message" size="28" color="#8f4d2f"></builtin-icon>
+        <div><div class="workspace-tile-title" data-i18n="eclass.live_classroom">教室聊天室</div><p class="workspace-tile-desc" data-i18n="eclass.teacher_live_desc">进入班级文字聊天室。</p></div>
+      </a>
+    </nav>
+</builtin-tpl-dashboard-workspace>
+
+<script type="module">
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.teacher',
+  fallbackProfileName: 'Teacher',
+  validateRole: (role) => role === 'teacher',
+  getInvalidRoleRedirect: () => 'student.html',
+  onApplyI18n: async ({ $, t }) => {
+    $('dashboard').labels = {
+      'sidebar.title': await t('eclass.title')
+    };
+  }
+});
+
+await shell.init();
+</script>
+</body>
+</html>

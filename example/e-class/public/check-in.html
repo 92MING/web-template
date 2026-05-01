@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
+<title>今日签到 - 数字教室</title>
+<script type="module" src="/shared/components.js?v=20260429-2"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; min-height: 100vh; font-family: ui-serif, Georgia, "Times New Roman", serif; color: var(--ink); background: radial-gradient(circle at 80% 10%, rgba(31,118,103,.16), transparent 28rem), var(--bg); }
+  body { --bg: #f2eadc; --ink: #20251f; --muted: #687062; --line: rgba(32,37,31,.14); --card: rgba(255,252,244,.86); --accent: #8f4d2f; }
+  :root[data-builtin-theme="dark"] body { --bg: #111614; --ink: #f5efe5; --muted: #b9beb4; --line: rgba(245,239,229,.14); --card: rgba(26,31,28,.86); --accent: #ffb074; }
+  .container { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
+  .card { border: 1px solid var(--line); border-radius: 24px; background: var(--card); box-shadow: 0 24px 80px rgba(32,37,31,.16); padding: clamp(24px, 5vw, 40px); }
+  .big-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 16px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #127768, #0d5a4d); color: #fff;
+    font-size: 18px; font-weight: 700; cursor: pointer; transition: transform .2s ease;
+  }
+  .big-btn:hover { transform: translateY(-2px); }
+  .big-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .code-input {
+    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); font-size: 16px; text-align: center;
+    letter-spacing: 4px; font-weight: 700;
+  }
+  .history-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--line); }
+  .history-item:last-child { border-bottom: none; }
+  .success { color: #166534; }
+  .fail { color: #991b1b; }
+</style>
+</head>
+<body>
+<div class="container">
+  <builtin-page-header id="page-header" icon="check-circle" title="今日签到" back-href="student.html" back-label="返回学生端"></builtin-page-header>
+
+  <div class="card" style="margin-top:1.5rem;">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:1.25rem;font-weight:700;margin-bottom:0.5rem;" id="title-text">输入签到码</div>
+      <p style="margin:0;color:var(--muted);font-size:0.9rem;" id="subtitle-text">向老师获取今日签到码，输入后即可完成签到。</p>
+    </div>
+    <input id="code-input" class="code-input" type="text" placeholder="0000" maxlength="8">
+    <div style="margin-top:1rem;">
+      <button id="btn-checkin" class="big-btn">
+        <builtin-icon name="check-circle" size="20"></builtin-icon>
+        <span id="btn-text">立即签到</span>
+      </button>
+    </div>
+    <div id="result-area" style="margin-top:1rem;text-align:center;"></div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem;">
+    <div style="font-size:1.1rem;font-weight:700;margin-bottom:0.75rem;">签到记录</div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<script type="module">
+import { BuiltinToast } from '/shared/components.js?v=20260429-2';
+import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+
+const shell = createPageBootstrap({
+  pageTitleKey: 'eclass.check_in',
+  translationPath: '/translate.json?v=20260429-2',
+  validateRole: (role) => role === 'student',
+  getInvalidRoleRedirect: () => 'teacher.html',
+});
+
+const { $, api } = shell;
+const classId = new URLSearchParams(location.search).get('class_id') || 'c1';
+
+async function doCheckIn() {
+  const code = $('code-input').value.trim();
+  if (!code) {
+    BuiltinToast.show('请输入签到码', { type: 'warning' });
+    return;
+  }
+  $('btn-checkin').disabled = true;
+  const res = await api('/student/check_in', {
+    method: 'POST',
+    body: JSON.stringify({ check_in_id: code, class_id: classId }),
+  });
+  $('btn-checkin').disabled = false;
+  if (!res) {
+    $('result-area').innerHTML = '<div class="fail">请求失败，请重试</div>';
+    return;
+  }
+  if (res.ok) {
+    $('result-area').innerHTML = '<div class="success">✓ 签到成功</div>';
+    $('code-input').value = '';
+    loadHistory();
+  } else {
+    $('result-area').innerHTML = `<div class="fail">✗ ${res.error || '签到失败'}</div>`;
+  }
+}
+
+async function loadHistory() {
+  const res = await api(`/student/check_in?class_id=${classId}`);
+  const list = (res && res.checkins) || [];
+  $('history-list').innerHTML = list.length
+    ? list.map((r) => {
+        const t = r.checked_at ? new Date(r.checked_at * 1000).toLocaleString('zh-CN') : '-';
+        return `<div class="history-item"><span>签到 #${r.check_in_id}</span><span style="color:var(--muted);font-size:0.8rem;">${t}</span></div>`;
+      }).join('')
+    : '<div style="color:var(--muted);font-size:0.9rem;">暂无签到记录</div>';
+}
+
+$('btn-checkin').addEventListener('click', doCheckIn);
+$('code-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doCheckIn(); });
+
+await shell.init();
+loadHistory();
+</script>
+</body>
+</html>

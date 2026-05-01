@@ -1,0 +1,96 @@
+:root {
+  color-scheme: light;
+}
+
+body {
+  --eclass-bg: #f2eadc;
+  --eclass-ink: #20251f;
+  --eclass-muted: #687062;
+  --eclass-line: rgba(32, 37, 31, 0.14);
+  --eclass-card: rgba(255, 252, 244, 0.88);
+  --eclass-accent: #8f4d2f;
+  --builtin-surface: rgba(255, 252, 244, 0.92);
+  --builtin-button-bg: rgba(255, 252, 244, 0.94);
+  --builtin-button-hover-bg: rgba(32, 37, 31, 0.04);
+  --builtin-border: rgba(32, 37, 31, 0.16);
+  --builtin-border-soft: rgba(32, 37, 31, 0.1);
+  --builtin-color-text: var(--eclass-ink);
+  --builtin-color-muted: var(--eclass-muted);
+  --builtin-primary: var(--eclass-accent);
+  --builtin-primary-soft: rgba(143, 77, 47, 0.12);
+  --builtin-row-hover-bg: rgba(32, 37, 31, 0.04);
+  margin: 0;
+  min-height: 100vh;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  color: var(--eclass-ink);
+  background: radial-gradient(circle at 80% 10%, rgba(31, 118, 103, 0.16), transparent 28rem), var(--eclass-bg);
+}
+
+:root[data-builtin-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-builtin-theme="dark"] body {
+  --eclass-bg: #111614;
+  --eclass-ink: #f5efe5;
+  --eclass-muted: #b9beb4;
+  --eclass-line: rgba(245, 239, 229, 0.14);
+  --eclass-card: rgba(26, 31, 28, 0.88);
+  --eclass-accent: #ffb074;
+  --builtin-surface: rgba(26, 31, 28, 0.92);
+  --builtin-button-bg: rgba(26, 31, 28, 0.94);
+  --builtin-button-hover-bg: rgba(245, 239, 229, 0.06);
+  --builtin-border: rgba(245, 239, 229, 0.18);
+  --builtin-border-soft: rgba(245, 239, 229, 0.1);
+  --builtin-color-text: var(--eclass-ink);
+  --builtin-color-muted: var(--eclass-muted);
+  --builtin-primary: var(--eclass-accent);
+  --builtin-primary-soft: rgba(255, 176, 116, 0.16);
+  --builtin-row-hover-bg: rgba(245, 239, 229, 0.06);
+}
+
+.card {
+  border: 1px solid var(--eclass-line);
+  border-radius: 30px;
+  background: var(--eclass-card);
+  box-shadow: 0 24px 80px rgba(32, 37, 31, 0.16);
+  padding: clamp(24px, 5vw, 46px);
+}
+
+p {
+  color: var(--eclass-muted);
+  line-height: 1.7;
+}
+
+.list-wrap,
+.browser-wrap,
+.timeline-wrap {
+  margin-top: 1.5rem;
+}
+
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--eclass-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--eclass-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ghost-btn:hover {
+  background: var(--builtin-row-hover-bg);
+}
+
+.danger {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.25);
+}
+
+.danger:hover {
+  background: rgba(180, 35, 24, 0.08);
+}

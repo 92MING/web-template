@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang='zh-CN'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>HELLO WORLD</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #040408;
+      --text: #f5f2ed;
+      --muted: #505058;
+      --accent: #c9a96e;
+      --glass-border: rgba(255,255,255,.10);
+      --glass-border-inner: rgba(255,255,255,.04);
+      --glass-bg: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+      --btn-bg: rgba(255,255,255,.04);
+      --btn-hover: rgba(255,255,255,.10);
+    }
+
+    :root[data-theme='light'] {
+      color-scheme: light;
+      --bg: #f0f0f3;
+      --text: #111114;
+      --muted: #6a6a72;
+      --accent: #9e7d4a;
+      --glass-border: rgba(0,0,0,.10);
+      --glass-border-inner: rgba(0,0,0,.04);
+      --glass-bg: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
+      --btn-bg: rgba(0,0,0,.04);
+      --btn-hover: rgba(0,0,0,.09);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'SF Pro Display', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      transition: background .7s ease, color .7s ease;
+    }
+
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 50% 42%, transparent 22%, var(--bg) 72%);
+      transition: background .7s ease;
+    }
+
+    main {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      perspective: 1400px;
+    }
+
+    /* ===== Glass Card with physical thickness ===== */
+    .hero-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: min(86vw, 540px);
+      padding: 56px 36px;
+      border: 1px solid var(--glass-border);
+      border-radius: 22px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(2px) saturate(80%);
+      box-shadow:
+        0 48px 140px rgba(0,0,0,.50),
+        inset 0 1px 1px rgba(255,255,255,.07),
+        inset 0 -1px 1px rgba(0,0,0,.20);
+      overflow: hidden;
+      transition: border-color .4s, box-shadow .4s;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    /* Frosted noise texture */
+    .hero-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 1;
+      opacity: .025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 96px;
+      mix-blend-mode: overlay;
+    }
+
+    /* Back surface (thickness) */
+    .hero-card .glass-back {
+      position: absolute;
+      inset: 2px;
+      border-radius: 20px;
+      border: 1px solid var(--glass-border-inner);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* BRDF lighting layer */
+    .brdf-light {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      mix-blend-mode: soft-light;
+      z-index: 1;
+    }
+
+    /* Press-driven gold glow */
+    .press-glow {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      transition: opacity .2s ease;
+      background: radial-gradient(
+        circle 170px at var(--glow-x, 50%) var(--glow-y, 50%),
+        rgba(255,235,190,.52) 0%,
+        rgba(201,169,110,.22) 26%,
+        transparent 56%
+      );
+      mix-blend-mode: screen;
+    }
+    .press-glow.active { opacity: 1; }
+
+    /* Rim light — edge glow that follows mouse */
+    .rim-light {
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      pointer-events: none;
+      z-index: 1;
+      opacity: var(--rim-a, 0);
+      transition: opacity .25s ease;
+      background: radial-gradient(
+        ellipse 75% 75% at var(--rim-x, 50%) var(--rim-y, 50%),
+        rgba(255,235,190,.45) 0%,
+        rgba(201,169,110,.22) 30%,
+        transparent 58%
+      );
+      mix-blend-mode: screen;
+    }
+    .rim-light::after {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border-radius: 20px;
+      background: var(--glass-bg);
+    }
+
+    :root[data-theme='light'] .rim-light {
+      mix-blend-mode: normal;
+    }
+
+    h1 {
+      position: relative;
+      font-size: clamp(2.2rem, 8.5vw, 5rem);
+      font-weight: 300;
+      line-height: 1.05;
+      letter-spacing: .14em;
+      text-align: center;
+      white-space: nowrap;
+      color: var(--text);
+      text-transform: uppercase;
+      z-index: 3;
+      transform: translateZ(32px);
+    }
+
+    .subtitle {
+      margin-top: 16px;
+      font-size: clamp(.7rem, 1.6vw, .88rem);
+      font-weight: 400;
+      color: var(--muted);
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      z-index: 3;
+      transform: translateZ(20px);
+    }
+
+    .lang-badge {
+      margin-top: 26px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--glass-border-inner);
+      background: var(--btn-bg);
+      font-size: .7rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: .06em;
+      z-index: 3;
+      transform: translateZ(26px);
+      transition: all .3s;
+      animation: badge-breathe 3.5s ease-in-out infinite;
+    }
+
+    @keyframes badge-breathe {
+      0%, 100% { box-shadow: 0 0 0 rgba(201,169,110,0); border-color: var(--glass-border-inner); }
+      50% { box-shadow: 0 0 18px rgba(201,169,110,.08); border-color: rgba(201,169,110,.14); }
+    }
+
+    h1.typing::after {
+      content: '|';
+      display: inline-block;
+      margin-left: 3px;
+      color: var(--accent);
+      font-weight: 200;
+      animation: blink 1s step-end infinite;
+      vertical-align: baseline;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Controls */
+    .control-bar {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      padding: 4px;
+      gap: 2px;
+      border: 1px solid var(--glass-border-inner);
+      border-radius: 16px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px);
+      box-shadow: 0 12px 40px rgba(0,0,0,.25);
+    }
+
+    .ctrl-btn {
+      width: 38px;
+      height: 38px;
+      border: none;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .2s ease;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .ctrl-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .ctrl-btn:hover {
+      background: var(--btn-hover);
+      color: var(--text);
+    }
+
+    .ctrl-btn.active {
+      color: var(--accent);
+    }
+
+    .ctrl-divider {
+      width: 1px;
+      height: 18px;
+      background: var(--glass-border-inner);
+    }
+
+    .ctrl-btn[title]:hover::after {
+      content: attr(title);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--glass-border-inner);
+      color: var(--muted);
+      font-size: .68rem;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      animation: tip-in .2s forwards;
+    }
+
+    @keyframes tip-in {
+      to { opacity: 1; }
+    }
+
+    .theme-toggle {
+      position: fixed;
+      top: 22px;
+      right: 22px;
+      z-index: 10;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border-inner);
+      background: var(--glass-bg);
+      color: var(--muted);
+      cursor: pointer;
+      backdrop-filter: blur(20px);
+      transition: all .3s ease;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    }
+
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .theme-toggle:hover {
+      background: var(--btn-hover);
+      color: var(--text);
+    }
+
+    .lang-drawer {
+      position: fixed;
+      bottom: 82px;
+      left: 50%;
+      transform: translateX(-50%) translateY(14px);
+      z-index: 9;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      max-width: min(96vw, 640px);
+      max-height: 36vh;
+      overflow-y: auto;
+      padding: 14px;
+      border: 1px solid var(--glass-border-inner);
+      border-radius: 18px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(32px);
+      opacity: 0;
+      pointer-events: none;
+      transition: all .35s cubic-bezier(.2,.9,.2,1);
+      scrollbar-width: thin;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+
+    .lang-drawer::-webkit-scrollbar { width: 4px; }
+    .lang-drawer::-webkit-scrollbar-thumb { background: var(--glass-border-inner); border-radius: 4px; }
+
+    .lang-drawer.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .lang-chip {
+      padding: 5px 11px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font-size: .74rem;
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+    }
+
+    .lang-chip:hover {
+      background: var(--btn-hover);
+      color: var(--text);
+    }
+
+    .lang-chip.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(201,169,110,.05);
+    }
+
+    @media (max-width: 520px) {
+      .hero-card { padding: 40px 22px; width: min(90vw, 380px); }
+      h1 { letter-spacing: .08em; }
+      .control-bar { bottom: 18px; }
+      .lang-drawer { bottom: 72px; max-height: 44vh; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id='bg-canvas'></canvas>
+  <div class='vignette'></div>
+
+  <button class='theme-toggle' id='themeBtn' title='Switch theme'>
+    <svg viewBox='0 0 24 24' id='themeIcon'><circle cx='12' cy='12' r='5'/><path d='M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42'/></svg>
+  </button>
+
+  <main>
+    <div class='hero-card' id='heroCard'>
+      <div class='glass-back'></div>
+      <div class='brdf-light' id='brdfLight'></div>
+      <div class='press-glow' id='pressGlow'></div>
+      <div class='rim-light' id='rimLight'></div>
+      <h1 id='mainText'>HELLO WORLD</h1>
+      <div class='subtitle' id='subText'>UNIVERSAL GREETING</div>
+      <div class='lang-badge' id='langBadge'>ENGLISH</div>
+    </div>
+  </main>
+
+  <div class='lang-drawer' id='langDrawer'></div>
+
+  <div class='control-bar'>
+    <button class='ctrl-btn' id='langToggle' title='Languages'>
+      <svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='10'/><path d='M2 12h20'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>
+    </button>
+    <div class='ctrl-divider'></div>
+    <button class='ctrl-btn' id='autoBtn' title='Auto Play'>
+      <svg viewBox='0 0 24 24' id='autoIcon'><polygon points='5 3 19 12 5 21 5 3'/></svg>
+    </button>
+    <div class='ctrl-divider'></div>
+    <button class='ctrl-btn' id='prevBtn' title='Previous'>
+      <svg viewBox='0 0 24 24'><polyline points='15 18 9 12 15 6'/></svg>
+    </button>
+    <div class='ctrl-divider'></div>
+    <button class='ctrl-btn' id='nextBtn' title='Next'>
+      <svg viewBox='0 0 24 24'><polyline points='9 18 15 12 9 6'/></svg>
+    </button>
+  </div>
+
+<script>
+/* ========================== CANVAS SETUP ========================== */
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, cx, cy;
+
+function resize() {
+  const dpr = Math.min(devicePixelRatio, 2);
+  W = canvas.width = window.innerWidth * dpr;
+  H = canvas.height = window.innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W /= dpr; H /= dpr;
+  cx = W / 2; cy = H / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* DOM refs */
+const card = document.getElementById('heroCard');
+const pressGlow = document.getElementById('pressGlow');
+const rimLight = document.getElementById('rimLight');
+const brdfLight = document.getElementById('brdfLight');
+const mainText = document.getElementById('mainText');
+const subText = document.getElementById('subText');
+const langBadge = document.getElementById('langBadge');
+const langDrawer = document.getElementById('langDrawer');
+const themeIcon = document.getElementById('themeIcon');
+const autoIcon = document.getElementById('autoIcon');
+
+/* Mouse */
+const mouse = { x: cx, y: cy, down: false, active: false };
+let mouseTimeout;
+window.addEventListener('mousemove', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  mouse.active = true;
+  clearTimeout(mouseTimeout);
+  mouseTimeout = setTimeout(() => mouse.active = false, 120);
+});
+window.addEventListener('mousedown', () => mouse.down = true);
+window.addEventListener('mouseup', () => mouse.down = false);
+window.addEventListener('touchstart', e => { mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.down = true; }, {passive:true});
+window.addEventListener('touchend', () => { mouse.down = false; pressGlow.classList.remove('active'); });
+
+function isLight() { return document.documentElement.dataset.theme === 'light'; }
+
+function getPalette() {
+  if (isLight()) {
+    return [
+      'rgba(80,170,140,.65)','rgba(190,160,80,.65)','rgba(170,110,160,.65)',
+      'rgba(90,150,190,.65)','rgba(190,110,90,.65)','rgba(160,170,80,.65)'
+    ];
+  }
+  return [
+    'rgba(60,180,140,.70)','rgba(200,170,80,.70)','rgba(170,100,160,.70)',
+    'rgba(80,150,200,.70)','rgba(200,100,80,.70)','rgba(160,170,70,.70)'
+  ];
+}
+
+/* ========================== GLOBAL CARD TILT + BRDF + PRESS GLOW ========================== */
+function updateCardEffects(e) {
+  const dx = (mouse.x - cx) / cx;
+  const dy = (mouse.y - cy) / cy;
+
+  /* 3D tilt */
+  const rx = dy * -10;
+  const ry = dx * 10;
+  card.style.transform = `perspective(1400px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(0)`;
+
+  /* Rim light on the edge facing away from mouse */
+  const rimX = 50 - dx * 65;
+  const rimY = 50 - dy * 65;
+  const rimA = Math.min(.92, .48 + Math.abs(dx) * .22 + Math.abs(dy) * .22);
+  rimLight.style.setProperty('--rim-x', rimX + '%');
+  rimLight.style.setProperty('--rim-y', rimY + '%');
+  rimLight.style.setProperty('--rim-a', rimA);
+
+  /* Press glow follows mouse while pressed */
+  if (mouse.down && e) {
+    const rect = card.getBoundingClientRect();
+    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      card.style.setProperty('--glow-x', x + '%');
+      card.style.setProperty('--glow-y', y + '%');
+    }
+  }
+}
+window.addEventListener('mousemove', updateCardEffects);
+
+/* Press glow activation */
+card.addEventListener('mousedown', e => {
+  const rect = card.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
+  card.style.setProperty('--glow-x', x + '%');
+  card.style.setProperty('--glow-y', y + '%');
+  pressGlow.classList.add('active');
+});
+card.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const rect = card.getBoundingClientRect();
+  const x = ((t.clientX - rect.left) / rect.width) * 100;
+  const y = ((t.clientY - rect.top) / rect.height) * 100;
+  card.style.setProperty('--glow-x', x + '%');
+  card.style.setProperty('--glow-y', y + '%');
+  pressGlow.classList.add('active');
+}, {passive:true});
+window.addEventListener('mouseup', () => pressGlow.classList.remove('active'));
+
+/* ========================== 3D GRID FLOOR ========================== */
+function drawGrid(rotX, rotY) {
+  const fov = 900;
+  const size = 16;
+  const sp = 100;
+  const yOff = 260;
+  ctx.save();
+  ctx.globalAlpha = isLight() ? .04 : .06;
+  ctx.strokeStyle = isLight() ? '#556' : '#778';
+  ctx.lineWidth = .7;
+
+  for (let i = -size; i <= size; i++) {
+    for (let axis = 0; axis < 2; axis++) {
+      let x1 = axis ? i * sp : -size * sp;
+      let z1 = axis ? -size * sp : i * sp;
+      let x2 = axis ? i * sp : size * sp;
+      let z2 = axis ? size * sp : i * sp;
+      let y1 = yOff, y2 = yOff;
+
+      let rx1 = x1 * Math.cos(rotY) - z1 * Math.sin(rotY);
+      let rz1 = x1 * Math.sin(rotY) + z1 * Math.cos(rotY);
+      let rx2 = x2 * Math.cos(rotY) - z2 * Math.sin(rotY);
+      let rz2 = x2 * Math.sin(rotY) + z2 * Math.cos(rotY);
+      x1 = rx1; z1 = rz1; x2 = rx2; z2 = rz2;
+
+      let ry1 = y1 * Math.cos(rotX) - z1 * Math.sin(rotX);
+      let rz3 = y1 * Math.sin(rotX) + z1 * Math.cos(rotX);
+      let ry2 = y2 * Math.cos(rotX) - z2 * Math.sin(rotX);
+      let rz4 = y2 * Math.sin(rotX) + z2 * Math.cos(rotX);
+      y1 = ry1; z1 = rz3; y2 = ry2; z2 = rz4;
+
+      const s1 = fov / (fov + z1);
+      const s2 = fov / (fov + z2);
+      if (s1 <= 0 || s2 <= 0) continue;
+
+      const sx1 = x1 * s1 + cx, sy1 = y1 * s1 + cy;
+      const sx2 = x2 * s2 + cx, sy2 = y2 * s2 + cy;
+
+      const grad = ctx.createLinearGradient(sx1, sy1, sx2, sy2);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(.5, ctx.strokeStyle);
+      grad.addColorStop(1, 'transparent');
+      ctx.strokeStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(sx1, sy1);
+      ctx.lineTo(sx2, sy2);
+      ctx.stroke();
+      ctx.strokeStyle = isLight() ? '#556' : '#778';
+    }
+  }
+  ctx.restore();
+}
+
+/* ========================== CAUSTICS ========================== */
+function drawCaustics(time, rotX, rotY) {
+  const fov = 900;
+  const yBase = 260;
+  const spots = 6;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < spots; i++) {
+    const t = time * 0.0012 + i * 1.1;
+    let x = Math.sin(t) * 70 + Math.cos(t * 0.37) * 35;
+    let z = Math.cos(t * 0.73) * 55 + Math.sin(t * 0.29) * 25;
+    let y = yBase;
+
+    let x2 = x * Math.cos(rotY) - z * Math.sin(rotY);
+    let z2 = x * Math.sin(rotY) + z * Math.cos(rotY);
+    x = x2; z = z2;
+    let y2c = y * Math.cos(rotX) - z * Math.sin(rotX);
+    let z3 = y * Math.sin(rotX) + z * Math.cos(rotX);
+    y = y2c; z = z3;
+
+    const sc = fov / (fov + z);
+    if (sc <= 0) continue;
+    const sx = x * sc + cx;
+    const sy = y * sc + cy;
+    const r = (30 + Math.sin(t * 1.7) * 14) * sc;
+
+    const a = 0.016 + Math.sin(t * 2.3) * 0.008;
+    const col = isLight() ? '130,110,80' : '201,169,110';
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+    g.addColorStop(0, `rgba(${col},${a})`);
+    g.addColorStop(0.4, `rgba(${col},${a * 0.35})`);
+    g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+
+function drawCardCaustics(time) {
+  const rect = card.getBoundingClientRect();
+  const ccx = rect.left + rect.width / 2;
+  const ccy = rect.top + rect.height / 2;
+  const maxR = Math.max(rect.width, rect.height) * 0.55;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const t = time * 0.0008;
+  for (let i = 0; i < 4; i++) {
+    const ang = t + i * (Math.PI * 2 / 4);
+    const ox = Math.cos(ang) * rect.width * 0.25;
+    const oy = Math.sin(ang * 0.6) * rect.height * 0.18;
+    const r = maxR * (0.5 + Math.sin(ang * 1.3) * 0.15);
+    const a = 0.007 + Math.sin(ang * 2) * 0.003;
+    const col = isLight() ? '130,110,80' : '201,169,110';
+    const g = ctx.createRadialGradient(ccx + ox, ccy + oy, 0, ccx + ox, ccy + oy, r);
+    g.addColorStop(0, `rgba(${col},${a})`);
+    g.addColorStop(0.5, `rgba(${col},${a * 0.3})`);
+    g.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(ccx + ox - r, ccy + oy - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}
+
+/* ========================== 3D PARTICLES ========================== */
+class Particle3D {
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(Math.random() * 2 - 1);
+    const r = 160 + Math.random() * 380;
+    this.ox = r * Math.sin(phi) * Math.cos(theta);
+    this.oy = r * Math.sin(phi) * Math.sin(theta) - 60;
+    this.oz = r * Math.cos(phi);
+    this.x = this.ox; this.y = this.oy; this.z = this.oz;
+    this.size = 2.0 + Math.random() * 2.8;
+    this.color = getPalette()[Math.floor(Math.random() * 6)];
+    this.alpha = .25 + Math.random() * .65;
+    this.blinkSpeed = .0015 + Math.random() * .007;
+    this.blinkOffset = Math.random() * Math.PI * 2;
+  }
+  update(rotX, rotY, time) {
+    const spd = .0003;
+    const cx0 = this.ox, cz0 = this.oz;
+    this.ox = cx0 * Math.cos(spd) - cz0 * Math.sin(spd);
+    this.oz = cx0 * Math.sin(spd) + cz0 * Math.cos(spd);
+    this.oy += Math.sin(time * .0006 + cx0 * .007) * .06;
+
+    let x = this.ox, y = this.oy, z = this.oz;
+    let x2 = x * Math.cos(rotY) - z * Math.sin(rotY);
+    let z2 = x * Math.sin(rotY) + z * Math.cos(rotY);
+    x = x2; z = z2;
+    let y2 = y * Math.cos(rotX) - z * Math.sin(rotX);
+    let z3 = y * Math.sin(rotX) + z * Math.cos(rotX);
+    y = y2; z = z3;
+
+    if (mouse.active) {
+      const px = x + cx, py = y + cy;
+      const dx = px - mouse.x, dy = py - mouse.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 150 && dist > .5) {
+        const f = (1 - dist/150) * 5;
+        x += (dx/dist) * f;
+        y += (dy/dist) * f;
+      }
+    }
+    this.x = x; this.y = y; this.z = z;
+  }
+  draw(ctx, time) {
+    const fov = 900;
+    const scale = fov / (fov + this.z);
+    if (scale < .04) return;
+    const sx = this.x * scale + cx;
+    const sy = this.y * scale + cy;
+    const s = this.size * scale;
+    const blink = .55 + .45 * Math.sin(time * this.blinkSpeed + this.blinkOffset);
+    ctx.beginPath();
+    ctx.arc(sx, sy, s, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = this.alpha * blink * Math.min(1, scale);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+const PARTICLE_COUNT = 800;
+const particles = Array.from({length: PARTICLE_COUNT}, () => new Particle3D());
+
+function drawConnections(time) {
+  const fov = 900;
+  const pts = particles.map(p => {
+    const sc = fov / (fov + p.z);
+    return { x: p.x * sc + cx, y: p.y * sc + cy, scale: sc };
+  });
+  ctx.lineWidth = .35;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    if (a.scale < .15) continue;
+    let n = 0;
+    for (let j = i + 1; j < pts.length && n < 2; j++) {
+      const b = pts[j];
+      if (b.scale < .15) continue;
+      const dx = a.x - b.x, dy = a.y - b.y;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < 7200) {
+        const alpha = (1 - d2/7200) * .06 * Math.min(a.scale, b.scale);
+        const col = isLight() ? `rgba(100,110,120,${alpha})` : `rgba(140,150,160,${alpha})`;
+        ctx.strokeStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        n++;
+      }
+    }
+  }
+}
+
+/* Main loop */
+let camRotX = .22, camRotY = 0;
+let time = 0;
+function animate() {
+  time++;
+  ctx.clearRect(0, 0, W, H);
+
+  const targetRY = (mouse.x - cx) * .00025;
+  const targetRX = .22 + (mouse.y - cy) * .0002;
+  camRotY += (targetRY - camRotY) * .025;
+  camRotX += (targetRX - camRotX) * .025;
+
+  if (mouse.down) {
+    particles.forEach(p => {
+      const px = p.x + cx, py = p.y + cy;
+      const dx = px - mouse.x, dy = py - mouse.y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if (d < 300) {
+        const f = (1 - d/300) * 12;
+        p.x += (dx/d||0) * f;
+        p.y += (dy/d||0) * f;
+      }
+    });
+  }
+
+  drawGrid(camRotX, camRotY);
+  drawCaustics(time, camRotX, camRotY);
+  drawCardCaustics(time);
+  particles.forEach(p => p.update(camRotX, camRotY, time));
+  drawConnections(time);
+  particles.forEach(p => p.draw(ctx, time));
+
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ========================== LANGUAGES ========================== */
+const languages = [
+  { name: 'ENGLISH',         text: 'HELLO WORLD',          sub: 'UNIVERSAL GREETING' },
+  { name: '中文',            text: '你好，世界',           sub: '宇宙级问候' },
+  { name: '繁體中文',        text: '你好世界',             sub: '宇宙級問候' },
+  { name: '日本語',          text: 'こんにちは世界',       sub: '普遍的な挨拶' },
+  { name: '한국어',          text: '안녕하세요 세계',      sub: '보편적인 인사' },
+  { name: 'FRANÇAIS',        text: 'BONJOUR LE MONDE',     sub: 'SALUTATION UNIVERSELLE' },
+  { name: 'DEUTSCH',         text: 'HALLO WELT',           sub: 'UNIVERSELLER GRUSS' },
+  { name: 'ESPAÑOL',         text: 'HOLA MUNDO',           sub: 'SALUDO UNIVERSAL' },
+  { name: 'ITALIANO',        text: 'CIAO MONDO',           sub: 'SALUTO UNIVERSALE' },
+  { name: 'PORTUGUÊS',       text: 'OLÁ MUNDO',            sub: 'SAUDAÇÃO UNIVERSAL' },
+  { name: 'РУССКИЙ',         text: 'ПРИВЕТ, МИР',          sub: 'УНИВЕРСАЛЬНОЕ ПРИВЕТСТВИЕ' },
+  { name: 'العربية',         text: 'مرحبا بالعالم',        sub: 'تحية عالمية' },
+  { name: 'עברית',           text: 'שלום עולם',            sub: 'ברכה אוניברסלית' },
+  { name: 'हिन्दी',          text: 'नमस्ते दुनिया',       sub: 'सार्वभौमिक अभिवादन' },
+  { name: 'বাংলা',           text: 'হ্যালো ওয়ার্ল্ড',    sub: 'সর্বজনীন অভিবাদন' },
+  { name: 'TÜRKÇE',          text: 'MERHABA DÜNYA',        sub: 'EVRENSEL SELAMLAMA' },
+  { name: 'TIẾNG VIỆT',      text: 'XIN CHÀO THẾ GIỚI',    sub: 'LỜI CHÀO PHỔ QUÁT' },
+  { name: 'ไทย',             text: 'สวัสดีชาวโลก',        sub: 'คำทักทายสากล' },
+  { name: 'ΕΛΛΗΝΙΚΆ',        text: 'ΓΕΙΆ ΣΟΥ ΚΌΣΜΕ',       sub: 'ΠΑΓΚΌΣΜΙΟΣ ΧΑΙΡΕΤΙΣΜΌΣ' },
+  { name: 'NEDERLANDS',      text: 'HALLO WERELD',         sub: 'UNIVERSELE GROET' },
+  { name: 'SVENSKA',         text: 'HEJ VÄRLDEN',          sub: 'UNIVERSELL HÄLSNING' },
+  { name: 'NORSK',           text: 'HEI VERDEN',           sub: 'UNIVERSELL HILSEN' },
+  { name: 'DANSK',           text: 'HEJ VERDEN',           sub: 'UNIVERSEL HILSEN' },
+  { name: 'SUOMI',           text: 'HEI MAAILMA',          sub: 'YLEINEN TERVEHDYS' },
+  { name: 'POLSKI',          text: 'WITAJ ŚWIECIE',        sub: 'POWSZECHNE POWITANIE' },
+  { name: 'ČEŠTINA',         text: 'AHOJ SVĚTE',           sub: 'UNIVERZÁLNÍ POZDRAV' },
+  { name: 'MAGYAR',          text: 'HELLÓ VILÁG',          sub: 'UNIVERZÁLIS KÖSZÖNTÉS' },
+  { name: 'ROMÂNĂ',          text: 'SALUT LUME',           sub: 'SALUTARE UNIVERSALĂ' },
+  { name: 'HRVATSKI',        text: 'POZDRAV SVIJETE',      sub: 'UNIVERZALNI POZDRAV' },
+  { name: 'СРПСКИ',          text: 'ЗДРАВО СВЕТЕ',         sub: 'УНИВЕРЗАЛНИ ПОЗДРАВ' },
+  { name: 'УКРАЇНСЬКА',      text: 'ПРИВІТ, СВІТ',         sub: 'УНІВЕРСАЛЬНЕ ВІТАННЯ' },
+  { name: 'اردو',            text: 'ہیلو ورلڈ',            sub: 'عالمی سلام' },
+  { name: 'മലയാളം',         text: 'ഹലോ വേൾഡ്',          sub: 'സാർവത്രിക ആശംസ' },
+  { name: 'தமிழ்',           text: 'ஹலோ வேர்ல்டு',        sub: 'உலகளாவிய வாழ்த்து' },
+  { name: 'తెలుగు',         text: 'హలో వరల్డ్',          sub: 'సార్వత്രిక శుభాకాంక్ష' },
+  { name: 'ಕನ್ನಡ',          text: 'ಹಲೋ ವರ್ಲ್ಡ್',         sub: 'ವಿಶ್ವ ಶುಭಾಶಯ' },
+  { name: 'मराठी',           text: 'नमस्कार जग',          sub: 'वैश्विक शुभेच्छा' },
+  { name: 'ગુજરાતી',        text: 'હેલો વર્લ્ડ',          sub: 'વૈશ્વિક શુભેચ્છા' },
+  { name: 'ਪੰਜਾਬੀ',         text: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ ਦੁਨਿਆ',   sub: 'ਸਾਰਵਭੌਮਿਕ ਸਲਾਮ' },
+  { name: 'မြန်မာဘာသာ',     text: 'မင်္ဂလာပါကမ္ဘာလောက',   sub: 'ကမ္ဘာ့အဆင့်သက်မဲ့မှု' },
+  { name: 'ខ្មែរ',           text: 'សួស្តីពិភពលោក',       sub: 'ការស្វាគមន៍សកល' },
+  { name: 'LIETUVIŲ',        text: 'LABAS PASAULI',        sub: 'VISUOTINIS PASVEIKINIMAS' },
+  { name: 'LATVIEŠU',        text: 'SVEIKA, PASAULE',      sub: 'UNIVERSĀLS SVEICIENS' },
+  { name: 'EESTI',           text: 'TERE MAAILM',          sub: 'ÜLDINE TERVITUS' },
+  { name: 'SLOVENČINA',      text: 'AHOJ SVET',            sub: 'UNIVERZÁLNE POZDRAVENIE' },
+  { name: 'SLOVENŠČINA',     text: 'POZDRAVLJEN, SVET',    sub: 'UNIVERZALNI POZDRAV' },
+  { name: 'БЪЛГАРСКИ',       text: 'ЗДРАВЕЙ, СВЯТ',        sub: 'УНИВЕРСАЛЕН ПОЗДРАВ' },
+  { name: 'ҚАЗАҚША',         text: 'СӘЛЕМ ӘЛЕМ',           sub: 'ӘЛЕМДІК СӘЛЕМ' },
+];
+
+let currentIdx = 0;
+let autoInterval = null;
+
+/* Typewriter */
+let typewriterTimer = null;
+function typewrite(text) {
+  clearInterval(typewriterTimer);
+  mainText.textContent = '';
+  mainText.classList.add('typing');
+  let i = 0;
+  typewriterTimer = setInterval(() => {
+    mainText.textContent += text[i];
+    i++;
+    if (i >= text.length) {
+      clearInterval(typewriterTimer);
+      mainText.classList.remove('typing');
+    }
+  }, 42);
+}
+
+function showLang(idx) {
+  currentIdx = ((idx % languages.length) + languages.length) % languages.length;
+  const l = languages[currentIdx];
+  typewrite(l.text);
+  subText.textContent = l.sub;
+  langBadge.textContent = l.name;
+  document.querySelectorAll('.lang-chip').forEach((c, i) => {
+    c.classList.toggle('active', i === currentIdx);
+  });
+}
+
+/* Build drawer */
+languages.forEach((l, i) => {
+  const chip = document.createElement('button');
+  chip.className = 'lang-chip';
+  chip.textContent = l.name;
+  chip.addEventListener('click', () => showLang(i));
+  langDrawer.appendChild(chip);
+});
+
+/* Controls */
+const langToggle = document.getElementById('langToggle');
+langToggle.addEventListener('click', () => {
+  langDrawer.classList.toggle('open');
+});
+
+/* Close drawer when clicking outside */
+document.addEventListener('click', e => {
+  if (langDrawer.classList.contains('open') &&
+      !langDrawer.contains(e.target) &&
+      !langToggle.contains(e.target)) {
+    langDrawer.classList.remove('open');
+  }
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => showLang(currentIdx + 1));
+document.getElementById('prevBtn').addEventListener('click', () => showLang(currentIdx - 1));
+
+const autoBtn = document.getElementById('autoBtn');
+autoBtn.addEventListener('click', () => {
+  if (autoInterval) {
+    clearInterval(autoInterval);
+    autoInterval = null;
+    autoBtn.classList.remove('active');
+    autoIcon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+    autoBtn.title = 'Auto Play';
+  } else {
+    showLang(currentIdx + 1);
+    autoInterval = setInterval(() => showLang(currentIdx + 1), 3200);
+    autoBtn.classList.add('active');
+    autoIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    autoBtn.title = 'Pause';
+  }
+});
+
+/* ========================== THEME ========================== */
+const themeBtn = document.getElementById('themeBtn');
+const sunSvg = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+const moonSvg = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+
+function setTheme(t, save = true) {
+  document.documentElement.dataset.theme = t;
+  themeIcon.innerHTML = t === 'light' ? moonSvg : sunSvg;
+  themeBtn.title = t === 'light' ? 'Switch to dark' : 'Switch to light';
+  if (save) localStorage.setItem('hw-theme', t);
+  particles.forEach(p => { p.color = getPalette()[Math.floor(Math.random() * 6)]; });
+}
+
+themeBtn.addEventListener('click', () => {
+  setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+});
+
+const savedTheme = localStorage.getItem('hw-theme');
+setTheme(savedTheme || 'dark', false);
+showLang(0);
+</script>
+</body>
+</html>

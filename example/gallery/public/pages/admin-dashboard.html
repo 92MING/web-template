@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-dashboard-admin widgets='{
+    "users":{"value":"8,420","change":"+120 this week"},
+    "orders":[{"id":"#1024","amount":"$120"},{"id":"#1023","amount":"$85"},{"id":"#1022","amount":"$240"}],
+    "servers":[{"name":"Web OK","status":"ok"},{"name":"DB OK","status":"ok"},{"name":"Cache Warn","status":"warn"}],
+    "actions":["Add User","New Order","Export"],
+    "notifications":[{"text":"New signup from","highlight":"alice"},{"text":"Order #1024 shipped"},{"text":"Server backup completed"}],
+    "calendar":true
+  }'>
+    <div slot="navbar"><builtin-navbar brand="Admin" items='[]'></builtin-navbar></div>
+  </builtin-tpl-dashboard-admin>
+</body>
+</html>

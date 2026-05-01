@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语音识别测试 (LLM-ASR)</title>
+<link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+<style>
+.drop-zone { transition: all 0.2s ease; }
+.drop-zone.drag-over { border-color: #6366f1; background: #eef2ff; }
+.badge-teacher { background: #6366f1; color: #fff; }
+.badge-student { background: #f59e0b; color: #fff; }
+.badge-default { background: #64748b; color: #fff; }
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse-ring { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+.recording-pulse { position: relative; }
+.recording-pulse::after { content: none; }
+
+body { font-family: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", system-ui, -apple-system, sans-serif; background: #edf2f6; color: #142033; }
+.drop-zone { transition: border-color .15s ease, background .15s ease; }
+.drop-zone.drag-over { border-color: #24557a; background: #eef3f7; }
+.fade-in { animation: none; }
+.recording-pulse::after { content: none; animation: none; }
+#dropZone:hover { border-color: #9aa9b8; background: #f7f9fb; }
+.badge-teacher { background: #24557a; color: #fff; }
+.badge-student { background: #8a611d; color: #fff; }
+.badge-default { background: #64748b; color: #fff; }
+.bg-gray-50 { background: #edf2f6 !important; }
+.bg-white { background: #fff !important; }
+.bg-indigo-50 { background: #eef3f7 !important; }
+.bg-amber-50 { background: #f7f1e7 !important; }
+.bg-red-50 { background: #fff3f2 !important; }
+.rounded-xl { border-radius: 10px !important; }
+.rounded-lg, .rounded-md { border-radius: 8px !important; }
+.shadow-sm { box-shadow: none !important; }
+.border-gray-200, .border-gray-300, .border-indigo-100, .border-amber-100, .border-red-200 { border-color: #d7dee8 !important; }
+.bg-indigo-600 { background: #24557a !important; }
+.text-indigo-600, .text-indigo-700 { color: #24557a !important; }
+.text-amber-600, .text-amber-700 { color: #8a611d !important; }
+.hover\:bg-indigo-700:hover { background: #1f4868 !important; }
+.hover\:bg-gray-50:hover { background: #f7f9fb !important; }
+#btnRecord.recording-pulse { border-color: #c25a5a !important; background: #fff5f5 !important; box-shadow: none !important; }
+
+/* Fill panel iframe width when embedded, keep centered layout for standalone page. */
+body[data-proj-embedded="1"] .max-w-3xl.mx-auto {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100%;
+}
+</style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div class="max-w-3xl mx-auto px-4 py-8">
+
+  <!-- Header -->
+  <div class="mb-8">
+    <a href="/admin/test/ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">← AI 测试</a>
+    <h1 class="text-2xl font-bold text-gray-900 mt-2">语音识别测试 (LLM-ASR)</h1>
+  </div>
+
+  <!-- Mode Toggle -->
+  <div class="flex bg-white rounded-lg shadow-sm border border-gray-200 p-1 mb-6">
+    <button id="btnModeAsr" onclick="setMode('asr')" class="flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white">
+      ASR 普通转录
+    </button>
+    <button id="btnModeTranscript" onclick="setMode('transcript')" class="flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors text-gray-600 hover:text-gray-900">
+      Transcript 角色分离
+    </button>
+  </div>
+
+  <!-- Roles Input (transcript mode) -->
+  <div id="rolesSection" class="mb-4 hidden">
+    <label class="block text-sm font-medium text-gray-700 mb-1">角色列表</label>
+    <input id="rolesInput" type="text" placeholder="Teacher, Student" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+  </div>
+
+  <!-- Common Options -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">预期语言</label>
+        <input id="expectedLangs" list="expectedLangOptions" type="text" placeholder="输入语言代码（逗号分隔），如 zh-tw,en,ja" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+        <datalist id="expectedLangOptions"></datalist>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Prompt</label>
+        <input id="asrPrompt" type="text" placeholder="Prompt" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Area -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <!-- Drop Zone -->
+    <div id="dropZone" class="drop-zone border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30">
+      <svg class="mx-auto h-10 w-10 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <p class="text-sm text-gray-600 font-medium">拖放音频/视频文件到这里</p>
+      <p class="text-xs text-gray-400 mt-1">或点击选择文件</p>
+      <input id="fileInput" type="file" accept="audio/*,video/*" class="hidden">
+    </div>
+
+    <!-- Microphone -->
+    <div class="flex items-center justify-center gap-3 mt-4">
+      <button id="btnRecord" onclick="toggleRecording()" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+        <span id="recordIcon" class="w-3 h-3 rounded-full bg-red-500"></span>
+        <span id="recordLabel">录音</span>
+      </button>
+      <span id="recordTimer" class="text-xs text-gray-400 hidden">00:00</span>
+    </div>
+
+    <!-- File Info -->
+    <div id="fileInfo" class="hidden mt-4 p-3 bg-gray-50 rounded-lg">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3 min-w-0">
+          <svg class="h-5 w-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+          </svg>
+          <div class="min-w-0">
+            <p id="fileName" class="text-sm font-medium text-gray-900 truncate"></p>
+            <p class="text-xs text-gray-500"><span id="fileSize"></span> · <span id="fileDuration"></span></p>
+          </div>
+        </div>
+        <button onclick="clearFile()" class="text-gray-400 hover:text-red-500 transition-colors">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <!-- Audio Player -->
+      <audio id="audioPlayer" controls class="w-full mt-3 h-10"></audio>
+    </div>
+
+    <!-- Submit Button -->
+    <button id="btnSubmit" onclick="submitAudio()" disabled class="mt-4 w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+      <svg id="submitSpinner" class="hidden animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span id="submitLabel">开始识别</span>
+    </button>
+  </div>
+
+  <!-- Result (ASR mode) -->
+  <div id="resultAsr" class="hidden mb-6 fade-in">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <h3 class="text-sm font-semibold text-gray-700">识别结果</h3>
+        <div class="flex items-center gap-2">
+          <span id="asrTime" class="text-xs text-gray-400"></span>
+          <button onclick="copyText('asrText')" class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            复制
+          </button>
+        </div>
+      </div>
+      <div class="p-4">
+        <div id="asrText" class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result (Transcript mode) -->
+  <div id="resultTranscript" class="hidden mb-6 fade-in">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <h3 class="text-sm font-semibold text-gray-700">角色分离结果</h3>
+        <div class="flex items-center gap-3">
+          <span id="transcriptTime" class="text-xs text-gray-400"></span>
+          <button onclick="copyTranscriptJson()" class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            复制 JSON
+          </button>
+          <button onclick="copyTranscriptText()" class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            复制文本
+          </button>
+        </div>
+      </div>
+      <div id="transcriptMessages" class="p-4 space-y-3"></div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="errorBox" class="hidden mb-6 bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm fade-in"></div>
+
+  <!-- History -->
+  <div id="historySection" class="hidden">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold text-gray-700">最近识别记录</h3>
+      <button onclick="clearHistory()" class="text-xs text-gray-400 hover:text-red-500">清空</button>
+    </div>
+    <div id="historyList" class="space-y-2"></div>
+  </div>
+
+</div>
+
+<script>
+// State
+let currentMode = 'asr';
+let currentFile = null;
+let mediaRecorder = null;
+let recordChunks = [];
+let recordStartTime = null;
+let recordTimerInterval = null;
+let isRecording = false;
+let transcriptData = null;
+let history = JSON.parse(localStorage.getItem('asr_history') || '[]');
+
+// DOM refs
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const audioPlayer = document.getElementById('audioPlayer');
+const btnSubmit = document.getElementById('btnSubmit');
+
+// Init
+renderHistory();
+loadLanguageSuggestions();
+
+async function loadLanguageSuggestions() {
+  const list = document.getElementById('expectedLangOptions');
+  if (!list) return;
+  try {
+    const resp = await fetch('/ai/languages');
+    if (!resp.ok) return;
+    const rows = await resp.json();
+    if (!Array.isArray(rows)) return;
+    list.innerHTML = rows
+      .filter((row) => row && row.code)
+      .map((row) => {
+        const code = escHtml(String(row.code || '').trim());
+        const name = escHtml(String(row.name || '').trim());
+        return `<option value="${code}">${name ? `${name} (${code})` : code}</option>`;
+      })
+      .join('');
+  } catch {}
+}
+
+// Mode toggle
+function setMode(mode) {
+  currentMode = mode;
+  const btnAsr = document.getElementById('btnModeAsr');
+  const btnTr = document.getElementById('btnModeTranscript');
+  const rolesSection = document.getElementById('rolesSection');
+  if (mode === 'asr') {
+    btnAsr.className = 'flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white';
+    btnTr.className = 'flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors text-gray-600 hover:text-gray-900';
+    rolesSection.classList.add('hidden');
+  } else {
+    btnTr.className = 'flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white';
+    btnAsr.className = 'flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors text-gray-600 hover:text-gray-900';
+    rolesSection.classList.remove('hidden');
+  }
+  document.getElementById('resultAsr').classList.add('hidden');
+  document.getElementById('resultTranscript').classList.add('hidden');
+  document.getElementById('errorBox').classList.add('hidden');
+}
+
+// Drag & drop
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && (f.type.startsWith('audio/') || f.type.startsWith('video/'))) loadFile(f);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function loadFile(file) {
+  currentFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatSize(file.size);
+  document.getElementById('fileDuration').textContent = '计算中...';
+  const url = URL.createObjectURL(file);
+  audioPlayer.src = url;
+  fileInfo.classList.remove('hidden');
+  btnSubmit.disabled = false;
+  // Detect duration via Web Audio API
+  detectDuration(file);
+}
+
+function detectDuration(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx.decodeAudioData(e.target.result, buf => {
+        const dur = buf.duration;
+        document.getElementById('fileDuration').textContent = formatDuration(dur);
+        ctx.close();
+      }, () => {
+        // Fallback: use audio element
+        fallbackDuration();
+      });
+    } catch {
+      fallbackDuration();
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function fallbackDuration() {
+  audioPlayer.addEventListener('loadedmetadata', function handler() {
+    if (isFinite(audioPlayer.duration)) {
+      document.getElementById('fileDuration').textContent = formatDuration(audioPlayer.duration);
+    } else {
+      document.getElementById('fileDuration').textContent = '未知';
+    }
+    audioPlayer.removeEventListener('loadedmetadata', handler);
+  });
+}
+
+function clearFile() {
+  currentFile = null;
+  fileInput.value = '';
+  audioPlayer.src = '';
+  fileInfo.classList.add('hidden');
+  btnSubmit.disabled = true;
+  document.getElementById('resultAsr').classList.add('hidden');
+  document.getElementById('resultTranscript').classList.add('hidden');
+  document.getElementById('errorBox').classList.add('hidden');
+}
+
+// Recording
+async function toggleRecording() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(recordChunks, { type: 'audio/webm' });
+      const file = new File([blob], `recording_${Date.now()}.webm`, { type: 'audio/webm' });
+      loadFile(file);
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    recordStartTime = Date.now();
+    document.getElementById('recordLabel').textContent = '停止';
+    document.getElementById('btnRecord').classList.add('recording-pulse', 'border-red-300', 'bg-red-50');
+    document.getElementById('recordTimer').classList.remove('hidden');
+    recordTimerInterval = setInterval(updateRecordTimer, 500);
+  } catch (err) {
+    showError('无法访问麦克风: ' + err.message);
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  isRecording = false;
+  clearInterval(recordTimerInterval);
+  document.getElementById('recordLabel').textContent = '录音';
+  document.getElementById('btnRecord').classList.remove('recording-pulse', 'border-red-300', 'bg-red-50');
+  document.getElementById('recordTimer').classList.add('hidden');
+}
+
+function updateRecordTimer() {
+  const elapsed = (Date.now() - recordStartTime) / 1000;
+  document.getElementById('recordTimer').textContent = formatDuration(elapsed);
+}
+
+// Submit
+async function submitAudio() {
+  if (!currentFile) return;
+  const spinner = document.getElementById('submitSpinner');
+  const label = document.getElementById('submitLabel');
+  spinner.classList.remove('hidden');
+  label.textContent = '识别中...';
+  btnSubmit.disabled = true;
+  document.getElementById('resultAsr').classList.add('hidden');
+  document.getElementById('resultTranscript').classList.add('hidden');
+  document.getElementById('errorBox').classList.add('hidden');
+
+  const formData = new FormData();
+  formData.append('file', currentFile);
+
+  const startTime = performance.now();
+
+  try {
+    if (currentMode === 'asr') {
+      const expectedLangs = document.getElementById('expectedLangs').value.trim();
+      const asrPrompt = document.getElementById('asrPrompt').value.trim();
+      if (expectedLangs) formData.append('expected_languages', expectedLangs);
+      if (asrPrompt) formData.append('prompt', asrPrompt);
+      const res = await fetch('/ai/asr', { method: 'POST', body: formData });
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      document.getElementById('asrText').textContent = data.text || '(空结果)';
+      document.getElementById('asrTime').textContent = `${elapsed}s`;
+      document.getElementById('resultAsr').classList.remove('hidden');
+      addHistory('asr', data.text, elapsed);
+    } else {
+      const roles = document.getElementById('rolesInput').value.trim();
+      const expectedLangs = document.getElementById('expectedLangs').value.trim();
+      const asrPrompt = document.getElementById('asrPrompt').value.trim();
+      if (roles) formData.append('roles', roles);
+      if (expectedLangs) formData.append('expected_languages', expectedLangs);
+      if (asrPrompt) formData.append('prompt', asrPrompt);
+      const res = await fetch('/ai/transcript', { method: 'POST', body: formData });
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      transcriptData = data.transcript;
+      renderTranscript(transcriptData);
+      document.getElementById('transcriptTime').textContent = `${elapsed}s`;
+      document.getElementById('resultTranscript').classList.remove('hidden');
+      addHistory('transcript', JSON.stringify(transcriptData), elapsed);
+    }
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    spinner.classList.add('hidden');
+    label.textContent = '开始识别';
+    btnSubmit.disabled = false;
+  }
+}
+
+// Render transcript bubbles
+const ROLE_COLORS = [
+  'bg-indigo-100 text-indigo-800', 'bg-amber-100 text-amber-800',
+  'bg-emerald-100 text-emerald-800', 'bg-rose-100 text-rose-800',
+  'bg-cyan-100 text-cyan-800', 'bg-purple-100 text-purple-800',
+];
+const roleBadgeColors = {};
+let roleColorIdx = 0;
+
+function getRoleBadge(role) {
+  if (!roleBadgeColors[role]) {
+    roleBadgeColors[role] = ROLE_COLORS[roleColorIdx % ROLE_COLORS.length];
+    roleColorIdx++;
+  }
+  return roleBadgeColors[role];
+}
+
+function renderTranscript(data) {
+  const container = document.getElementById('transcriptMessages');
+  container.innerHTML = '';
+  roleColorIdx = 0;
+  Object.keys(roleBadgeColors).forEach(k => delete roleBadgeColors[k]);
+
+  const items = Array.isArray(data?.segments) ? data.segments : [];
+  if (!Array.isArray(items) || items.length === 0) {
+    container.innerHTML = '<p class="text-sm text-gray-400">无转录内容</p>';
+    return;
+  }
+  items.forEach(item => {
+    const role = item?.speaker || 'Unknown';
+    const text = item?.text || '';
+    const badgeClass = getRoleBadge(role);
+    const div = document.createElement('div');
+    div.className = 'flex items-start gap-3 fade-in';
+    div.innerHTML = `
+      <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 mt-0.5 ${badgeClass}">${escHtml(role)}</span>
+      <p class="text-sm text-gray-800 leading-relaxed">${escHtml(text)}</p>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// Copy helpers
+function copyText(elementId) {
+  const text = document.getElementById(elementId).textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('已复制'));
+}
+
+function copyTranscriptJson() {
+  if (transcriptData) {
+    navigator.clipboard.writeText(JSON.stringify(transcriptData, null, 2)).then(() => showToast('已复制 JSON'));
+  }
+}
+
+function copyTranscriptText() {
+  if (!transcriptData) return;
+  const items = Array.isArray(transcriptData?.segments) ? transcriptData.segments : [];
+  const text = items.map(item => {
+    const role = item?.speaker || 'Unknown';
+    return `${role}: ${item?.text || ''}`;
+  }).join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('已复制文本'));
+}
+
+// History
+function addHistory(mode, text, time) {
+  history.unshift({ mode, text: text?.substring(0, 200), time, date: new Date().toLocaleString('zh-CN') });
+  if (history.length > 20) history = history.slice(0, 20);
+  localStorage.setItem('asr_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  if (history.length === 0) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  list.innerHTML = history.map((h, i) => `
+    <div class="bg-white rounded-lg border border-gray-200 p-3 text-sm">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="inline-block px-1.5 py-0.5 rounded text-xs font-medium ${h.mode === 'asr' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}">${h.mode === 'asr' ? 'ASR' : 'Transcript'}</span>
+        <span class="text-xs text-gray-400">${h.date} · ${h.time}s</span>
+      </div>
+      <p class="text-gray-600 text-xs truncate">${escHtml(h.text || '')}</p>
+    </div>
+  `).join('');
+}
+
+function clearHistory() {
+  history = [];
+  localStorage.removeItem('asr_history');
+  renderHistory();
+}
+
+// Error
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = '错误: ' + msg;
+  box.classList.remove('hidden');
+}
+
+// Toast
+function showToast(msg) {
+  const toast = document.createElement('div');
+  toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50 fade-in';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 1500);
+}
+
+// Utilities
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function formatDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>

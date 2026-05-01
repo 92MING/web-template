@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f5f5f5">
+<title>我的收藏 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
+  .container { max-width: 1140px; margin: 0 auto; padding: 1rem; }
+  .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .header h1 { margin: 0; font-size: 1.5rem; }
+  .header-actions { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
+  .nav-links { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .nav-links a {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 6px 12px; border: 1px solid var(--builtin-border, #d1d5db);
+    border-radius: var(--builtin-radius, 6px); background: var(--builtin-button-bg, #ffffff);
+    color: var(--builtin-color-text, #111827); text-decoration: none; font-size: 14px;
+  }
+  .nav-links a:hover { background: var(--builtin-button-hover-bg, #f9fafb); }
+  @media (max-width: 720px) {
+    .container { padding: max(0.5rem, env(safe-area-inset-top)) 0.75rem max(0.5rem, env(safe-area-inset-bottom)); }
+    .header h1 { font-size: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <builtin-icon name="heart" size="24" variant="outlined"></builtin-icon>
+    <h1 data-i18n="eshop.favorites">我的收藏</h1>
+    <div class="header-actions">
+      <div class="nav-links">
+        <a href="index.html" data-i18n="eshop.back_to_mall">返回商城</a>
+        <a href="user-profile.html" data-i18n="eshop.user_profile">个人中心</a>
+      </div>
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
+      <builtin-theme-toggle></builtin-theme-toggle>
+    </div>
+  </div>
+  <div id="favorites-list" data-i18n="eshop.loading">加载中...</div>
+</div>
+<script type="module">
+import { initEshop, api, t, applyI18n, USER_ID, BuiltinToast } from './eshop-utils.js';
+
+await initEshop();
+
+const $ = id => document.getElementById(id);
+
+async function loadFavorites() {
+  const r = await api('/shop/favorites?user_id=' + USER_ID);
+  const items = (r && r.items) || [];
+  const container = $('favorites-list');
+  if (!items.length) {
+    container.innerHTML = `<builtin-alert variant="info">${await t('eshop.no_favorites')}</builtin-alert>`;
+    await applyI18n();
+    return;
+  }
+  // Use builtin-product-grid
+  const pg = document.createElement('builtin-product-grid');
+  pg.products = items.map(p => ({
+    id: p.id,
+    title: p.name,
+    price: '¥' + p.price,
+    originalPrice: p.old_price ? '¥' + p.old_price : undefined,
+    image: p.image,
+    rating: p.rating,
+    sales: p.sales,
+    tags: p.tags || [],
+    href: 'product-detail.html?id=' + p.id,
+  }));
+  pg.addEventListener('builtin-product-click', (e) => {
+    location.href = 'product-detail.html?id=' + e.detail.id;
+  });
+  container.innerHTML = '';
+  container.appendChild(pg);
+
+  // Add remove buttons
+  setTimeout(() => {
+    const grid = pg.shadowRoot?.querySelector('.grid');
+    if (!grid) return;
+    grid.querySelectorAll('.product').forEach((el, idx) => {
+      const pid = items[idx]?.id;
+      if (!pid) return;
+      const btn = document.createElement('button');
+      btn.textContent = '取消收藏';
+      btn.style.cssText = 'margin-top:6px;width:100%;padding:6px;border:1px solid var(--builtin-color-danger);border-radius:var(--builtin-radius,6px);background:transparent;color:var(--builtin-color-danger);cursor:pointer;font:inherit;font-size:12px;';
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await api('/shop/favorites', { method: 'DELETE', body: JSON.stringify({ user_id: USER_ID, product_id: pid }) });
+        BuiltinToast.show(await t('eshop.favorite_removed'), { type: 'info' });
+        loadFavorites();
+      });
+      el.querySelector('.info')?.appendChild(btn);
+    });
+  }, 100);
+}
+
+loadFavorites();
+</script>
+</body>
+</html>

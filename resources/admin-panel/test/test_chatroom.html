@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RTC聊天室测试</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <script>
+    window.I18N = {
+      'rtc.title': { 'zh-cn': 'RTC聊天室测试', 'zh-tw': 'RTC聊天室測試', en: 'RTC Chatroom Test' },
+      'rtc.status.disconnected': { 'zh-cn': '未连接', 'zh-tw': '未連接', en: 'Offline' },
+      'rtc.status.started': { 'zh-cn': '已启动', 'zh-tw': '已啟動', en: 'Started' },
+      'rtc.status.connected': { 'zh-cn': '已连接', 'zh-tw': '已連接', en: 'Connected' },
+      'rtc.status.closed': { 'zh-cn': '已断开', 'zh-tw': '已斷開', en: 'Closed' }
+    };
+  </script>
+  <style>
+    :root {
+      --bg: #f1f5f9; --panel: #ffffff; --line: #e2e8f0; --text: #0f172a; --muted: #64748b;
+      --soft: #f8fafc;
+    }
+    html.dark {
+      --bg: #020617; --panel: #0f172a; --line: #24324a; --text: #e5edf9; --muted: #9fb0ca;
+      --soft: #14223a;
+    }
+    body { background: var(--bg); color: var(--text); margin: 0; font-family: system-ui, sans-serif; }
+    .card { border-radius: 8px; padding: 16px; background: var(--panel); border: 1px solid var(--line); }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; font-weight: 600; }
+    .field input, .field select { width: 100%; font-size: 13px; padding: 6px 10px;
+      background: var(--soft); color: var(--text); border: 1px solid var(--line); border-radius: 6px; outline: none; }
+    .field input:focus, .field select:focus { border-color: #6366f1; }
+    .btn { font-size: 13px; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all .15s; border: none; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-secondary { background: var(--line); color: var(--text); }
+    .btn-secondary:hover { background: #cbd5e1; }
+    #room-iframe { width: 100%; border: none; border-radius: 8px; background: #0f172a; }
+    #event-log { max-height: 200px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 11px; padding: 8px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; }
+    .log-line { padding: 2px 0; color: #64748b; }
+    .log-line .ts { color: #94a3b8; margin-right: 8px; }
+    .log-line.ok { color: #16a34a; }
+    .log-line.err { color: #dc2626; }
+    .log-line.warn { color: #d97706; }
+    .rooms-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .rooms-table th { text-align: left; font-weight: 600; color: #64748b; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+    .rooms-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+    .rooms-table tr:hover td { background: #f8fafc; }
+    #disconnect-modal { display: none; }
+    #disconnect-modal.show { display: flex; }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="p-5 space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 id="page-title" class="text-lg font-bold text-slate-700" data-i18n="rtc.title">RTC聊天室测试</h2>
+    <span id="conn-status" class="text-xs text-slate-400" data-i18n="rtc.status.disconnected">未连接</span>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="lab-toolbar" class="card">
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
+      <div class="field">
+        <label>模式</label>
+        <select id="f-mode" onchange="syncModeUI()">
+          <option value="create">创建房间</option>
+          <option value="join">加入房间</option>
+        </select>
+      </div>
+      <div class="field" id="f-name-wrap">
+        <label>房间名称</label>
+        <input id="f-name" value="测试房间" placeholder="房间名称"/>
+      </div>
+      <div class="field" id="f-roomid-wrap" style="display:none">
+        <label>房间 ID</label>
+        <input id="f-roomid" placeholder="加入时必填"/>
+      </div>
+      <div class="field">
+        <label>用户名</label>
+        <input id="f-username" value="管理员" placeholder="你的昵称"/>
+      </div>
+      <div class="field">
+        <label>密码（可选）</label>
+        <input id="f-password" type="password" placeholder="无密码"/>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <label class="text-xs text-slate-500"><input type="checkbox" id="f-close-on-leave" class="mr-1" checked/>创建者离开时关闭房间</label>
+      <label class="text-xs text-slate-500"><input type="checkbox" id="f-debug" class="mr-1" checked/>调试模式</label>
+      <div class="flex-1"></div>
+      <button onclick="refreshRooms()" class="btn btn-secondary">刷新房间列表</button>
+      <button onclick="launch()" id="launch-btn" class="btn btn-primary">启动</button>
+    </div>
+  </div>
+
+  <!-- Room list -->
+  <div id="rooms-card" class="card">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-semibold uppercase text-slate-500 tracking-wide">当前房间列表</span>
+      <span id="rooms-count" class="text-xs text-slate-400"></span>
+    </div>
+    <table class="rooms-table">
+      <thead><tr><th>房间 ID</th><th>名称</th><th>成员数</th><th>创建者</th><th>操作</th></tr></thead>
+      <tbody id="rooms-tbody"><tr><td colspan="5" class="text-slate-400">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Room iframe -->
+  <div id="iframe-section" class="hidden">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-semibold uppercase text-slate-500 tracking-wide">聊天室</span>
+      <button onclick="disconnect()" class="text-xs text-red-400 hover:text-red-500 font-medium">断开连接</button>
+    </div>
+    <iframe id="room-iframe" style="height:70vh;" src="about:blank"></iframe>
+  </div>
+
+  <!-- Disconnect modal (room_terminated) -->
+  <div id="disconnect-modal" class="fixed inset-0 z-50 bg-black/40 items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl p-5 space-y-3">
+      <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">房间连接已结束</div>
+      <div id="disconnect-reason" class="text-xs text-slate-500 dark:text-slate-400">—</div>
+      <div class="flex justify-end">
+        <button id="disconnect-ok-btn" class="btn btn-primary text-xs px-4 py-2">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event log floating toggle -->
+  <button id="event-log-fab" onclick="document.getElementById('event-log-panel').classList.toggle('hidden')" style="position:fixed;bottom:16px;right:16px;z-index:90;width:40px;height:40px;border-radius:50%;background:#4f46e5;color:#fff;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(79,70,229,.35);display:flex;align-items:center;justify-content:center" title="事件日志">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+  </button>
+  <div id="event-log-panel" class="hidden" style="position:fixed;bottom:64px;right:16px;z-index:89;width:420px;max-height:320px;border-radius:8px;background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.12);overflow:hidden">
+    <div style="padding:10px 14px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+      <span class="text-xs font-semibold uppercase text-slate-500 tracking-wide">事件日志</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="clearLog()" class="text-xs text-slate-400 hover:text-slate-600">清空</button>
+        <button onclick="document.getElementById('event-log-panel').classList.add('hidden')" class="text-xs text-slate-400 hover:text-slate-600">关闭</button>
+      </div>
+    </div>
+    <div id="event-log" style="flex:1;overflow-y:auto;max-height:260px"></div>
+  </div>
+
+<script>
+'use strict';
+
+const $ = id => document.getElementById(id);
+
+function uiLang() {
+  return typeof window.PageControls?.getLang === 'function' ? window.PageControls.getLang() : 'zh-cn';
+}
+
+function uiText(key, fallback) {
+  const entry = window.I18N?.[key];
+  const lang = uiLang();
+  if (!entry) return fallback || key;
+  if (entry[lang] != null) return entry[lang];
+  return entry['zh-cn'] || fallback || key;
+}
+
+function setConnStatus(key, color = '') {
+  $('conn-status').textContent = uiText(key, $('conn-status').textContent);
+  $('conn-status').style.color = color;
+}
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+function log(msg, cls = '') {
+  const el = $('event-log');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + cls;
+  const ts = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  line.innerHTML = `<span class="ts">${ts}</span>${esc(msg)}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog() { $('event-log').innerHTML = ''; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Mode toggle (mirrors v2 syncLabModeUI) ────────────────────────────────────
+function syncModeUI() {
+  const mode = $('f-mode').value;
+  const isCreate = mode === 'create';
+  $('f-name-wrap').style.display = isCreate ? '' : 'none';
+  $('f-roomid-wrap').style.display = isCreate ? 'none' : '';
+  $('f-roomid').placeholder = isCreate ? '留空自动生成' : '必填：输入房间 ID';
+  const u = $('f-username');
+  const cur = (u.value || '').trim();
+  if (isCreate && (!cur || cur === '测试人员')) u.value = '管理员';
+  else if (!isCreate && (!cur || cur === '管理员')) u.value = '测试人员';
+}
+
+// ── Rooms list ────────────────────────────────────────────────────────────────
+async function refreshRooms() {
+  try {
+    const data = await fetch('/admin/api/rooms?page=1&page_size=50').then(r => r.json());
+    const tbody = $('rooms-tbody');
+    tbody.innerHTML = '';
+    $('rooms-count').textContent = `共 ${data.total} 个`;
+    if (!data.items || data.items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-slate-400">暂无房间</td></tr>';
+      return;
+    }
+    data.items.forEach(room => {
+      const tr = document.createElement('tr');
+      const cands = Object.keys(room.candidates || {}).length;
+      const creator = room.creator_id || '—';
+      tr.innerHTML = `
+        <td class="font-mono text-xs">${esc(room.room_id)}</td>
+        <td>${esc(room.name || '—')}</td>
+        <td>${cands}</td>
+        <td class="text-xs text-slate-400">${esc(String(creator).slice(0,8))}</td>
+        <td>
+          <button onclick="quickJoin('${esc(room.room_id)}')" class="text-xs text-indigo-500 hover:underline mr-2">加入</button>
+          <button onclick="forceStop('${esc(room.room_id)}','${esc(room.name||'')}')" class="text-xs text-red-400 hover:underline">停止</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    log('刷新房间列表失败: ' + e.message, 'err');
+  }
+}
+
+function quickJoin(roomId) {
+  $('f-mode').value = 'join';
+  $('f-roomid').value = roomId;
+  syncModeUI();
+  log('已选择房间 ' + roomId + '，点击启动加入');
+}
+
+async function forceStop(roomId, roomName) {
+  if (!confirm(`确认强制停止房间"${roomName || roomId}"？`)) return;
+  try {
+    const resp = await fetch(`/admin/api/rooms/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error(await resp.text());
+    log('已停止房间 ' + roomId, 'ok');
+    await refreshRooms();
+  } catch (e) {
+    log('停止失败: ' + e.message, 'err');
+  }
+}
+
+// ── Launch (matches v2 launchLab postMessage protocol) ───────────────────────
+function launch() {
+  const mode     = $('f-mode').value;
+  const name     = encodeURIComponent($('f-name').value || '测试房间');
+  const roomId   = encodeURIComponent($('f-roomid').value || '');
+  const userName = encodeURIComponent($('f-username').value || (mode === 'join' ? '测试人员' : '管理员'));
+  const password = $('f-password').value.trim();
+  const debugQ   = $('f-debug')?.checked ? '&debug=1' : '&debug=0';
+  const closeQ   = $('f-close-on-leave')?.checked ? '&close_room_on_creator_left=1' : '';
+
+  if (mode === 'join' && !$('f-roomid').value.trim()) {
+    log('加入模式下必须填写房间 ID', 'err');
+    return;
+  }
+
+  let url = `/rtc_room/room?mode=${mode}&user_name=${userName}`;
+  if (mode === 'create') url += `&name=${name}${closeQ}${debugQ}`;
+  else url += `&room_id=${roomId}${debugQ}`;
+  if (password) url += `&password=${encodeURIComponent(password)}`;
+
+  log(`启动聊天室: ${mode} / ${decodeURIComponent(name)} / ${decodeURIComponent(userName)}`);
+
+  const frame = $('room-iframe');
+
+  // Send ui-config after iframe loads (v2 protocol)
+  frame.onload = () => {
+    if (!frame.contentWindow) return;
+    frame.contentWindow.postMessage({
+      type: 'ui-config',
+      darkMode: false,
+      debugMode: !!$('f-debug')?.checked,
+      showDarkButton: true,
+      showLanguageButton: true,
+      showDebugButton: true,
+    }, '*');
+  };
+
+  frame.src = url;
+  $('iframe-section').classList.remove('hidden');
+  $('lab-toolbar').classList.add('hidden');
+  setConnStatus('rtc.status.started', '#16a34a');
+
+  setTimeout(refreshRooms, 1500);
+}
+
+function disconnect() {
+  const frame = $('room-iframe');
+  frame.src = 'about:blank';
+  $('iframe-section').classList.add('hidden');
+  $('lab-toolbar').classList.remove('hidden');
+  setConnStatus('rtc.status.disconnected');
+  log('已断开连接');
+  setTimeout(refreshRooms, 500);
+}
+
+// ── v2 postMessage protocol handler ──────────────────────────────────────────
+// rtc_room/room.html sends: { type:'event', event:'connected'|'disconnected'|'room_terminated'|'ui_ready'|'ack' }
+window.addEventListener('message', (ev) => {
+  if (!ev.data || ev.data.type !== 'event') return;
+  const { event: evt } = ev.data;
+
+  if (evt === 'connected') {
+    $('lab-toolbar').classList.add('hidden');
+    setConnStatus('rtc.status.connected', '#16a34a');
+    log(`已连接房间 room_id=${ev.data.room_id || '?'} candidate=${ev.data.candidate_id || '?'}`, 'ok');
+  }
+
+  else if (evt === 'disconnected') {
+    $('lab-toolbar').classList.remove('hidden');
+    $('iframe-section').classList.add('hidden');
+    const frame = $('room-iframe');
+    if (frame) frame.src = 'about:blank';
+    setConnStatus('rtc.status.disconnected');
+    log('连接已断开', 'warn');
+    setTimeout(refreshRooms, 500);
+  }
+
+  else if (evt === 'room_terminated') {
+    $('lab-toolbar').classList.remove('hidden');
+    const reason = ev.data.reason_text || ev.data.reason || '房间连接已中断';
+    $('disconnect-reason').textContent = reason;
+    $('disconnect-modal').classList.add('show');
+    setConnStatus('rtc.status.closed', '#ef4444');
+    log('房间已终止: ' + reason, 'err');
+    setTimeout(refreshRooms, 500);
+  }
+
+  else if (evt === 'ui_ready') {
+    const frame = $('room-iframe');
+    frame?.contentWindow?.postMessage({
+      type: 'ui-config',
+      darkMode: false,
+      debugMode: !!$('f-debug')?.checked,
+      showDarkButton: true,
+      showLanguageButton: true,
+      showDebugButton: true,
+    }, '*');
+    log('room ui_ready → 已发送 ui-config');
+  }
+
+  else if (evt === 'ack') {
+    log(`ack: ${ev.data.cmd || '?'}`);
+  }
+
+  else {
+    log(`[event] ${evt} ${JSON.stringify(ev.data)}`);
+  }
+});
+
+// ── Disconnect modal ─────────────────────────────────────────────────────────
+$('disconnect-ok-btn').addEventListener('click', () => {
+  $('disconnect-modal').classList.remove('show');
+  const frame = $('room-iframe');
+  if (frame) frame.src = 'about:blank';
+  $('iframe-section').classList.add('hidden');
+});
+$('disconnect-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'disconnect-modal') {
+    $('disconnect-modal').classList.remove('show');
+    const frame = $('room-iframe');
+    if (frame) frame.src = 'about:blank';
+    $('iframe-section').classList.add('hidden');
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+syncModeUI();
+document.title = uiText('rtc.title', document.title);
+refreshRooms();
+</script>
+</body>
+</html>

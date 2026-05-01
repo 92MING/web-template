@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>商品管理 - e-Shop</title>
+<script type="module" src="/shared/components.js"></script>
+<script type="module" src="/shared/templates.js"></script>
+<style>
+  builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
+  .product-list { display: grid; gap: 0.75rem; }
+  .product-item { display: grid; gap: 0.6rem; padding: 1rem; border-bottom: 1px solid var(--builtin-border-soft, #e5e7eb); }
+  .product-item:last-child { border-bottom: none; }
+  .product-title { font-size: 1.05rem; font-weight: 700; }
+  .product-desc { color: var(--builtin-color-muted, #6b7280); font-size: 0.9rem; line-height: 1.6; }
+  .product-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; color: var(--builtin-color-muted, #6b7280); }
+  .product-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+</style>
+<link rel="stylesheet" href="/eshop-merchant.css?v=20260501-1">
+</head>
+<body>
+<builtin-app-shell id="app-shell">
+  <section class="card">
+    <builtin-schema-form id="product-form" submit-label="保存商品" layout="vertical"></builtin-schema-form>
+  </section>
+  <section class="card list-wrap">
+    <h2 style="margin:0;font-size:1.5rem;" data-copy="list_title">商品列表</h2>
+    <div id="list-state"></div>
+    <div id="product-list" class="product-list"></div>
+  </section>
+  <builtin-card slot="secondary">
+    <div slot="header"><strong id="context-title">商品管理上下文</strong></div>
+    <builtin-metadata-list id="product-context" columns="1" compact></builtin-metadata-list>
+  </builtin-card>
+</builtin-app-shell>
+
+<script type="module">
+import { initEshop, api, t, getRole, logout, switchLang, BuiltinToast } from './eshop-utils.js?v=20260501-1';
+
+await initEshop();
+
+if (getRole() !== 'merchant' && getRole() !== 'admin') {
+  location.replace('index.html');
+}
+
+const $ = id => document.getElementById(id);
+const form = $('product-form');
+const copy = {
+  'zh-cn': {
+    back: '返回商家后台',
+    eyebrow: '商家商品',
+    title: '商品管理',
+    documentTitle: '商品管理 - e-Shop',
+    lead: '在独立页面里创建、编辑和整理商品，列表与表单保持同一视觉基座。',
+    list_title: '商品列表',
+    contextTitle: '商品管理上下文',
+    productId: '商品 ID',
+    productName: '商品名称',
+    price: '价格',
+    originalPrice: '原价',
+    category: '分类',
+    stock: '库存',
+    image: '图片 URL',
+    tags: '标签',
+    description: '描述',
+    tagsHint: '标签，逗号分隔',
+    add: '新增商品',
+    save: '保存商品',
+    cancel: '取消编辑',
+    ok_save: '商品已保存',
+    ok_delete: '商品已删除',
+    fill: '请至少填写商品 ID、名称和价格',
+    loadingTitle: '正在加载商品',
+    loadingDescription: '正在获取当前商家可管理的商品列表。',
+    emptyTitle: '还没有商品',
+    emptyDescription: '创建第一件商品后，这里会出现商品列表。',
+    errorTitle: '加载商品失败',
+    errorDescription: '请稍后重试，或返回商家后台重新进入。',
+    totalLabel: '商品总数',
+    categoryLabel: '分类数量',
+    editingLabel: '当前编辑',
+    edit: '编辑',
+    delete: '删除',
+  },
+  en: {
+    back: 'Back to Merchant',
+    eyebrow: 'Merchant Products',
+    title: 'Product Management',
+    documentTitle: 'Product Management - e-Shop',
+    lead: 'Create, edit and organize products on a dedicated page with a consistent merchant shell.',
+    list_title: 'Product List',
+    contextTitle: 'Product Management Context',
+    productId: 'Product ID',
+    productName: 'Product Name',
+    price: 'Price',
+    originalPrice: 'Original Price',
+    category: 'Category',
+    stock: 'Stock',
+    image: 'Image URL',
+    tags: 'Tags',
+    description: 'Description',
+    tagsHint: 'Comma-separated tags',
+    add: 'Add Product',
+    save: 'Save Product',
+    cancel: 'Cancel Edit',
+    ok_save: 'Product saved',
+    ok_delete: 'Product deleted',
+    fill: 'Product ID, name and price are required',
+    loadingTitle: 'Loading products',
+    loadingDescription: 'Fetching products available to this merchant.',
+    emptyTitle: 'No products yet',
+    emptyDescription: 'Products will appear here after the first item is created.',
+    errorTitle: 'Failed to load products',
+    errorDescription: 'Try again in a moment or return to the merchant console.',
+    totalLabel: 'Products',
+    categoryLabel: 'Categories',
+    editingLabel: 'Editing',
+    edit: 'Edit',
+    delete: 'Delete',
+  }
+};
+
+let lang = localStorage.getItem('eshop_lang') || 'zh-cn';
+let products = [];
+let editingProductId = null;
+
+function d() {
+  return copy[lang] || copy['zh-cn'];
+}
+
+function applyShellCopy() {
+  const labels = d();
+  document.title = labels.documentTitle;
+  const appShell = $('app-shell');
+  appShell.eyebrow = labels.eyebrow;
+  appShell.title = labels.title;
+  appShell.subtitle = labels.lead;
+  appShell.backHref = 'merchant.html';
+  appShell.backLabel = labels.back;
+  appShell.currentLang = lang;
+  appShell.breadcrumbs = [
+    { label: labels.back, href: 'merchant.html' },
+    { label: labels.title },
+  ];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  $('context-title').textContent = labels.contextTitle;
+  document.querySelectorAll('[data-copy]').forEach((el) => {
+    el.textContent = labels[el.dataset.copy] || el.textContent;
+  });
+}
+
+function updateForm() {
+  const labels = d();
+  const current = form.getValue?.() || {};
+  form.schema = [
+    { name: 'id', label: labels.productId, type: 'text', required: true, default: current.id || '' },
+    { name: 'name', label: labels.productName, type: 'text', required: true, default: current.name || '' },
+    { name: 'price', label: labels.price, type: 'number', required: true, default: current.price || '' },
+    { name: 'old_price', label: labels.originalPrice, type: 'number', default: current.old_price || '' },
+    { name: 'category', label: labels.category, type: 'text', default: current.category || '' },
+    { name: 'stock', label: labels.stock, type: 'number', default: current.stock || '' },
+    { name: 'image', label: labels.image, type: 'text', default: current.image || '' },
+    { name: 'tags', label: labels.tags, type: 'text', hint: labels.tagsHint, default: current.tags || '' },
+    { name: 'description', label: labels.description, type: 'textarea', rows: 3, default: current.description || '' },
+  ];
+  form.submitLabel = labels.save;
+}
+
+function renderListState(mode) {
+  const labels = d();
+  const host = $('list-state');
+  if (mode === 'idle') {
+    host.innerHTML = '';
+    return;
+  }
+  if (mode === 'loading') {
+    host.innerHTML = `<builtin-empty-state preset="loading" heading="${labels.loadingTitle}" description="${labels.loadingDescription}"></builtin-empty-state>`;
+    return;
+  }
+  if (mode === 'error') {
+    host.innerHTML = `<builtin-empty-state preset="error" heading="${labels.errorTitle}" description="${labels.errorDescription}" action-label="${labels.back}" action-href="merchant.html"></builtin-empty-state>`;
+    return;
+  }
+  host.innerHTML = `<builtin-empty-state heading="${labels.emptyTitle}" description="${labels.emptyDescription}"></builtin-empty-state>`;
+}
+
+function updateContext() {
+  const labels = d();
+  const categoryCount = new Set(products.map((item) => item.category).filter(Boolean)).size;
+  $('product-context').items = [
+    { icon: 'shopping', label: labels.totalLabel, value: String(products.length) },
+    { icon: 'tag', label: labels.categoryLabel, value: String(categoryCount) },
+    { icon: 'edit', label: labels.editingLabel, value: editingProductId || '—' },
+  ];
+}
+
+function resetForm() {
+  editingProductId = null;
+  form.reset();
+  form.setValue({ id: 'p' + Date.now() });
+  updateForm();
+  updateContext();
+}
+
+function startEdit(id) {
+  const product = products.find((item) => item.id === id);
+  if (!product) return;
+  editingProductId = id;
+  form.setValue({
+    id: product.id || '',
+    name: product.name || '',
+    price: product.price || '',
+    old_price: product.old_price || '',
+    category: product.category || '',
+    stock: product.stock || '',
+    image: product.image || '',
+    tags: (product.tags || []).join(','),
+    description: product.description || '',
+  });
+  updateForm();
+  updateContext();
+  form.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function doDelete(id) {
+  if (!confirm(await t('eshop.confirm_delete'))) return;
+  await api('/shop/merchant/products', { method: 'DELETE', body: JSON.stringify({ id }) });
+  BuiltinToast.show(d().ok_delete, { type: 'success' });
+  if (editingProductId === id) {
+    resetForm();
+  }
+  await load();
+}
+
+function renderList() {
+  const host = $('product-list');
+  const labels = d();
+  if (!products.length) {
+    host.innerHTML = '';
+    renderListState('empty');
+    return;
+  }
+  renderListState('idle');
+  host.innerHTML = products.map((p) => `
+    <div class="product-item" data-id="${p.id}">
+      <div class="product-title">${p.name || ''}</div>
+      <div class="product-desc">${p.description || ''}</div>
+      <div class="product-meta">
+        <span>${labels.price}: ¥${p.price || 0}</span>
+        <span>${labels.category}: ${p.category || '—'}</span>
+        <span>${labels.stock}: ${p.stock || 0}</span>
+        <span>${awaitSafeText(p.sales)}</span>
+      </div>
+      <div class="product-meta">
+        <span>${labels.productId}: ${p.id || ''}</span>
+        <span>${labels.tags}: ${(p.tags || []).join(', ') || '—'}</span>
+      </div>
+      <div class="product-actions">
+        <button class="ghost-btn btn-edit" type="button" data-id="${p.id}"><builtin-icon name="edit" size="14"></builtin-icon> ${labels.edit}</button>
+        <button class="ghost-btn danger btn-delete" type="button" data-id="${p.id}"><builtin-icon name="delete" size="14"></builtin-icon> ${labels.delete}</button>
+      </div>
+    </div>
+  `).join('');
+
+  host.querySelectorAll('.btn-edit').forEach((btn) => {
+    btn.addEventListener('click', () => startEdit(btn.dataset.id));
+  });
+  host.querySelectorAll('.btn-delete').forEach((btn) => {
+    btn.addEventListener('click', () => doDelete(btn.dataset.id));
+  });
+}
+
+function awaitSafeText(sales) {
+  return `${d().stock === '库存' ? '销量' : 'Sales'}: ${sales || 0}`;
+}
+
+async function load() {
+  renderListState('loading');
+  try {
+    const res = await api('/shop/merchant/products');
+    products = (res && res.products) || [];
+    renderList();
+    updateContext();
+  } catch (_error) {
+    products = [];
+    $('product-list').innerHTML = '';
+    renderListState('error');
+    updateContext();
+  }
+}
+
+form.addEventListener('builtin-submit', async (event) => {
+  const value = event.detail.value;
+  const payload = {
+    id: value.id?.trim(),
+    name: value.name?.trim(),
+    price: parseInt(value.price, 10) || 0,
+    old_price: parseInt(value.old_price, 10) || 0,
+    category: value.category?.trim() || '',
+    stock: parseInt(value.stock, 10) || 0,
+    image: value.image?.trim() || '',
+    tags: (value.tags || '').split(',').map((s) => s.trim()).filter(Boolean),
+    description: value.description?.trim() || '',
+  };
+  if (!payload.id || !payload.name || !payload.price) {
+    BuiltinToast.show(d().fill, { type: 'warning' });
+    return;
+  }
+  await api('/shop/merchant/products', { method: 'POST', body: JSON.stringify(payload) });
+  BuiltinToast.show(d().ok_save, { type: 'success' });
+  resetForm();
+  await load();
+});
+
+document.addEventListener('builtin-user-action', (e) => {
+  if (e.detail?.action === 'logout') logout();
+});
+
+document.addEventListener('builtin-lang-change', async (e) => {
+  lang = e.detail?.lang || lang;
+  await switchLang(lang);
+  applyShellCopy();
+  updateForm();
+  renderList();
+  updateContext();
+});
+
+document.addEventListener('builtin-theme-change', (e) => {
+  localStorage.setItem('eshop_theme', e.detail.dark ? 'dark' : 'light');
+});
+
+resetForm();
+applyShellCopy();
+updateContext();
+await load();
+</script>
+</body>
+</html>

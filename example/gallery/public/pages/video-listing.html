@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Listing</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-video-listing categories='[{"id":"all","label":"All"},{"id":"music","label":"Music"},{"id":"gaming","label":"Gaming"},{"id":"news","label":"News"}]'>
+    <div slot="navbar"><builtin-navbar brand="StreamHub" items='[]'></builtin-navbar></div>
+  </builtin-tpl-video-listing>
+</body>
+</html>

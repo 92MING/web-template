@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout Layout</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
+  <script type="module" src="/shared/components.js"></script>
+  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/gallery-shell.js"></script>
+  <style>body{margin:0;}</style>
+</head>
+<body>
+  <builtin-tpl-ecommerce-checkout items='[
+    {"title":"Premium Wireless Headphones","qty":1,"price":"$299"},
+    {"title":"Travel Case","qty":2,"price":"$38"}
+  ]' subtotal="$337" shipping="$15" total="$352">
+    <div slot="navbar"><builtin-navbar brand="AudioStore" items='[]'></builtin-navbar></div>
+  </builtin-tpl-ecommerce-checkout>
+</body>
+</html>

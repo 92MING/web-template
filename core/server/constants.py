@@ -1,0 +1,19 @@
+from pathlib import Path
+
+from core.constants import PROJECT_DIR, APP_DIR, RESOURCES_DIR, CONFIG_DIR, PUBLIC_DIR
+
+SERVER_DIR = PROJECT_DIR / "core" / "server"
+ADMIN_PANEL_DIR = RESOURCES_DIR / "admin-panel"
+ADMIN_PANEL_SHARED_DIR = ADMIN_PANEL_DIR / "shared"
+PUBLIC_VENDOR_DIR = PUBLIC_DIR / "vendor"
+DEFAULT_LOG_DIR = PROJECT_DIR / "logs"
+DEFAULT_CONFIG_PATH = CONFIG_DIR / "server.yaml"
+
+__all__ = [
+    "SERVER_DIR",
+    "ADMIN_PANEL_DIR",
+    "ADMIN_PANEL_SHARED_DIR",
+    "PUBLIC_VENDOR_DIR",
+    "DEFAULT_LOG_DIR",
+    "DEFAULT_CONFIG_PATH",
+]
