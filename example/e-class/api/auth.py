@@ -5,7 +5,14 @@ from core.server import AdvanceRequest
 from core.server.data_types.apikey import create_apikey
 from core.utils.type_utils import AdvancedBaseModel
 
-from eclass_api_base import EClassRoute, STUDENT_ROLE_NAME, TEACHER_ROLE_NAME
+from eclass_api_base import (
+    AUDITOR_ROLE_NAME,
+    EClassRoute,
+    LEADER_ROLE_NAME,
+    SCHOOL_ADMIN_ROLE_NAME,
+    STUDENT_ROLE_NAME,
+    TEACHER_ROLE_NAME,
+)
 
 
 class RegisterRequest(AdvancedBaseModel):
@@ -32,7 +39,7 @@ class EclassAuthRoute(EClassRoute):
         schools = self.shared_data.get_shared_dict_value("eclass", "schools")
         if not schools:
             schools = {
-                "school1": {"id": "school1", "name": "香港马料水职业技术学校"},
+                "school1": {"id": "school1", "name": "示例学校"},
             }
             self.shared_data.set_shared_dict_value("eclass", "schools", schools)
 
@@ -66,6 +73,26 @@ class EclassAuthRoute(EClassRoute):
                     "nickname": "Teacher One",
                     "name": "Teacher One",
                     "role": "teacher",
+                    "school_id": "school1",
+                    "grade": "",
+                    "password_hash": "8d969eef6ecad3c2",
+                },
+                "auditor1": {
+                    "user_id": "auditor1",
+                    "email": "auditor1@example.com",
+                    "nickname": "Auditor One",
+                    "name": "Auditor One",
+                    "role": AUDITOR_ROLE_NAME,
+                    "school_id": "school1",
+                    "grade": "",
+                    "password_hash": "8d969eef6ecad3c2",
+                },
+                "leader1": {
+                    "user_id": "leader1",
+                    "email": "leader1@example.com",
+                    "nickname": "Leader One",
+                    "name": "Leader One",
+                    "role": LEADER_ROLE_NAME,
                     "school_id": "school1",
                     "grade": "",
                     "password_hash": "8d969eef6ecad3c2",
@@ -126,7 +153,15 @@ class EclassAuthRoute(EClassRoute):
         return hashlib.sha256(password.encode()).hexdigest()[:16]
 
     def _normalize_role(self, role: str) -> str:
-        return TEACHER_ROLE_NAME if str(role or "").strip().lower() == TEACHER_ROLE_NAME else STUDENT_ROLE_NAME
+        normalized = str(role or "").strip().lower()
+        if normalized in {
+            TEACHER_ROLE_NAME,
+            SCHOOL_ADMIN_ROLE_NAME,
+            LEADER_ROLE_NAME,
+            AUDITOR_ROLE_NAME,
+        }:
+            return normalized
+        return STUDENT_ROLE_NAME
 
     async def _issue_apikey(self, *, user_id: str, role: str) -> str:
         await self.ensure_permission_roles()
@@ -199,6 +234,8 @@ class EclassAuthRoute(EClassRoute):
                 {"role": "学生", "email": "student1@example.com", "password": "123456"},
                 {"role": "学生", "email": "student2@example.com", "password": "123456"},
                 {"role": "老师", "email": "teacher1@example.com", "password": "123456"},
+                {"role": "审核员", "email": "auditor1@example.com", "password": "123456"},
+                {"role": "领导", "email": "leader1@example.com", "password": "123456"},
             ]}
 
         return {"ok": False, "error": "无效的操作", "error_code": "invalid_action"}

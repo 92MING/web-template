@@ -71,6 +71,7 @@ class ARoute(Route):
     (api_root / "a" / "b.py").write_text(
         """
 from core.server import Route
+from core.server.route import get
 
 class BRoute(Route):
     Tags = "child"
@@ -79,8 +80,9 @@ class BRoute(Route):
     async def get(self):
         return {"route": "b"}
 
-    async def get_all(self):
-        return {"route": "b-all"}
+@get("/decorated")
+async def decorated_get():
+    return {"route": "decorated"}
 """,
         encoding="utf-8",
     )
@@ -123,9 +125,12 @@ class CRoute(Route):
         assert inherited_response.status_code == 200
         assert inherited_response.json() == {"route": "b"}
 
-        suffix_response = await _get(app, "/api/a/b/all", client_host="127.0.0.9", headers={"x-parent": "1"})
-        assert suffix_response.status_code == 200
-        assert suffix_response.json() == {"route": "b-all"}
+        decorated_response = await _get(app, "/api/a/b/decorated", client_host="127.0.0.9", headers={"x-parent": "1"})
+        assert decorated_response.status_code == 200
+        assert decorated_response.json() == {"route": "decorated"}
+
+        decorated_missing_dependency_response = await _get(app, "/api/a/b/decorated", client_host="127.0.0.9")
+        assert decorated_missing_dependency_response.status_code == 422
 
         param_response = await _get(app, "/api/a/example-item", client_host="127.0.0.9", headers={"x-parent": "1"})
         assert param_response.status_code == 200
@@ -150,6 +155,8 @@ class CRoute(Route):
 
     schema = app.openapi()
     assert schema["paths"]["/api/a/b"]["get"]["tags"] == ["root", "parent", "child"]
+    assert schema["paths"]["/api/a/b/decorated"]["get"]["tags"] == ["root", "parent", "child"]
+    assert "/api/a/b/all" not in schema["paths"]
 
 
 def test_route_loader_apikey_protected_is_inherited_and_checks_route_permission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

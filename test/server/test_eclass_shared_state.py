@@ -122,9 +122,8 @@ class EclassSharedStateTest(unittest.IsolatedAsyncioTestCase):
             headers=self._bearer(student_token),
         )
         self.assertEqual(response.status_code, 200)
-        homework = response.json()["homework"]
+        homework = [item for item in response.json()["homework"] if item["title"] == "Shared homework"]
         self.assertEqual(len(homework), 1)
-        self.assertEqual(homework[0]["title"], "Shared homework")
         self.assertEqual(homework[0]["due_date"], "2026-05-05T10:00")
         self.assertEqual(homework[0]["status"], "pending")
 

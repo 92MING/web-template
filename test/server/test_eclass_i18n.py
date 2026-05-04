@@ -36,8 +36,8 @@ class EclassI18nTest(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/translate.json")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data["eclass.title"]["zh_cn"], "数字教室")
-        self.assertEqual(data["eclass.title"]["en"], "Digital Classroom")
+        self.assertEqual(data["eclass.title"]["zh_cn"], "在线课堂")
+        self.assertEqual(data["eclass.title"]["en"], "Online Classroom")
         self.assertEqual(data["eclass.loading"]["zh_cn"], "加载中...")
         self.assertEqual(data["eclass.theme_dark"]["en"], "Dark")
 

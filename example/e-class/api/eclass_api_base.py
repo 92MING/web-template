@@ -8,13 +8,23 @@ from fastapi import Request
 
 from core.server import AdvanceRequest, Route
 from core.server.data_types.apikey import get_apikey_by_key
-from core.server.data_types.role import create_permission_role, get_permission_role_by_name
+from core.server.data_types.role import create_permission_role, get_permission_role_by_name, update_permission_role
 from core.server.shared_dict import SharedDict
 
 STUDENT_ROLE_NAME = "student"
 TEACHER_ROLE_NAME = "teacher"
+SCHOOL_ADMIN_ROLE_NAME = "school_admin"
+LEADER_ROLE_NAME = "leader"
+AUDITOR_ROLE_NAME = "auditor"
 
-__all__ = ["EClassRoute", "STUDENT_ROLE_NAME", "TEACHER_ROLE_NAME"]
+__all__ = [
+    "EClassRoute",
+    "STUDENT_ROLE_NAME",
+    "TEACHER_ROLE_NAME",
+    "SCHOOL_ADMIN_ROLE_NAME",
+    "LEADER_ROLE_NAME",
+    "AUDITOR_ROLE_NAME",
+]
 
 
 class EClassRoute(Route):
@@ -29,7 +39,7 @@ class EClassRoute(Route):
         schools = self.shared_data.get_shared_dict_value("eclass", "schools")
         if not schools:
             self.shared_data.set_shared_dict_value("eclass", "schools", {
-                "school1": {"id": "school1", "name": "香港马料水职业技术学校"},
+                "school1": {"id": "school1", "name": "示例学校"},
             })
 
         users = self.shared_data.get_shared_dict_value("eclass", "users")
@@ -61,6 +71,26 @@ class EClassRoute(Route):
                     "nickname": "Teacher One",
                     "name": "Teacher One",
                     "role": TEACHER_ROLE_NAME,
+                    "school_id": "school1",
+                    "grade": "",
+                    "password_hash": self._hash("123456"),
+                },
+                "auditor1": {
+                    "user_id": "auditor1",
+                    "email": "auditor1@example.com",
+                    "nickname": "Auditor One",
+                    "name": "Auditor One",
+                    "role": AUDITOR_ROLE_NAME,
+                    "school_id": "school1",
+                    "grade": "",
+                    "password_hash": self._hash("123456"),
+                },
+                "leader1": {
+                    "user_id": "leader1",
+                    "email": "leader1@example.com",
+                    "nickname": "Leader One",
+                    "name": "Leader One",
+                    "role": LEADER_ROLE_NAME,
                     "school_id": "school1",
                     "grade": "",
                     "password_hash": self._hash("123456"),
@@ -133,15 +163,51 @@ class EClassRoute(Route):
         return dict(user) if isinstance(user, dict) else None
 
     async def ensure_permission_roles(self) -> None:
-        await self._ensure_permission_role(STUDENT_ROLE_NAME)
-        await self._ensure_permission_role(TEACHER_ROLE_NAME)
+        await self._ensure_permission_role(
+            STUDENT_ROLE_NAME,
+            whitelist_routes=["/api/student*", "/api/classroom*"],
+            blacklist_routes=["/api/teacher*"],
+        )
+        await self._ensure_permission_role(
+            TEACHER_ROLE_NAME,
+            whitelist_routes=["/api/teacher*", "/api/classroom*"],
+            blacklist_routes=["/api/student*"],
+        )
+        await self._ensure_permission_role(
+            SCHOOL_ADMIN_ROLE_NAME,
+            whitelist_routes=["/api/teacher*", "/api/audit*", "/api/leader*"],
+            blacklist_routes=[],
+        )
+        await self._ensure_permission_role(
+            LEADER_ROLE_NAME,
+            whitelist_routes=["/api/leader*", "/api/teacher/profile*"],
+            blacklist_routes=[],
+        )
+        await self._ensure_permission_role(
+            AUDITOR_ROLE_NAME,
+            whitelist_routes=["/api/teacher/profile*", "/api/teacher/honors*", "/api/audit*"],
+            blacklist_routes=[],
+        )
 
-    async def _ensure_permission_role(self, name: str) -> None:
-        if await get_permission_role_by_name(name) is not None:
+    async def _ensure_permission_role(
+        self,
+        name: str,
+        *,
+        whitelist_routes: list[str],
+        blacklist_routes: list[str],
+    ) -> None:
+        existing = await get_permission_role_by_name(name)
+        if existing is not None:
+            await update_permission_role(
+                str(existing.id),
+                whitelist_routes=whitelist_routes,
+                blacklist_routes=blacklist_routes,
+                banned=False,
+            )
             return
         await create_permission_role(
             name=name,
-            whitelist_routes="all",
-            blacklist_routes=[],
+            whitelist_routes=whitelist_routes,
+            blacklist_routes=blacklist_routes,
             banned=False,
         )

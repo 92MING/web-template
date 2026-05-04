@@ -23,7 +23,7 @@ Features:
 
 ## e-Class
 
-A digital classroom demo.
+An online classroom demo.
 
 ```bash
 cd e-class

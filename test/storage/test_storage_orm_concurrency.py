@@ -67,7 +67,6 @@ def test_concurrent_first_writes_bootstrap_schema_without_race() -> None:
         """
     )
     env = os.environ.copy()
-    env.setdefault("KONGPAPER_CORE_EAGER_IMPORTS", "0")
     result = subprocess.run(
         [sys.executable, "-c", code],
         cwd=str(_PROJECT_ROOT),
@@ -132,7 +131,6 @@ def test_sqlite_orm_client_survives_background_loop_then_main_loop_reuse() -> No
         """
     )
     env = os.environ.copy()
-    env.setdefault("KONGPAPER_CORE_EAGER_IMPORTS", "0")
     result = subprocess.run(
         [sys.executable, "-c", code],
         cwd=str(_PROJECT_ROOT),

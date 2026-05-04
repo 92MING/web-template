@@ -47,12 +47,84 @@ class UsersRootRoute(Route):
 | `options` | OPTIONS |
 | `websocket` | WebSocket |
 
-如果方法名带后缀，后缀会继续拆成子路径：
+类方法名必须精确等于 HTTP 方法名。`get_all`、`get_status_detail` 这类带后缀的方法不会被当成路由方法；如果需要子路径，请使用文件路径、`RoutePath`，或下面的函数装饰器。
 
-- `get` -> 当前路由本身
-- `get_all` -> `/all`
-- `get_status_detail` -> `/status/detail`
-- `websocket_chat` -> WebSocket `/chat`
+## 函数装饰器路由
+
+如果只是快速定义一个路由，可以不写 `Route` class，直接使用 `get`、`post` 等装饰器：
+
+```python
+from core.server.route import get
+
+
+@get("/c")
+async def hello() -> dict[str, str]:
+    return {"message": "hello"}
+```
+
+如果这个函数定义在 `app/a/b.py`，对应路径就是 `/a/b/c`。
+
+同一个文件里仍然可以定义 `Route` class。此时该文件里的 `Route` class 上声明的 `Tags`、`Dependencies`、`AllowedIPs`、`ApikeyProtected` 等配置，也会应用到同文件的装饰器路由上：
+
+```python
+from fastapi import Depends
+from core.server import Route
+from core.server.route import get
+
+
+async def require_login() -> None:
+    pass
+
+
+class BRoute(Route):
+    Tags = "B"
+    Dependencies = Depends(require_login)
+
+
+@get("/c")
+async def hello() -> dict[str, str]:
+    return {"message": "hello"}
+```
+
+可用装饰器包括：`route`、`get`、`post`、`put`、`patch`、`delete`、`head`、`options`、`websocket`。`route` 默认方法是 `GET`，也可以显式传 `method="POST"`。
+
+## Route / HTML 查找顺序
+
+访问一个无后缀路径时，例如 `GET /a/b/c`，框架按“应用目录优先、公开静态目录最后”的规则查找。
+
+应用目录包括 `extra_app_paths` 和主仓 `app/`，顺序如下：
+
+```text
+for d in [*extra_app_paths, app/]:
+    1. {d}/a/b/c/__init__.py
+    2. {d}/a/b/c/index.py
+    3. {d}/a/b/c/index.html
+    4. {d}/a/b/c.py
+    5. {d}/a/b/c.html
+    6. {d}/a/b/_*_.py
+    7. {d}/a/_*_/__init__.py
+    8. {d}/a/_*_/index.py
+    9. {d}/a/_*_.py
+    10. {d}/_*_/__init__.py
+    11. {d}/_*_/index.py
+    12. {d}/_*_.py
+```
+
+`_*_` 表示合法的动态路径段，例如 `_user_id_`。动态目录里的 `index.html` 也会参与 HTML fallback；普通私有目录，例如 `_private/`，不会被当成 fallback 静态资源暴露。
+
+公开静态目录包括 `extra_public_paths` 和主仓 `public/`，顺序如下：
+
+```text
+for d in [*extra_public_paths, public/]:
+    1. {d}/a/b/c/index.html
+    2. {d}/a/b/c.html
+```
+
+`public/` 不会扫描 Python Route。即使 `public/` 里存在 `.py` 文件，也只会被视作普通静态文件，不会 import，也不会注册路由。
+
+父级 `__init__.py` / `index.py` 上声明的请求保护配置会在 middleware 层影响其 pattern 下的 HTML 和子路径访问，包括 `Dependencies`、`AllowedIPs`、`ApikeyProtected`。例如 `app/a/b/c/__init__.py` 开启 `ApikeyProtected` 后，`/a/b/c/index.html`、`/a/b/c/d` 这类访问也会先经过父级保护；如果更具体的 `app/a/b/c/d/__init__.py` 或 `app/a/b/c/d/index.py` 显式设置 `ApikeyProtected = False`，则会覆盖父级保护。
+
+其中 `Dependencies` 是追加合并，父级和子级 dependency 都会执行；`AllowedIPs` 也是追加合并，任一白名单匹配即可放行；`ApikeyProtected` 是标量覆盖，最近的显式 `True` / `False` 生效。`Tags`、`ResponseModel` 这类只影响 API 注册/OpenAPI 的元数据不会作用到 HTML fallback。
 
 ```python
 from fastapi import Body
@@ -72,9 +144,6 @@ class ItemRoute(Route):
 
     async def delete(self, item_id: str) -> dict[str, str]:
         return {"deleted": item_id}
-
-    async def get_all(self) -> dict[str, str]:
-        return {"scope": "all-items"}
 ```
 
 ## 类级配置
@@ -137,6 +206,58 @@ class OrderRoute(Route):
 - 其他标量配置如 `Summary`、`Description`、`ResponseModel`、`StatusCode` 等，也是子类/子路由就近覆盖父级。
 
 `ApikeyProtected` 开启后，API key 可通过 `x-api-key`、`Authorization: Bearer ...`、`api_key` 或 `x_api_key` 传入。
+
+## 错误处理
+
+`Route` 可以定义错误处理方法。框架会按请求路径查找最近的 Route handler；例如 `/a/b/c/d` 触发 404 时，如果 `/a/b/c` 对应的 Route 定义了错误处理，就优先调用它。
+
+```python
+from typing import Any
+
+from core.server import ErrorContext, Route
+from starlette.responses import HTMLResponse
+
+
+class PageRoute(Route):
+    def on_error_code(
+        self,
+        code: int,
+        exception: Exception,
+        context: ErrorContext,
+    ) -> Any:
+        if code == 404:
+            return HTMLResponse(f"<h1>Not found</h1><p>{context.path}</p>", status_code=404)
+        return exception
+
+    async def on_exception(
+        self,
+        exception: Exception,
+        context: ErrorContext,
+    ) -> Any:
+        if isinstance(exception, ValueError):
+            return {"message": str(exception)}
+        return await super().on_exception(exception, context)
+```
+
+两个方法都可以写成 sync 或 async：
+
+- `on_exception(exception, context)`：处理普通异常。默认实现会在遇到 `HTTPException` 时继续调用 `on_error_code`。
+- `on_error_code(code, exception, context)`：处理 HTTP 错误码，例如 404、403、500。
+- 返回 `exception` 表示当前 handler 不处理该错误，继续使用原始错误行为。
+- 返回其他值表示该 handler 已处理错误；可以返回 `dict`、`str`、`HTMLResponse`、`JSONResponse` 等 FastAPI 支持的响应值。
+
+如果覆写了 `on_exception`，`on_error_code` 不一定会触发；是否继续触发取决于你的 `on_exception` 是否调用 `super().on_exception(...)`。
+
+`ErrorContext` 会提供当前请求、路径、方法、匹配到的 Route path、Route class、异常 traceback 等上下文信息。字段如下：
+
+| 字段 | 说明 |
+| --- | --- |
+| `request` | 当前 FastAPI `Request`。 |
+| `path` | 当前请求路径。 |
+| `method` | 当前请求方法。 |
+| `route_path` | 本次命中的错误处理 Route path。 |
+| `route_cls` | 本次命中的错误处理 Route class。 |
+| `traceback` | 可为空的 `traceback.TracebackException`。真实异常会带 traceback；由 404/403 这类响应状态码触发时通常为 `None`。 |
 
 ## 路径参数
 
@@ -282,5 +403,5 @@ class DownloadRoute(Route):
 再补三条容易漏掉的规则：
 
 1. `__init__.py` 和 `index.py` 都会映射到所在目录本身。
-2. 方法名后缀会继续追加到 URL，例如 `get_all` 对应 `/all`。
+2. 方法名后缀不会追加到 URL；子路径请用文件路径、`RoutePath` 或函数装饰器声明。
 3. 一个文件里如果定义了多个 `Route` 子类，加载器会逐个挂载；但通常仍建议一个文件只放一组相关路由，避免可读性变差。

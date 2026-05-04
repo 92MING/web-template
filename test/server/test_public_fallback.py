@@ -16,6 +16,9 @@ from core.server.app import create_app
 from core.server.data_types.config import Config
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
 class PublicFallbackTest(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
@@ -110,7 +113,8 @@ class PublicFallbackTest(unittest.IsolatedAsyncioTestCase):
     async def test_app_root_precedes_extra_public_root(self):
         response = await self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Hello World", response.text)
+        self.assertIn("HELLO WORLD", response.text)
+        self.assertNotIn("EXTRA ROOT INDEX", response.text)
 
     async def test_directory_path_without_trailing_slash_serves_index_html(self):
         response = await self.client.get("/docs")
@@ -167,6 +171,39 @@ class PublicFallbackTest(unittest.IsolatedAsyncioTestCase):
         plain_to_min = await self.client.get("/vendor/minified/only.js")
         self.assertEqual(plain_to_min.status_code, 200)
         self.assertIn("minified-only", plain_to_min.text)
+
+    async def test_test_media_is_not_global_public_route(self):
+        response = await self.client.get("/test-media/sample-video.mp4")
+        self.assertEqual(response.status_code, 404)
+
+class GalleryTestMediaRouteTest(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        import core.server.app as core_app_module
+
+        core_app_module._app = None
+        cfg = Config()
+        cfg.server_config.extra_app_paths = [str(PROJECT_ROOT / "example" / "gallery")]
+        cfg.server_config.extra_public_paths = [str(PROJECT_ROOT / "example" / "gallery" / "public")]
+        cls.app = create_app(config=cfg)
+
+    @classmethod
+    def tearDownClass(cls):
+        import core.server.app as core_app_module
+
+        core_app_module._app = None
+
+    async def asyncSetUp(self):
+        self.transport = httpx.ASGITransport(app=self.app)
+        self.client = httpx.AsyncClient(transport=self.transport, base_url="http://testserver")
+
+    async def asyncTearDown(self):
+        await self.client.aclose()
+
+    async def test_gallery_serves_test_media_from_resources(self):
+        response = await self.client.get("/test-media/gallery-sample-video.mp4")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("video", response.headers.get("content-type", ""))
 
 
 if __name__ == "__main__":

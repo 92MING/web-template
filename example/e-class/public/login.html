@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
-<title>数字教室登录</title>
+<title>在线课堂登录</title>
 <script type="module" src="/shared/components.js?v=20260429-2"></script>
 <script type="module" src="/shared/templates.js"></script>
 <style>
@@ -63,7 +63,7 @@
   <div slot="side">
     <div style="display:grid;gap:16px;">
       <div style="display:grid;gap:10px;">
-        <div style="font:700 12px/1.4 system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;opacity:.82;" data-copy="brand">数字教室</div>
+        <div style="font:700 12px/1.4 system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;opacity:.82;" data-copy="brand">在线课堂</div>
         <h1 style="margin:0;font-size:clamp(32px,5vw,52px);line-height:1.04;letter-spacing:-.03em;" data-copy="headline">先登录，再进入你的课堂。</h1>
         <p style="margin:0;font:15px/1.7 system-ui,sans-serif;opacity:.88;max-width:34rem;" data-copy="lead">学生和老师使用同一个入口。登录后按身份进入对应工作台，课程、作业、成绩、公告和教室管理分布在独立页面。</p>
       </div>
@@ -122,7 +122,7 @@ import { setSharedTheme, BuiltinToast } from '/shared/components.js?v=20260429-2
 
 const copy = {
   'zh-cn': {
-    brand: '数字教室', theme: '深色', themeLight: '浅色', headline: '先登录，再进入你的课堂。',
+    brand: '在线课堂', theme: '深色', themeLight: '浅色', headline: '先登录，再进入你的课堂。',
     lead: '学生和老师使用同一个入口。登录后按身份进入对应工作台，课程、作业、成绩、公告和教室管理分布在独立页面。',
     chip_student: '学生课程与作业', chip_teacher: '老师教室管理', chip_i18n: '中英文 / 深浅色',
     login_title: '登录', register_title: '注册', login: '登录', register: '注册', student: '学生端', teacher: '老师端',
@@ -131,7 +131,7 @@ const copy = {
     err_email_already_registered: '该邮箱已被注册', err_invalid_credentials: '邮箱或密码错误', err_invalid_action: '不支持的操作'
   },
   en: {
-    brand: 'Digital Classroom', theme: 'Dark', themeLight: 'Light', headline: 'Sign in before entering class.',
+    brand: 'Online Classroom', theme: 'Dark', themeLight: 'Light', headline: 'Sign in before entering class.',
     lead: 'Students and teachers use the same entrance. After sign-in, each role lands in its own workspace; courses, homework, grades, announcements and classroom management are separate pages.',
     chip_student: 'Student courses and homework', chip_teacher: 'Teacher classroom management', chip_i18n: 'Chinese / English and themes',
     login_title: 'Sign in', register_title: 'Create account', login: 'Sign in', register: 'Register', student: 'Student', teacher: 'Teacher',

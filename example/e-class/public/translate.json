@@ -1,6 +1,6 @@
 {
-  "eclass.title": {"en": "Digital Classroom", "zh_cn": "数字教室"},
-  "eclass.login_title": {"en": "Digital Classroom Login", "zh_cn": "数字教室登录"},
+  "eclass.title": {"en": "Online Classroom", "zh_cn": "在线课堂"},
+  "eclass.login_title": {"en": "Online Classroom Login", "zh_cn": "在线课堂登录"},
   "eclass.login": {"en": "Login", "zh_cn": "登录"},
   "eclass.login_failed": {"en": "Login failed", "zh_cn": "登录失败"},
   "eclass.username_placeholder": {"en": "Username", "zh_cn": "用户名"},

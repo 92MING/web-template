@@ -77,7 +77,7 @@ class HelloRoute(Route):
 - `app/api/users/__init__.py` 对应 `/api/users`
 - `app/api/users/index.py` 对应 `/api/users`
 - `app/api/users/_user_id_.py` 对应 `/api/users/{user_id}`
-- `get_all()` 这类方法名后缀会继续展开为子路径
+- 子路径通过文件路径、`RoutePath` 或函数装饰器声明，方法名必须精确等于 HTTP 方法名
 
 这部分的完整规则见 [route.md](route.md)。
 

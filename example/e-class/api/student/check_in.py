@@ -6,6 +6,7 @@ from fastapi import Request
 from pydantic import BaseModel
 
 from eclass_api_base import EClassRoute
+from teacher_domain import AttendanceActivity, AttendanceRecord
 
 
 class CheckInRequest(BaseModel):
@@ -47,15 +48,42 @@ class StudentCheckInRoute(EClassRoute):
             if row.get("check_in_id") == payload.check_in_id and row.get("student_id") == student_id:
                 return {"ok": False, "error": "已签到，无需重复"}
 
+        activity_model: AttendanceActivity | None = None
+        try:
+            candidate = await AttendanceActivity.SearchOneById(payload.check_in_id)
+            if isinstance(candidate, AttendanceActivity):
+                activity_model = candidate
+        except ValueError:
+            activity_model = None
+
         row = {
             "check_in_id": payload.check_in_id,
             "student_id": student_id,
             "student_name": user.get("nickname") or user.get("name") or student_id,
             "class_id": payload.class_id,
             "checked_at": time.time(),
+            "status": "present",
         }
         rows.append(row)
         self.shared_dict.set(key, rows)
+
+        if activity_model is not None:
+            existing = await AttendanceRecord.SearchOne({
+                "activity_id": payload.check_in_id,
+                "student_id": str(student_id or ""),
+            })
+            if not isinstance(existing, AttendanceRecord):
+                record = AttendanceRecord(
+                    teacher_id=activity_model.teacher_id,
+                    school_id=activity_model.school_id,
+                    created_by=str(student_id or ""),
+                    activity_id=payload.check_in_id,
+                    class_id=payload.class_id,
+                    student_id=str(student_id or ""),
+                    status="present",
+                    checked_at=row["checked_at"],
+                )
+                await record.save()
 
         students_key = f"class:{payload.class_id}:students"
         students = set(self.shared_dict.get(students_key, []))

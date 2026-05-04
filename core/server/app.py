@@ -17,13 +17,20 @@ from dataclasses import asdict, is_dataclass
 from functools import lru_cache
 from threading import Thread
 from pathlib import Path
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Awaitable, Callable, TYPE_CHECKING
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
+from fastapi.params import Depends as DependsParam
+from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
+from fastapi.dependencies.utils import solve_dependencies
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel
+from starlette.responses import Response as StarletteResponse
+from starlette.routing import compile_path
 
 from core.constants import APP_DIR, PROJECT_DIR, PUBLIC_DIR, RESOURCES_DIR
 from core.utils.concurrent_utils import run_any_func
@@ -598,9 +605,17 @@ def invoke_uvicorn_close():
 class _PublicFallbackResolver:
     """Resolve app HTML and public files after FastAPI route matching has failed."""
 
-    def __init__(self, app_dirs: list[Path], public_dirs: list[Path]):
+    def __init__(self, app_dirs: list[Path], public_dirs: list[Path], route_entries: list[dict[str, Any]], route_class_entries: list[dict[str, Any]]):
         self._app_dirs = app_dirs
         self._public_dirs = public_dirs
+        self._route_entries = route_entries
+        self._route_class_entries = route_class_entries
+        self._app_root_order = {str(path.resolve()): index for index, path in enumerate(app_dirs)}
+        self._route_entries_by_rel: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for entry in route_entries:
+            order_rel_path = str(entry.get("order_rel_path") or entry["rel_path"]).replace("\\", "/")
+            key = (str(Path(str(entry["root"])).resolve()), order_rel_path)
+            self._route_entries_by_rel[key].append(entry)
 
     def _candidate_paths_for_request(self, path: str) -> list[Path]:
         requested = Path(path.lstrip("/"))
@@ -618,10 +633,6 @@ class _PublicFallbackResolver:
     @lru_cache(maxsize=2048)
     def _resolve_cached(self, path: str) -> tuple[str, str, str | None] | None:
         lang, static_path = self._resolve_localized_path(path)
-        html_path = self._app_html_path_for_request(static_path)
-        if html_path is not None:
-            return ("html", str(html_path), lang)
-
         html_path = self._public_html_path_for_request(static_path)
         if html_path is not None:
             return ("html", str(html_path), lang)
@@ -631,6 +642,26 @@ class _PublicFallbackResolver:
             return ("file", str(file_path), lang)
 
         return None
+
+    def first_app_candidate(self, path: str, method: str) -> tuple[str, Path | None, str | None] | None:
+        lang, static_path = self._resolve_localized_path(path)
+        for root in self._app_dirs:
+            candidate = self._first_app_candidate_in_root(root, static_path, method)
+            if candidate is not None:
+                kind, file_path = candidate
+                return kind, file_path, lang
+        return None
+
+    def app_response_for_candidate(self, candidate: tuple[str, Path | None, str | None]) -> HTMLResponse | None:
+        kind, file_path, lang = candidate
+        if kind != "html" or file_path is None:
+            return None
+        from .html_injection import html_response_from_path_with_mobile
+
+        response = html_response_from_path_with_mobile(file_path)
+        if lang:
+            response = self._with_html_lang(response, lang)
+        return response
 
     def response_for_path(self, path: str) -> HTMLResponse | FileResponse | None:
         resolved = self._resolve_cached(path)
@@ -649,6 +680,365 @@ class _PublicFallbackResolver:
 
         media_type, _ = mimetypes.guess_type(str(resolved_path))
         return FileResponse(resolved_path, media_type=media_type)
+
+    def _first_app_candidate_in_root(self, root: Path, path: str, method: str) -> tuple[str, Path | None] | None:
+        parts = [part for part in path.split("/") if part]
+
+        def route_candidate(rel: Path) -> tuple[str, Path | None] | None:
+            if self._route_rel_matches(root, rel, path, method):
+                return "route", None
+            return None
+
+        def html_candidate(rel: Path) -> tuple[str, Path | None] | None:
+            html_path = self._existing_html(root, rel)
+            if html_path is not None:
+                return "html", html_path
+            return None
+
+        candidates: list[tuple[str, Path]] = []
+        if not parts:
+            candidates.extend([
+                ("route", Path("__init__.py")),
+                ("route", Path("index.py")),
+                ("html", Path("index.html")),
+            ])
+        else:
+            exact_dir = Path(*parts)
+            candidates.extend([
+                ("route", exact_dir / "__init__.py"),
+                ("route", exact_dir / "index.py"),
+                ("html", exact_dir / "index.html"),
+            ])
+            raw = Path(*parts)
+            if raw.suffix:
+                exact_html = raw
+                exact_py = raw.with_suffix(raw.suffix + ".py")
+            else:
+                exact_html = raw.with_suffix(".html")
+                exact_py = raw.with_suffix(".py")
+            candidates.extend([
+                ("route", exact_py),
+                ("html", exact_html),
+            ])
+            candidates.extend(self._dynamic_app_candidates(root, parts))
+
+        for kind, rel in candidates:
+            result = route_candidate(rel) if kind == "route" else html_candidate(rel)
+            if result is not None:
+                return result
+        return None
+
+    def _dynamic_app_candidates(self, root: Path, parts: list[str]) -> list[tuple[str, Path]]:
+        candidates: list[tuple[str, Path]] = []
+        if not parts:
+            return candidates
+        deepest_parent_parts = parts[:-1]
+        deepest_parent = root / Path(*deepest_parent_parts) if deepest_parent_parts else root
+        candidates.extend(self._dynamic_file_candidates(root, deepest_parent, deepest_parent_parts))
+        candidates.extend(self._dynamic_dir_candidates(root, deepest_parent, deepest_parent_parts))
+        for prefix_len in range(len(parts) - 2, -1, -1):
+            prefix_parts = parts[:prefix_len]
+            parent = root / Path(*prefix_parts) if prefix_parts else root
+            candidates.extend(self._dynamic_dir_candidates(root, parent, prefix_parts))
+            candidates.extend(self._dynamic_file_candidates(root, parent, prefix_parts))
+        return candidates
+
+    def _dynamic_dir_candidates(self, root: Path, parent: Path, prefix_parts: list[str]) -> list[tuple[str, Path]]:
+        result: list[tuple[str, Path]] = []
+        for child in self._sorted_dynamic_children(parent, want_dir=True):
+            rel_base = self._relative_candidate(root, child)
+            result.extend([
+                ("route", rel_base / "__init__.py"),
+                ("route", rel_base / "index.py"),
+                ("html", rel_base / "index.html"),
+            ])
+        return result
+
+    def _dynamic_file_candidates(self, root: Path, parent: Path, prefix_parts: list[str]) -> list[tuple[str, Path]]:
+        result: list[tuple[str, Path]] = []
+        for child in self._sorted_dynamic_children(parent, want_dir=False):
+            rel = self._relative_candidate(root, child)
+            if child.suffix == ".py":
+                result.append(("route", rel))
+            elif child.suffix.lower() == ".html":
+                result.append(("html", rel))
+        return result
+
+    def _sorted_dynamic_children(self, parent: Path, *, want_dir: bool) -> list[Path]:
+        if not parent.is_dir():
+            return []
+        children: list[Path] = []
+        for child in sorted(parent.iterdir(), key=lambda item: item.name):
+            if want_dir:
+                if child.is_dir() and self._is_dynamic_path_token(child.name):
+                    children.append(child)
+            elif child.is_file() and self._is_dynamic_path_token(child.stem):
+                children.append(child)
+        return children
+
+    def _relative_candidate(self, root: Path, candidate: Path) -> Path:
+        try:
+            return candidate.resolve().relative_to(root.resolve())
+        except Exception:
+            return candidate.relative_to(root)
+
+    def _route_rel_matches(self, root: Path, rel: Path, path: str, method: str) -> bool:
+        key = (str(root.resolve()), rel.as_posix())
+        for entry in self._route_entries_by_rel.get(key, ()):
+            if not self._method_matches(str(entry.get("method") or ""), method):
+                continue
+            if self._route_path_matches(str(entry.get("route_path") or ""), path):
+                return True
+        return False
+
+    def _method_matches(self, route_method: str, request_method: str) -> bool:
+        route_method = route_method.upper()
+        request_method = request_method.upper()
+        return route_method == request_method or (request_method == "HEAD" and route_method == "GET")
+
+    def _route_path_matches(self, route_path: str, path: str) -> bool:
+        try:
+            regex, _, _ = compile_path(route_path)
+        except Exception:
+            return route_path == path
+        return regex.match(path) is not None
+
+    def _existing_html(self, root: Path, rel: Path) -> Path | None:
+        if self._has_private_app_rel_path(rel):
+            return None
+        try:
+            base = root.resolve()
+        except Exception:
+            return None
+        candidate = self._resolve_existing_request_path(base, root, rel, require_html=True)
+        if candidate is not None and candidate.is_file() and candidate.suffix.lower() == ".html":
+            return candidate
+        return None
+
+    def guard_route_classes_for_path(self, path: str) -> list[type]:
+        entries: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, int]] = set()
+        for entry in self._route_class_entries:
+            rel_path = str(entry.get("rel_path") or "").replace("\\", "/")
+            if not (rel_path.endswith("/__init__.py") or rel_path.endswith("/index.py") or rel_path in {"__init__.py", "index.py"}):
+                continue
+            route_path = str(entry.get("route_path") or "")
+            if not self._route_guard_matches(route_path, path):
+                continue
+            route_cls = entry.get("route_cls")
+            if not isinstance(route_cls, type):
+                continue
+            key = (str(entry.get("root") or ""), rel_path, id(route_cls))
+            if key in seen:
+                continue
+            seen.add(key)
+            entries.append(entry)
+        entries.sort(key=self._guard_entry_sort_key)
+        return [entry["route_cls"] for entry in entries]
+
+    def error_handler_entry_for_path(self, path: str, exception: Exception) -> dict[str, Any] | None:
+        entries: list[dict[str, Any]] = []
+        for entry in self._route_class_entries:
+            route_cls = entry.get("route_cls")
+            route_instance = entry.get("route_instance")
+            route_path = str(entry.get("route_path") or "")
+            if not isinstance(route_cls, type) or route_instance is None:
+                continue
+            if not self._route_guard_matches(route_path, path):
+                continue
+            if not self._declares_error_handler(route_cls, exception):
+                continue
+            entries.append(entry)
+        entries.sort(key=self._error_entry_sort_key)
+        return entries[0] if entries else None
+
+    def _declares_error_handler(self, route_cls: type, exception: Exception) -> bool:
+        if self._declares_route_method(route_cls, "on_exception"):
+            return True
+        if self._exception_status_code(exception) is not None and self._declares_route_method(route_cls, "on_error_code"):
+            return True
+        return False
+
+    def _declares_route_method(self, route_cls: type, name: str) -> bool:
+        from .route import Route
+
+        for cls in inspect.getmro(route_cls):
+            if cls is Route:
+                break
+            if name in cls.__dict__:
+                return True
+        return False
+
+    def _exception_status_code(self, exception: Exception) -> int | None:
+        return int(exception.status_code) if hasattr(exception, "status_code") else None
+
+    def _error_entry_sort_key(self, entry: dict[str, Any]) -> tuple[int, int, int, str]:
+        root_order = self._app_root_order.get(str(Path(str(entry.get("root") or "")).resolve()), 10_000)
+        route_path = str(entry.get("route_path") or "")
+        depth = len([part for part in route_path.split("/") if part])
+        rel_path = str(entry.get("rel_path") or "")
+        entry_order = 1 if rel_path.endswith("index.py") else 0
+        return -depth, root_order, -entry_order, rel_path
+
+    async def error_response_for_exception(
+        self,
+        request: Request,
+        exception: Exception,
+        *,
+        original_response: StarletteResponse | None = None,
+    ) -> StarletteResponse | None:
+        entry = self.error_handler_entry_for_path(request.url.path, exception)
+        if entry is None:
+            return None
+        route_instance = entry.get("route_instance")
+        if route_instance is None:
+            return None
+        from .route import ErrorContext
+
+        context = ErrorContext(
+            request=request,
+            path=request.url.path,
+            method=request.method,
+            route_path=str(entry.get("route_path") or "") or None,
+            route_cls=entry.get("route_cls") if isinstance(entry.get("route_cls"), type) else None,
+            traceback=traceback.TracebackException.from_exception(exception) if exception.__traceback__ else None,
+        )
+        result = route_instance.on_exception(exception, context)
+        if inspect.isawaitable(result):
+            result = await result
+        return self._error_handler_result_to_response(result, exception, original_response)
+
+    async def error_response_for_response(self, request: Request, response: StarletteResponse) -> StarletteResponse | None:
+        status_code = int(getattr(response, "status_code", 200) or 200)
+        if status_code < 400:
+            return None
+        from fastapi import HTTPException
+
+        exception = HTTPException(status_code=status_code, detail=getattr(response, "body", None) or response.status_code)
+        return await self.error_response_for_exception(request, exception, original_response=response)
+
+    def _error_handler_result_to_response(
+        self,
+        result: Any,
+        exception: Exception,
+        original_response: StarletteResponse | None,
+    ) -> StarletteResponse | None:
+        if result is None:
+            return None
+        if result is exception:
+            return None
+        if isinstance(result, StarletteResponse):
+            return result
+        status_code = self._exception_status_code(exception)
+        if status_code is None and original_response is not None:
+            status_code = int(getattr(original_response, "status_code", 500) or 500)
+        return JSONResponse(status_code=status_code or 500, content=jsonable_encoder(result))
+
+    def _route_guard_matches(self, route_path: str, path: str) -> bool:
+        if "{" in route_path:
+            return self._route_path_prefix_matches(route_path, path)
+        if route_path == "/":
+            return True
+        return path == route_path or path.startswith(route_path.rstrip("/") + "/")
+
+    def _route_path_prefix_matches(self, route_path: str, path: str) -> bool:
+        if self._route_path_matches(route_path, path):
+            return True
+        if route_path == "/":
+            return True
+        route_parts = [part for part in route_path.split("/") if part]
+        path_parts = [part for part in path.split("/") if part]
+        if len(route_parts) > len(path_parts):
+            return False
+        for route_part, path_part in zip(route_parts, path_parts):
+            if route_part.startswith("{") and route_part.endswith("}"):
+                if route_part.endswith(":path}"):
+                    return True
+                continue
+            if route_part != path_part:
+                return False
+        return True
+
+    def _guard_entry_sort_key(self, entry: dict[str, Any]) -> tuple[int, int, int, str]:
+        root_order = self._app_root_order.get(str(Path(str(entry.get("root") or "")).resolve()), 10_000)
+        route_path = str(entry.get("route_path") or "")
+        depth = len([part for part in route_path.split("/") if part])
+        rel_path = str(entry.get("rel_path") or "")
+        entry_order = 0 if rel_path.endswith("__init__.py") else 1
+        return root_order, depth, entry_order, rel_path
+
+    async def guard_response_for_request(self, request: Request, app: FastAPI) -> JSONResponse | None:
+        route_classes = self.guard_route_classes_for_path(request.url.path)
+        if not route_classes:
+            return None
+        from .route import RouteLoader
+
+        dependency_builder = RouteLoader(Path("."), app)
+        dependencies = dependency_builder._collect_append_attr(route_classes, "Dependencies")
+        allowed_ips = dependency_builder._collect_append_attr(route_classes, "AllowedIPs")
+        if allowed_ips:
+            dependencies.append(dependency_builder._make_allowed_ips_dependency(allowed_ips))
+        if bool(dependency_builder._resolve_scalar_attr(route_classes, "ApikeyProtected", default=False)):
+            dependencies.append(dependency_builder._require_apikey_dependency)
+        if not dependencies:
+            return None
+
+        async def _guard_endpoint() -> None:
+            return None
+
+        route = APIRoute(
+            request.url.path,
+            _guard_endpoint,
+            dependencies=[
+                dependency if isinstance(dependency, DependsParam) else Depends(dependency)
+                for dependency in dependencies
+            ],
+            methods=[request.method],
+        )
+        response = JSONResponse(None)
+        try:
+            async with AsyncExitStack() as stack:
+                previous_inner_stack = request.scope.get("fastapi_inner_astack")
+                previous_function_stack = request.scope.get("fastapi_function_astack")
+                request.scope["fastapi_inner_astack"] = stack
+                request.scope["fastapi_function_astack"] = stack
+                try:
+                    solved = await solve_dependencies(
+                        request=request,
+                        dependant=route.dependant,
+                        body=None,
+                        response=response,
+                        dependency_overrides_provider=app,
+                        dependency_cache={},
+                        async_exit_stack=stack,
+                        embed_body_fields=False,
+                    )
+                finally:
+                    if previous_inner_stack is None:
+                        request.scope.pop("fastapi_inner_astack", None)
+                    else:
+                        request.scope["fastapi_inner_astack"] = previous_inner_stack
+                    if previous_function_stack is None:
+                        request.scope.pop("fastapi_function_astack", None)
+                    else:
+                        request.scope["fastapi_function_astack"] = previous_function_stack
+        except Exception as exc:
+            return self._dependency_exception_response(exc)
+        if solved.errors:
+            return JSONResponse(
+                status_code=422,
+                content={"detail": jsonable_encoder(solved.errors)},
+            )
+        return None
+
+    def _dependency_exception_response(self, exc: Exception) -> JSONResponse:
+        from fastapi import HTTPException
+
+        if isinstance(exc, HTTPException):
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+        if isinstance(exc, RequestValidationError):
+            return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
+        raise exc
 
     def _resolve_localized_path(self, path: str) -> tuple[str | None, str]:
         from .translate import is_language_code, normalize_language
@@ -796,6 +1186,15 @@ class _PublicFallbackResolver:
                 return True
         return False
 
+    def _has_private_app_rel_path(self, path: Path) -> bool:
+        for part in path.parts:
+            if part in {"__init__.py", "index.html", ""}:
+                continue
+            name = Path(part).stem if Path(part).suffix else part
+            if name.startswith("_") and not self._is_dynamic_path_token(name):
+                return True
+        return False
+
     def _with_html_lang(self, response: HTMLResponse, lang: str) -> HTMLResponse:
         text = response.body.decode(response.charset or "utf-8", "replace")
         normalized = lang
@@ -852,24 +1251,51 @@ def register_public_fallback(app: FastAPI, config=None) -> None:
     if not app_dirs and not public_dirs:
         return
 
-    resolver = _PublicFallbackResolver(app_dirs, public_dirs)
+    route_entries = list(getattr(app.state, "route_loader_entries", []) or [])
+    route_class_entries = list(getattr(app.state, "route_loader_class_entries", []) or [])
+    resolver = _PublicFallbackResolver(app_dirs, public_dirs, route_entries, route_class_entries)
     app.state._public_fallback_registered = True
     app.state.public_fallback_resolver = resolver
 
     @app.middleware("http")
     async def _public_fallback_middleware(request: Request, call_next):
-        response = await call_next(request)
+        guard_response = await resolver.guard_response_for_request(request, app)
+        if guard_response is not None:
+            handled_guard_response = await resolver.error_response_for_response(request, guard_response)
+            return handled_guard_response or guard_response
+
+        first_app_candidate = None
+        if request.method in {"GET", "HEAD"}:
+            first_app_candidate = resolver.first_app_candidate(request.url.path, request.method)
+            if first_app_candidate is not None and first_app_candidate[0] == "html":
+                app_response = resolver.app_response_for_candidate(first_app_candidate)
+                if app_response is not None:
+                    return app_response
+
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            handled_exception_response = await resolver.error_response_for_exception(request, exc)
+            if handled_exception_response is not None:
+                return handled_exception_response
+            raise
         if response.status_code != 404 or request.method not in {"GET", "HEAD"}:
-            return response
+            handled_response = await resolver.error_response_for_response(request, response)
+            return handled_response or response
+        if first_app_candidate is not None and first_app_candidate[0] == "route":
+            handled_response = await resolver.error_response_for_response(request, response)
+            return handled_response or response
         if _has_registered_route_match(app, request.scope):
-            return response
+            handled_response = await resolver.error_response_for_response(request, response)
+            return handled_response or response
         from .rtc_room import is_rtc_room_enabled, is_rtc_room_public_path
 
         if is_rtc_room_public_path(request.url.path) and not is_rtc_room_enabled(cfg):
             return response
         fallback_response = resolver.response_for_path(request.url.path)
         if fallback_response is None:
-            return response
+            handled_response = await resolver.error_response_for_response(request, response)
+            return handled_response or response
         return fallback_response
 
 # ---- App factory ----
