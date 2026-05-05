@@ -53,7 +53,7 @@ _app: FastAPI | None = None
 _inner_comm_server_thread: Thread | None = None
 _app_stop_event = asyncio.Event()
 
-logger = logging.getLogger("proj-template")
+logger = logging.getLogger(__name__)
 
 
 def _is_app_shutting_down() -> bool:

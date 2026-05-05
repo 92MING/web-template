@@ -18,7 +18,7 @@ from core.utils.text_utils import Language
 from ...app import on_before_app_created
 from ...data_types.config import Config
 
-logger = logging.getLogger("proj-template.ai_services")
+logger = logging.getLogger(__name__)
 
 
 def _env_first(*keys: str) -> str:

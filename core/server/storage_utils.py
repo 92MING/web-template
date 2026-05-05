@@ -781,7 +781,7 @@ async def run_main_process_orm_preflight(
     storage_config: StorageConfig,
     logger: logging.Logger | None = None,
 ) -> _StoragePreflightPayload:
-    preflight_logger = logger or logging.getLogger("proj-template.orm-preflight")
+    preflight_logger = logger or logging.getLogger(f"{__name__}.orm_preflight")
     orm_discovered_map = await _run_loaded_model_preflight(
         storage_config.orm,
         logger=preflight_logger,

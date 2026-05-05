@@ -708,7 +708,7 @@ class RouteLoader:
     ) -> None:
         import logging
 
-        logger = logging.getLogger("proj-template")
+        logger = logging.getLogger(__name__)
         instance = route_cls()
         explicit_route_path = getattr(route_cls, "RoutePath", None)
         url_path = explicit_route_path if explicit_route_path else self._build_url_path(rel_path)
@@ -783,7 +783,7 @@ class RouteLoader:
     ) -> None:
         import logging
 
-        logger = logging.getLogger("proj-template")
+        logger = logging.getLogger(__name__)
         route_cls = type(
             f"_{getattr(func, '__name__', 'Function').title().replace('_', '')}DecoratedRoute",
             (Route,),

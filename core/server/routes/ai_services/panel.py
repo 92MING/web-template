@@ -43,7 +43,7 @@ from ...shared import (
     WorkerSnapshot,
 )
 
-logger = logging.getLogger("proj-template.ai_services_panel")
+logger = logging.getLogger(__name__)
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient", "testserver"}
 type AIServiceConfigSource = Literal["shared-runtime", "process-env", "defaults"]
 
