@@ -394,13 +394,7 @@ def thinkthinksyn_client() -> "ThinkThinkSyn":
 
 
 
-    if 'TTS_APIKEY' in os.environ:
-
-        apikey = os.environ['TTS_APIKEY']
-
-    else:
-
-        apikey = ''
+    apikey = _env_first('TTS_APIKEY', 'TTS_API_KEY') or ''
 
 
 

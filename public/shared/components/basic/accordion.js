@@ -1,0 +1,12 @@
+import { BuiltinBaseElement, html, css, unsafeHTML } from "../lit-base.js";
+import { ensureShoelace } from "../vendor-loader.js";
+
+export class BuiltinAccordion extends BuiltinBaseElement {
+  static properties = { items: { type: Array }, single: { type: Boolean }, variant: { type: String }, size: { type: String }, defaultOpen: { type: Array, attribute: "default-open" }, labels: { type: Object }, _openIndices: { type: Object, state: true }, _ready: { type: Boolean, state: true } };
+  static styles = css`:host { display:block; } .wrap { display:grid; gap: var(--builtin-accordion-gap, 8px); } sl-details::part(base) { border-radius: var(--builtin-radius, 6px); background: var(--builtin-surface, #fff); } sl-details::part(header) { font-weight: 650; } .compact sl-details::part(header), .compact sl-details::part(content) { font-size: 13px; }`;
+  constructor() { super(); this.items = []; this.single = false; this.variant = "default"; this.size = "default"; this.defaultOpen = []; this._openIndices = new Set(); this._ready = false; }
+  connectedCallback() { super.connectedCallback(); const defaults = Array.isArray(this.defaultOpen) ? this.defaultOpen : []; this._openIndices = new Set(defaults); ensureShoelace().then(() => { this._ready = true; }); }
+  _panels() { if (Array.isArray(this.items) && this.items.length) return this.items.map((item, index) => ({ index, title: item.title || "", content: item.content || "", disabled: !!item.disabled })); return Array.from(this.querySelectorAll("[data-title]")).map((el, index) => ({ index, title: el.dataset.title || "", content: el.innerHTML, disabled: el.dataset.disabled === "true" || el.hasAttribute("data-disabled") })); }
+  _onToggle(index, e) { const open = e.target.open; const next = this.single && open ? new Set([index]) : new Set(this._openIndices); if (!open) next.delete(index); else next.add(index); this._openIndices = next; this.dispatchEvent(new CustomEvent("builtin-toggle", { bubbles: true, composed: true, detail: { index, open } })); }
+  render() { if (!this._ready) return html``; return html`<div class="wrap ${this.size === "compact" ? "compact" : ""}">${this._panels().map((panel) => html`<sl-details summary="${panel.title}" ?open=${this._openIndices.has(panel.index)} ?disabled=${panel.disabled} @sl-show=${(e) => this._onToggle(panel.index, e)} @sl-hide=${(e) => this._onToggle(panel.index, e)}>${unsafeHTML(panel.content)}</sl-details>`)}</div><slot style="display:none"></slot>`; }
+}

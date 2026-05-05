@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Live integration tests for admin panel routes and API endpoints.
 
-Starts the full server via ``python example/gallery/run.py`` with 2 workers,
+Starts the full server via ``python scripts/run.py`` with 2 workers,
 logs in, then probes every ``/_internal/admin/*`` route from the OpenAPI spec.
 Also uses Playwright to verify key HTML pages render without console errors
 or broken static asset references.
@@ -22,10 +22,18 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-_SERVER_PORT = 8010
+_SERVER_PORT = 19031
 _BASE_URL = f"http://127.0.0.1:{_SERVER_PORT}"
-_RUN_PY = str(_project_root / "example" / "demo" / "run.py")
+_RUN_PY = str(_project_root / "scripts" / "run.py")
+_STOP_PY = str(_project_root / "scripts" / "stop.py")
 _ADMIN_PW = "ThinkThinkSyn2023"
+
+
+def _server_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["ADMIN_PW"] = _ADMIN_PW
+    env["__SKIP_AI_PRELOAD__"] = "1"
+    return env
 
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -97,7 +105,6 @@ def _request(
 
 
 class TestAdminRoutesLive(unittest.TestCase):
-    _proc: subprocess.Popen | None = None
     _api_key: str = ""
 
     @classmethod
@@ -109,24 +116,29 @@ class TestAdminRoutesLive(unittest.TestCase):
         except Exception:
             pass
 
-        cls._proc = subprocess.Popen(
+        result = subprocess.run(
             [sys.executable, _RUN_PY, "--server-port", str(_SERVER_PORT), "--server-worker", "2"],
             cwd=str(_project_root),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            env=_server_env(),
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr or result.stdout or f"run.py exited with {result.returncode}")
         _wait_for_server_ready(timeout=60.0)
         cls._api_key = _login()
 
     @classmethod
     def tearDownClass(cls):
-        if cls._proc is not None:
-            cls._proc.terminate()
-            try:
-                cls._proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                cls._proc.kill()
-                cls._proc.wait()
+        subprocess.run(
+            [sys.executable, _STOP_PY, "-p", str(_SERVER_PORT), "-y"],
+            cwd=str(_project_root),
+            env=_server_env(),
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
 
     @property
     def _cookie(self) -> str:
@@ -295,8 +307,8 @@ class TestAdminRoutesLive(unittest.TestCase):
                 page = context.new_page()
                 page.on("console", lambda msg: errors.append(f"{path}: [{msg.type}] {msg.text}") if msg.type == "error" else None)
                 page.on("response", lambda resp: network_failures.append(f"{path}: {resp.status} {resp.url}") if resp.status >= 400 and (resp.url.endswith(".css") or resp.url.endswith(".js")) else None)
-                page.goto(f"{_BASE_URL}{path}")
-                page.wait_for_load_state("networkidle")
+                page.goto(f"{_BASE_URL}{path}", wait_until="load", timeout=15_000)
+                page.wait_for_timeout(1_000)
                 page.close()
 
             browser.close()

@@ -11,12 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from core.server.translate import register_translation, TranslationLanguage
+from core.server.translate import _register_internal_translation, TranslationLanguage
 from core.utils.type_utils import AdvancedBaseModel
 from core.server.constants import SERVER_DIR
 from core.server.data_types.config import Config, RuntimeConfigPathInfo
 from ... import runtime_control
-from ...app import get_resources, on_app_created
+from ...app import get_resources, internal_admin_path, on_app_created
 from ...html_injection import html_response_from_path
 from ...shared import AppSharedData, RuntimeMeta, WorkerSnapshot
 HK_TZ = timezone(timedelta(hours=8), name="Asia/Hong_Kong")
@@ -205,7 +205,6 @@ def _zh_field_description(path: str, description: str | None) -> str | None:
         "log_config.zip_old_logs": "log_config.zip_old_logs",
     }
     return mapping.get(path, description)
-
 def _register_backend_settings_translations() -> None:
     rows = [
         ("backend.settings.title", "Backend Settings", "", ""),
@@ -242,7 +241,7 @@ def _register_backend_settings_translations() -> None:
             (TranslationLanguage.ZH_TW, zh_tw),
         ):
             if text is not None:
-                register_translation(alias, language, text, aliases=[alias])
+                _register_internal_translation(alias, language, text, aliases=[alias])
 _register_backend_settings_translations()
 
 def _now_iso() -> str:
@@ -316,8 +315,8 @@ def _install_runtime_tracking(app: FastAPI) -> None:
     _ensure_backend_runtime_state(app)
     app.add_middleware(_BackendRuntimeTrackingMiddleware, fastapi_app=app)
     app.state._backend_runtime_tracking_installed = True
-@on_app_created
 
+@on_app_created
 def _install_runtime_tracking_on_app_created(app: FastAPI):
     _install_runtime_tracking(app)
 
@@ -485,7 +484,7 @@ def _build_ui_field(name: str, field_info: FieldInfo, *, path_prefix: str = "") 
         (TranslationLanguage.ZH_TW, _zh_field_label(name)),
     ):
         if text is not None:
-            register_translation(descriptor.label_key, language, text, aliases=[descriptor.label_key, descriptor.path])
+            _register_internal_translation(descriptor.label_key, language, text, aliases=[descriptor.label_key, descriptor.path])
     if descriptor.description:
         for language, text in (
             (TranslationLanguage.EN, descriptor.description),
@@ -493,7 +492,7 @@ def _build_ui_field(name: str, field_info: FieldInfo, *, path_prefix: str = "") 
             (TranslationLanguage.ZH_TW, _zh_field_description(path, descriptor.description)),
         ):
             if text is not None:
-                register_translation(
+                _register_internal_translation(
                     descriptor.description_key or descriptor.description,
                     language,
                     text,
@@ -676,6 +675,7 @@ def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
     )
 
 def register_backend_panel_routes(app: FastAPI):
+    admin_path = internal_admin_path
     if not getattr(app.state, "_backend_runtime_tracking_installed", False):
         try:
             _install_runtime_tracking(app)
@@ -685,43 +685,43 @@ def register_backend_panel_routes(app: FastAPI):
     settings_path = get_resources("admin-panel", "panel", "backend_settings.html") or Path("backend_settings.html")
     apikey_path = get_resources("admin-panel", "panel", "backend_apikey.html") or Path("backend_apikey.html")
     role_path = get_resources("admin-panel", "panel", "backend_role.html") or Path("backend_role.html")
-    @app.get("/admin/panel/backend/overview", response_class=HTMLResponse)
+    @app.get(admin_path("panel/backend/overview"), response_class=HTMLResponse)
 
     async def panel_backend_overview_html():
         return html_response_from_path(
             overview_path,
             not_found_message="panel/backend_overview.html not found",
         )
-    @app.get("/admin/panel/backend/settings", response_class=HTMLResponse)
+    @app.get(admin_path("panel/backend/settings"), response_class=HTMLResponse)
 
     async def panel_backend_settings_html():
         return html_response_from_path(
             settings_path,
             not_found_message="panel/backend_settings.html not found",
         )
-    @app.get("/admin/panel/backend/apikey", response_class=HTMLResponse)
+    @app.get(admin_path("panel/backend/apikey"), response_class=HTMLResponse)
 
     async def panel_backend_apikey_html():
         return html_response_from_path(
             apikey_path,
             not_found_message="panel/backend_apikey.html not found",
         )
-    @app.get("/admin/panel/backend/role", response_class=HTMLResponse)
+    @app.get(admin_path("panel/backend/role"), response_class=HTMLResponse)
 
     async def panel_backend_role_html():
         return html_response_from_path(
             role_path,
             not_found_message="panel/backend_role.html not found",
         )
-    @app.get("/admin/api/backend/runtime", response_model=BackendRuntimeResponse)
+    @app.get(admin_path("api/backend/runtime"), response_model=BackendRuntimeResponse)
 
     async def backend_runtime_info() -> BackendRuntimeResponse:
         return _build_runtime_payload(app)
-    @app.get("/admin/api/backend/start_args")
+    @app.get(admin_path("api/backend/start_args"))
 
     async def backend_start_args() -> dict[str, str]:
         return {"start_args": os.getenv("__START_ARGS__", "[]")}
-    @app.get("/admin/api/backend/settings", response_model=BackendSettingsResponse)
+    @app.get(admin_path("api/backend/settings"), response_model=BackendSettingsResponse)
 
     async def backend_settings_payload() -> BackendSettingsResponse:
         config_info = Config.DescribeRuntimeConfigPath()
@@ -733,7 +733,7 @@ def register_backend_panel_routes(app: FastAPI):
             load_note=load_note,
             restart_required_message="",
         )
-    @app.post("/admin/api/backend/settings", response_model=BackendSettingsSaveResponse)
+    @app.post(admin_path("api/backend/settings"), response_model=BackendSettingsSaveResponse)
 
     async def backend_save_settings(payload: BackendSettingsSaveRequest, request: Request) -> BackendSettingsSaveResponse:
         _ensure_local_request(request)
@@ -766,7 +766,7 @@ def register_backend_panel_routes(app: FastAPI):
             write_note=config_info.get("write_note"),
             config=config_model,
         )
-    @app.post("/admin/api/backend/control", response_model=BackendControlResponse)
+    @app.post(admin_path("api/backend/control"), response_model=BackendControlResponse)
 
     async def backend_control(payload: BackendControlRequest, request: Request) -> BackendControlResponse:
         _ensure_local_request(request)

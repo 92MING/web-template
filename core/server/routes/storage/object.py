@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 
 
 
-from ...app import on_before_app_created
+from ...app import internal_admin_path, on_before_app_created
 
 from ...data_types.config import Config
 
@@ -1299,9 +1299,11 @@ def _object_bucket_payload_from_config(config: Any, *, bucket: str | None, folde
 
 def register_storage_object_routes(app: FastAPI):
 
+    admin_path = internal_admin_path
 
 
-    @app.get("/admin/storage/object")
+
+    @app.get(admin_path("storage/object"))
 
     async def storage_object_page():
 
@@ -1309,7 +1311,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/clients", response_model=StorageClientsResponse)
+    @app.get(admin_path("api/storage/object/clients"), response_model=StorageClientsResponse)
 
     async def storage_object_clients() -> StorageClientsResponse:
 
@@ -1319,7 +1321,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/config", response_model=ObjectConfigResponse)
+    @app.get(admin_path("api/storage/object/config"), response_model=ObjectConfigResponse)
 
     async def storage_object_config(client_name: str | None = Query(default=None, alias="client")) -> ObjectConfigResponse:
 
@@ -1371,7 +1373,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/buckets", response_model=ObjectBucketsResponse)
+    @app.get(admin_path("api/storage/object/buckets"), response_model=ObjectBucketsResponse)
 
     async def storage_object_buckets() -> ObjectBucketsResponse:
 
@@ -1403,7 +1405,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/buckets", response_model=ObjectBucketWriteResponse)
+    @app.post(admin_path("api/storage/object/buckets"), response_model=ObjectBucketWriteResponse)
 
     async def storage_object_create_bucket(body: ObjectBucketCreateBody) -> ObjectBucketWriteResponse:
 
@@ -1435,7 +1437,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.patch("/admin/api/storage/object/buckets", response_model=ObjectBucketWriteResponse)
+    @app.patch(admin_path("api/storage/object/buckets"), response_model=ObjectBucketWriteResponse)
 
     async def storage_object_update_bucket(
 
@@ -1483,7 +1485,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.delete("/admin/api/storage/object/buckets", response_model=ObjectBucketDeleteResponse)
+    @app.delete(admin_path("api/storage/object/buckets"), response_model=ObjectBucketDeleteResponse)
 
     async def storage_object_delete_bucket(
 
@@ -1525,7 +1527,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/items", response_model=ObjectItemsResponse)
+    @app.get(admin_path("api/storage/object/items"), response_model=ObjectItemsResponse)
 
     async def storage_object_items(
 
@@ -1765,7 +1767,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/folder", response_model=ObjectFolderCreateResponse)
+    @app.post(admin_path("api/storage/object/folder"), response_model=ObjectFolderCreateResponse)
 
     async def storage_object_create_folder(body: ObjectFolderCreateBody, client_name: str | None = Query(default=None, alias="client")) -> ObjectFolderCreateResponse:
 
@@ -1807,7 +1809,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/upload", response_model=ObjectUploadResponse)
+    @app.post(admin_path("api/storage/object/upload"), response_model=ObjectUploadResponse)
 
     async def storage_object_upload(
 
@@ -1903,7 +1905,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/meta", response_model=ObjectItem)
+    @app.get(admin_path("api/storage/object/meta"), response_model=ObjectItem)
 
     async def storage_object_meta(path: str = Query(..., min_length=1), client_name: str | None = Query(default=None, alias="client")) -> ObjectItem:
 
@@ -1959,7 +1961,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/content")
+    @app.get(admin_path("api/storage/object/content"))
 
     async def storage_object_content(
 
@@ -2001,7 +2003,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/office-preview", response_model=ObjectOfficePreviewResponse)
+    @app.get(admin_path("api/storage/object/office-preview"), response_model=ObjectOfficePreviewResponse)
 
     async def storage_object_office_preview(
 
@@ -2045,7 +2047,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/office-preview/pdf")
+    @app.get(admin_path("api/storage/object/office-preview/pdf"))
 
     async def storage_object_office_preview_pdf(
 
@@ -2101,7 +2103,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.get("/admin/api/storage/object/office-preview/thumb")
+    @app.get(admin_path("api/storage/object/office-preview/thumb"))
 
     async def storage_object_office_preview_thumb(
 
@@ -2169,7 +2171,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.put("/admin/api/storage/object/content", response_model=ObjectWriteResponse)
+    @app.put(admin_path("api/storage/object/content"), response_model=ObjectWriteResponse)
 
     async def storage_object_write_content(
 
@@ -2253,7 +2255,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.patch("/admin/api/storage/object/metadata", response_model=ObjectMetadataUpdateResponse)
+    @app.patch(admin_path("api/storage/object/metadata"), response_model=ObjectMetadataUpdateResponse)
 
     async def storage_object_update_metadata(
 
@@ -2297,7 +2299,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/copy", response_model=ObjectPathTransferResponse)
+    @app.post(admin_path("api/storage/object/copy"), response_model=ObjectPathTransferResponse)
 
     async def storage_object_copy(body: ObjectCopyMoveBody, client_name: str | None = Query(default=None, alias="client")) -> ObjectPathTransferResponse:
 
@@ -2309,7 +2311,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/move", response_model=ObjectPathTransferResponse)
+    @app.post(admin_path("api/storage/object/move"), response_model=ObjectPathTransferResponse)
 
     async def storage_object_move(body: ObjectCopyMoveBody, client_name: str | None = Query(default=None, alias="client")) -> ObjectPathTransferResponse:
 
@@ -2321,7 +2323,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.delete("/admin/api/storage/object/item", response_model=ObjectDeleteResponse)
+    @app.delete(admin_path("api/storage/object/item"), response_model=ObjectDeleteResponse)
 
     async def storage_object_delete(path: str = Query(..., min_length=1), client_name: str | None = Query(default=None, alias="client")) -> ObjectDeleteResponse:
 
@@ -2331,7 +2333,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/delete-many", response_model=ObjectDeleteManyResponse)
+    @app.post(admin_path("api/storage/object/delete-many"), response_model=ObjectDeleteManyResponse)
 
     async def storage_object_delete_many(body: ObjectDeleteManyBody, client_name: str | None = Query(default=None, alias="client")) -> ObjectDeleteManyResponse:
 
@@ -2353,7 +2355,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.patch("/admin/api/storage/object/expire", response_model=ObjectExpireResponse)
+    @app.patch(admin_path("api/storage/object/expire"), response_model=ObjectExpireResponse)
 
     async def storage_object_expire(body: ObjectExpireBody, path: str = Query(..., min_length=1), client_name: str | None = Query(default=None, alias="client")) -> ObjectExpireResponse:
 
@@ -2377,7 +2379,7 @@ def register_storage_object_routes(app: FastAPI):
 
 
 
-    @app.post("/admin/api/storage/object/cleanup", response_model=StorageCleanupResponse)
+    @app.post(admin_path("api/storage/object/cleanup"), response_model=StorageCleanupResponse)
 
     async def storage_object_cleanup(force: bool = True, client_name: str | None = Query(default=None, alias="client")) -> StorageCleanupResponse:
 

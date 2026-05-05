@@ -13,6 +13,8 @@ _script_path = Path(__file__).resolve()
 _project_root = _script_path.parent.parent
 _app_dir = _project_root / "app"
 
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 if str(_app_dir) not in sys.path:
     sys.path.insert(0, str(_app_dir))
 
@@ -36,13 +38,17 @@ def main() -> None:
     os.environ["__SERVER_INSTANCE_ID__"] = instance_id
 
     cmd = [sys.executable, "-m", "app", *sys.argv[1:]]
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(_project_root),
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    popen_kwargs: dict[str, object] = {
+        "cwd": str(_project_root),
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if sys.platform == "win32":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    else:
+        popen_kwargs["start_new_session"] = True
+
+    proc = subprocess.Popen(cmd, **popen_kwargs)
 
     hk_tz = timezone(timedelta(hours=8), name="Asia/Hong_Kong")
     start_time = datetime.now(tz=hk_tz).isoformat()

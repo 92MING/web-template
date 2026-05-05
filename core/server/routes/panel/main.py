@@ -11,18 +11,18 @@ from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from core.rtc_chat.room import (
     RoomInfo,
     WebRTCRoom,
 )
 from core.utils.type_utils import AdvancedBaseModel
-from core.server.constants import ADMIN_PANEL_SHARED_DIR
+from core.server.constants import ADMIN_PANEL_SHARED_DIR, PUBLIC_DIR
 from core.server.data_types.config import Config
 from ...html_injection import html_response_from_path
 from ...app import get_resources, on_before_app_created, ensure_openapi_customization, redirect_to_worker
 from ...shared import AppSharedData
-from ...translate import get_global_translation, get_all_global_translations
+from ...translate import get_all_public_translations, get_internal_translation, get_internal_translation_catalog, normalize_language
 from .backend import register_backend_panel_routes
 
 
@@ -49,6 +49,41 @@ def _json_for_html_script(value: Any) -> str:
 
 def _internal_admin_path(path: str = "") -> str:
     return Config.GetConfig().server_config.get_internal_admin_path(path)
+
+def _internal_path(path: str = "") -> str:
+    return Config.GetConfig().server_config.get_internal_path(path)
+
+def _safe_locale_segment(value: str) -> str:
+    text = normalize_language(value)
+    if not text or "/" in text or "\\" in text or text.startswith("."):
+        raise HTTPException(404, "Locale not found")
+    return text
+
+def _safe_locale_category(value: str | None) -> str:
+    text = str(value or "default").strip().lower()
+    if not text or "/" in text or "\\" in text or text.startswith("."):
+        raise HTTPException(404, "Locale category not found")
+    return text
+
+def _load_locale_file(category: str | None, lang: str) -> dict[str, Any]:
+    language = _safe_locale_segment(lang)
+    category_name = _safe_locale_category(category)
+    root = PUBLIC_DIR / "locales"
+    candidates = []
+    if category is not None:
+        candidates.append(root / category_name / f"{language}.json")
+    candidates.append(root / f"{language}.json")
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise HTTPException(500, f"Invalid locale file: {path.name}") from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(500, f"Locale file must contain an object: {path.name}")
+        return payload
+    return {}
 
 def _swagger_ui_config_lines(spec_expr: str) -> str:
     config_lines = [
@@ -510,10 +545,11 @@ def _prune_components_for_spec(spec: dict[str, Any], source_components: dict[str
 
 def _prune_admin_paths_from_openapi(spec: dict[str, Any]) -> dict[str, Any]:
     admin_prefix = _internal_admin_path()
+    admin_prefix_root = admin_prefix.rstrip("/")
     filtered_paths = {
         path: copy.deepcopy(path_item)
         for path, path_item in spec.get("paths", {}).items()
-        if isinstance(path, str) and not (path.startswith("/admin") or path.startswith(admin_prefix))
+        if isinstance(path, str) and not (path == admin_prefix_root or path.startswith(admin_prefix_root + "/"))
     }
     pruned_spec = {
         key: copy.deepcopy(value)
@@ -573,7 +609,7 @@ def register_panel_routes(app: FastAPI):
             if candidate is not None:
                 return candidate
         return None
-    @app.get("/html-assets/{file_path:path}")
+    @app.get(_internal_path("html-assets/{file_path:path}"))
 
     async def serve_html_assets(file_path: str):
         """Serve shared HTML-layer assets from server/html/shared/."""
@@ -583,13 +619,13 @@ def register_panel_routes(app: FastAPI):
         media_type, _ = mimetypes.guess_type(str(full))
         return FileResponse(full, media_type=media_type or "application/octet-stream")
     # ---- Panel pages ----
-    @app.get("/admin/panel", response_class=HTMLResponse)
+    @app.get(_internal_admin_path("panel"), response_class=HTMLResponse)
 
     async def panel_html():
         """Management panel."""
         panel_path = get_resources("admin-panel", "panel.html") or Path("panel.html")
         return html_response_from_path(panel_path, not_found_message="panel.html not found")
-    @app.get("/admin/panel/api", response_class=HTMLResponse)
+    @app.get(_internal_admin_path("panel/api"), response_class=HTMLResponse)
 
     async def panel_api_docs() -> HTMLResponse:
         swagger_response = get_swagger_ui_html(
@@ -601,7 +637,7 @@ def register_panel_routes(app: FastAPI):
             _inject_panel_api_doc_tools(swagger_response.body.decode("utf-8")),
             status_code=swagger_response.status_code,
         )
-    @app.get("/admin/panel/api/export/full", response_class=HTMLResponse, include_in_schema=False)
+    @app.get(_internal_admin_path("panel/api/export/full"), response_class=HTMLResponse, include_in_schema=False)
 
     async def panel_api_docs_export_full() -> HTMLResponse:
         spec = copy.deepcopy(app.openapi())
@@ -613,7 +649,7 @@ def register_panel_routes(app: FastAPI):
             html_body,
             headers={"Content-Disposition": 'attachment; filename="proj-template-api-docs.html"'},
         )
-    @app.get("/admin/panel/api/export/public", response_class=HTMLResponse, include_in_schema=False)
+    @app.get(_internal_admin_path("panel/api/export/public"), response_class=HTMLResponse, include_in_schema=False)
 
     async def panel_api_docs_export_public() -> HTMLResponse:
         spec = _prune_admin_paths_from_openapi(copy.deepcopy(app.openapi()))
@@ -634,11 +670,11 @@ def register_panel_routes(app: FastAPI):
         """Bind port."""
         frontend_baseurl: str | None = None
         """Optional frontend base URL."""
-        internal_path_prefix: str | None = None
+        internal_path_prefix: str
         """Internal path prefix (e.g. /_internal)."""
         expose_ai_service: bool = False
         """Whether public AI service routes are exposed."""
-    @app.get("/api/server/config", response_model=ServerConfigInfo)
+    @app.get(_internal_admin_path("api/server/config"), response_model=ServerConfigInfo)
 
     async def server_config_info() -> ServerConfigInfo:
         cfg = Config.GetConfig().server_config
@@ -651,11 +687,11 @@ def register_panel_routes(app: FastAPI):
             expose_ai_service=cfg.expose_ai_service,
         )
     # ---- Room list (panel needs it) ----
-    @app.get("/admin/test/ai", response_class=HTMLResponse)
+    @app.get(_internal_admin_path("test/ai"), response_class=HTMLResponse)
 
     async def admin_test_ai_index() -> HTMLResponse:
         return _resolve_admin_test_html("ai")
-    @app.get("/admin/test/ai/{page_path:path}", response_class=HTMLResponse)
+    @app.get(_internal_admin_path("test/ai/{page_path:path}"), response_class=HTMLResponse)
 
     async def admin_test_ai_page(page_path: str) -> HTMLResponse:
         return _resolve_admin_test_html("ai", page_path)
@@ -669,7 +705,7 @@ def register_panel_routes(app: FastAPI):
         """Current page."""
         page_size: int = 10
         """Items per page."""
-    @app.get("/admin/api/rooms", response_model=PaginatedRooms)
+    @app.get(_internal_admin_path("api/rooms"), response_model=PaginatedRooms)
 
     async def list_rooms(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100)) -> PaginatedRooms:
         """List all active rooms (paginated)."""
@@ -678,7 +714,7 @@ def register_panel_routes(app: FastAPI):
         start = (page - 1) * page_size
         items = [r.model_dump() for r in all_rooms[start : start + page_size]]
         return PaginatedRooms(items=items, total=total, page=page, page_size=page_size)
-    @app.get("/admin/api/rooms/{room_id}", response_model=RoomInfo)
+    @app.get(_internal_admin_path("api/rooms/{room_id}"), response_model=RoomInfo)
 
     async def get_room_detail(room_id: str, request: Request) -> RoomInfo:
         """Return full room details for the requested room."""
@@ -693,7 +729,7 @@ def register_panel_routes(app: FastAPI):
             shared.delete_room_worker(room_id)
             raise HTTPException(404, f"Room not found: {room_id}")
         return room.dump_info()
-    @app.delete("/admin/api/rooms/{room_id}")
+    @app.delete(_internal_admin_path("api/rooms/{room_id}"))
 
     async def delete_room(room_id: str, request: Request) -> dict[str, object]:
         """Force-close a room and remove its worker mapping."""
@@ -719,7 +755,20 @@ def register_panel_routes(app: FastAPI):
     class AllTranslationsResponse(AdvancedBaseModel):
         translations: dict[str, dict[str, str]]
         """lang -> { key -> translation }"""
-    @app.get("/api/ui_translate", response_model=TranslateResponse)
+
+    @app.get("/locales/{category}/{lang}.json", response_class=JSONResponse)
+    async def public_category_locale(category: str, lang: str) -> dict[str, Any]:
+        file_payload = _load_locale_file(category, lang)
+        registered_payload = get_all_public_translations(category, lang)
+        return {**file_payload, **registered_payload}
+
+    @app.get("/locales/{lang}.json", response_class=JSONResponse)
+    async def public_default_locale(lang: str) -> dict[str, Any]:
+        file_payload = _load_locale_file(None, lang)
+        registered_payload = get_all_public_translations("default", lang)
+        return {**file_payload, **registered_payload}
+
+    @app.get(_internal_admin_path("api/ui_translate"), response_model=TranslateResponse)
 
     async def ui_translate(
         keys: str = Query(..., description="Comma-separated translation keys."),
@@ -730,11 +779,10 @@ def register_panel_routes(app: FastAPI):
         for key in keys.split(','):
             key = key.strip()
             if key:
-                results[key] = get_global_translation(key, lang)
+                results[key] = get_internal_translation(key, lang)
         return TranslateResponse(translations=results)
-    @app.get("/api/ui_translate/all", response_model=AllTranslationsResponse)
+    @app.get(_internal_admin_path("api/ui_translate/all"), response_model=AllTranslationsResponse)
 
     async def ui_translate_all() -> AllTranslationsResponse:
         """Return all available translations."""
-        from ...translate import get_translation_catalog
-        return AllTranslationsResponse(translations=get_translation_catalog())
+        return AllTranslationsResponse(translations=get_internal_translation_catalog())

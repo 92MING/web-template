@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Template Gallery</title>
   <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
-  <script type="module" src="/shared/components.js"></script>
-  <script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/shared/components/basic.js"></script>
   <script type="module" src="/gallery-shell.js?v=20260501-1"></script>
   <style>
     :root {
@@ -73,41 +72,41 @@
     import { getGalleryLang } from "/gallery-shell.js?v=20260501-1";
 
     const TEMPLATES = [
-      { file: "generic-home.html",            tag: "frontpage", titleEn: "Generic Homepage",      titleZh: "通用首页",     descEn: "Standard business / product frontpage", descZh: "通用业务首页" },
-      { file: "content-home.html",            tag: "frontpage", titleEn: "Content Homepage",      titleZh: "内容首页",     descEn: "Blog / magazine landing",               descZh: "博客 / 杂志首页" },
-      { file: "video-home.html",              tag: "frontpage", titleEn: "Video Homepage",        titleZh: "视频首页",     descEn: "Streaming-service style hero",          descZh: "流媒体风格首页" },
-      { file: "shop-home.html",               tag: "frontpage", titleEn: "Shop Homepage",         titleZh: "商城首页",     descEn: "E-commerce frontpage with promos",      descZh: "带促销位的商城首页" },
-      { file: "saas-home.html",               tag: "frontpage", titleEn: "SaaS Homepage",         titleZh: "SaaS 首页",    descEn: "High-converting SaaS landing",          descZh: "SaaS 转化型落地" },
-      { file: "editorial-layout.html",        tag: "magazine",  titleEn: "Editorial Layout",      titleZh: "杂志阅读",     descEn: "Long-form magazine article",            descZh: "长文阅读版式" },
-      { file: "news-layout.html",             tag: "magazine",  titleEn: "News Layout",           titleZh: "新闻门户",     descEn: "News portal with breaking ticker",      descZh: "带头条快讯的新闻门户" },
-      { file: "onboarding-guide.html",        tag: "tutorial",  titleEn: "Onboarding Guide",      titleZh: "新手引导",     descEn: "Step-by-step walkthrough",              descZh: "分步引导教程" },
-      { file: "documentation-layout.html",    tag: "tutorial",  titleEn: "Documentation Layout",  titleZh: "文档中心",     descEn: "Docs with sidebar TOC",                 descZh: "带侧边目录的文档" },
-      { file: "wizard-form.html",             tag: "form",      titleEn: "Wizard Form",           titleZh: "向导表单",     descEn: "Multi-step form with progress",         descZh: "多步表单流程" },
-      { file: "survey-layout.html",           tag: "form",      titleEn: "Survey Layout",         titleZh: "问卷调查",     descEn: "Questionnaire / feedback form",         descZh: "问卷 / 反馈" },
-      { file: "video-player.html",            tag: "video",     titleEn: "Video Player",          titleZh: "视频播放",     descEn: "YouTube-style watch page",              descZh: "视频观看页" },
-      { file: "video-listing.html",           tag: "video",     titleEn: "Video Listing",         titleZh: "视频列表",     descEn: "Browse / discover grid",                descZh: "视频浏览网格" },
-      { file: "video-platform.html",          tag: "video",     titleEn: "Video Platform",        titleZh: "视频平台",     descEn: "Full YouTube-style homepage",           descZh: "完整视频平台" },
-      { file: "product-detail.html",          tag: "ecommerce", titleEn: "Product Detail",        titleZh: "商品详情",     descEn: "PDP with gallery and reviews",          descZh: "带画廊与评论的详情页" },
-      { file: "ecommerce-product-grid.html",  tag: "ecommerce", titleEn: "Product Grid",          titleZh: "商品列表",     descEn: "Category listing with filters",         descZh: "带筛选的列表页" },
-      { file: "checkout-layout.html",         tag: "ecommerce", titleEn: "Checkout",              titleZh: "结账页",       descEn: "Payment & order summary",               descZh: "支付与订单汇总" },
-      { file: "cart-drawer.html",             tag: "ecommerce", titleEn: "Cart Drawer",           titleZh: "购物车抽屉",   descEn: "Sliding cart panel",                    descZh: "侧滑购物车" },
-      { file: "personal-profile.html",        tag: "profile",   titleEn: "Personal Profile",      titleZh: "个人资料",     descEn: "Social-style profile",                  descZh: "社交风格资料" },
-      { file: "portfolio-layout.html",        tag: "profile",   titleEn: "Portfolio",             titleZh: "作品集",       descEn: "Creative portfolio",                    descZh: "创作者作品集" },
-      { file: "chat-room.html",               tag: "chat",      titleEn: "Chat Room",             titleZh: "聊天室",       descEn: "Full chat interface",                   descZh: "聊天室界面" },
+      { file: "generic-home.html",            tag: "frontpage", titleEn: "Generic Homepage",      titleZh: "通用首页",     descEn: "Standard business / product frontpage", descZh: "标准业务或产品首页" },
+      { file: "content-home.html",            tag: "frontpage", titleEn: "Content Homepage",      titleZh: "内容首页",     descEn: "Blog / magazine landing",               descZh: "博客或杂志入口页" },
+      { file: "video-home.html",              tag: "frontpage", titleEn: "Video Homepage",        titleZh: "视频首页",     descEn: "Streaming-service style hero",          descZh: "流媒体服务风格首页" },
+      { file: "shop-home.html",               tag: "frontpage", titleEn: "Shop Homepage",         titleZh: "商城首页",     descEn: "E-commerce frontpage with promos",      descZh: "带促销位的电商首页" },
+      { file: "saas-home.html",               tag: "frontpage", titleEn: "SaaS Homepage",         titleZh: "SaaS 首页",    descEn: "High-converting SaaS landing",          descZh: "高转化 SaaS 落地页" },
+      { file: "editorial-layout.html",        tag: "magazine",  titleEn: "Editorial Layout",      titleZh: "编辑排版",     descEn: "Long-form magazine article",            descZh: "长文杂志阅读版式" },
+      { file: "news-layout.html",             tag: "magazine",  titleEn: "News Layout",           titleZh: "新闻门户",     descEn: "News portal with breaking ticker",      descZh: "带快讯滚动的新闻门户" },
+      { file: "onboarding-guide.html",        tag: "tutorial",  titleEn: "Onboarding Guide",      titleZh: "新手引导",     descEn: "Step-by-step walkthrough",              descZh: "逐步完成的新手教程" },
+      { file: "documentation-layout.html",    tag: "tutorial",  titleEn: "Documentation Layout",  titleZh: "文档中心",     descEn: "Docs with sidebar TOC",                 descZh: "带侧边目录的文档页" },
+      { file: "wizard-form.html",             tag: "form",      titleEn: "Wizard Form",           titleZh: "向导表单",     descEn: "Multi-step form with progress",         descZh: "带进度的多步骤表单" },
+      { file: "survey-layout.html",           tag: "form",      titleEn: "Survey Layout",         titleZh: "问卷调查",     descEn: "Questionnaire / feedback form",         descZh: "问卷或反馈表单" },
+      { file: "video-player.html",            tag: "video",     titleEn: "Video Player",          titleZh: "视频播放页",     descEn: "YouTube-style watch page",              descZh: "视频观看页面" },
+      { file: "video-listing.html",           tag: "video",     titleEn: "Video Listing",         titleZh: "视频列表",     descEn: "Browse / discover grid",                descZh: "视频浏览与发现网格" },
+      { file: "video-platform.html",          tag: "video",     titleEn: "Video Platform",        titleZh: "视频平台",     descEn: "Full YouTube-style homepage",           descZh: "完整视频平台首页" },
+      { file: "product-detail.html",          tag: "ecommerce", titleEn: "Product Detail",        titleZh: "商品详情",     descEn: "PDP with gallery and reviews",          descZh: "带图库与评价的商品详情" },
+      { file: "ecommerce-product-grid.html",  tag: "ecommerce", titleEn: "Product Grid",          titleZh: "商品列表",     descEn: "Category listing with filters",         descZh: "带筛选的分类商品列表" },
+      { file: "checkout-layout.html",         tag: "ecommerce", titleEn: "Checkout",              titleZh: "结账页",       descEn: "Payment & order summary",               descZh: "支付与订单摘要" },
+      { file: "cart-drawer.html",             tag: "ecommerce", titleEn: "Cart Drawer",           titleZh: "购物车抽屉",   descEn: "Sliding cart panel",                    descZh: "滑出式购物车" },
+      { file: "personal-profile.html",        tag: "profile",   titleEn: "Personal Profile",      titleZh: "个人资料",     descEn: "Social-style profile",                  descZh: "社交风格个人主页" },
+      { file: "portfolio-layout.html",        tag: "profile",   titleEn: "Portfolio",             titleZh: "作品集",       descEn: "Creative portfolio",                    descZh: "创作者作品展示页" },
+      { file: "chat-room.html",               tag: "chat",      titleEn: "Chat Room",             titleZh: "聊天室",       descEn: "Full chat interface",                   descZh: "完整聊天界面" },
       { file: "message-thread.html",          tag: "chat",      titleEn: "Message Thread",        titleZh: "消息会话",     descEn: "Message bubble list",                   descZh: "消息气泡列表" },
-      { file: "analytics-dashboard.html",     tag: "dashboard", titleEn: "Analytics Dashboard",   titleZh: "数据看板",     descEn: "Reporting dashboard",                   descZh: "报表看板" },
-      { file: "admin-dashboard.html",         tag: "dashboard", titleEn: "Admin Dashboard",       titleZh: "后台管理",     descEn: "Management dashboard",                  descZh: "管理后台" },
-      { file: "master-detail.html",          tag: "dashboard", titleEn: "Master Detail",         titleZh: "主从布局",     descEn: "Master-detail split view",              descZh: "主从分栏布局" },
-      { file: "workspace-home.html",          tag: "dashboard", titleEn: "Workspace Home",        titleZh: "工作空间",     descEn: "Team workspace dashboard",              descZh: "团队工作台" },
-      { file: "product-launch.html",          tag: "landing",   titleEn: "Product Launch",        titleZh: "新品发布",     descEn: "Waitlist / countdown landing",          descZh: "倒计时落地页" },
-      { file: "lead-capture.html",            tag: "landing",   titleEn: "Lead Capture",          titleZh: "线索收集",     descEn: "Marketing landing page",                descZh: "市场转化页" },
-      { file: "login-page.html",              tag: "auth",      titleEn: "Login Page",            titleZh: "登录页",       descEn: "Auth with multiple layouts",            descZh: "多版式登录" },
-      { file: "social-profile.html",          tag: "social",    titleEn: "Social Profile",        titleZh: "社交资料",     descEn: "LinkedIn / Facebook style",             descZh: "LinkedIn / Facebook 风格" },
-      { file: "company-about.html",           tag: "company",   titleEn: "Company About",         titleZh: "关于公司",     descEn: "Corporate About page",                  descZh: "企业介绍页" },
-      { file: "contact-us.html",              tag: "company",   titleEn: "Contact Us",            titleZh: "联系我们",     descEn: "Contact form + FAQ",                    descZh: "联系表单 + 常见问题" },
-      { file: "blog-article.html",            tag: "blog",      titleEn: "Blog Article",          titleZh: "博客文章",     descEn: "Medium-style article reader",           descZh: "Medium 风格文章" },
-      { file: "file-manager.html",            tag: "cloud",     titleEn: "File Manager",          titleZh: "文件管理",     descEn: "Google Drive-style manager",            descZh: "云盘风格管理器" },
-      { file: "live-stream-room.html",        tag: "live",      titleEn: "Live Stream Room",      titleZh: "直播间",       descEn: "Twitch / Bilibili style",               descZh: "Twitch / B 站风格" },
+      { file: "analytics-dashboard.html",     tag: "dashboard", titleEn: "Analytics Dashboard",   titleZh: "数据看板",     descEn: "Reporting dashboard",                   descZh: "报表分析看板" },
+      { file: "admin-dashboard.html",         tag: "dashboard", titleEn: "Admin Dashboard",       titleZh: "后台管理",     descEn: "Management dashboard",                  descZh: "管理后台看板" },
+      { file: "master-detail.html",           tag: "dashboard", titleEn: "Master Detail",         titleZh: "主从详情",     descEn: "Master-detail split view",              descZh: "主从列表详情视图" },
+      { file: "workspace-home.html",          tag: "dashboard", titleEn: "Workspace Home",        titleZh: "工作台首页",     descEn: "Team workspace dashboard",              descZh: "团队工作台看板" },
+      { file: "product-launch.html",          tag: "landing",   titleEn: "Product Launch",        titleZh: "新品发布",     descEn: "Waitlist / countdown landing",          descZh: "预约与倒计时落地页" },
+      { file: "lead-capture.html",            tag: "landing",   titleEn: "Lead Capture",          titleZh: "线索收集",     descEn: "Marketing landing page",                descZh: "市场营销落地页" },
+      { file: "login-page.html",              tag: "auth",      titleEn: "Login Page",            titleZh: "登录页",       descEn: "Auth with multiple layouts",            descZh: "多布局认证页面" },
+      { file: "social-profile.html",          tag: "social",    titleEn: "Social Profile",        titleZh: "社交资料",     descEn: "LinkedIn / Facebook style",             descZh: "LinkedIn 或 Facebook 风格" },
+      { file: "company-about.html",           tag: "company",   titleEn: "Company About",         titleZh: "关于公司",     descEn: "Corporate About page",                  descZh: "企业介绍页面" },
+      { file: "contact-us.html",              tag: "company",   titleEn: "Contact Us",            titleZh: "联系我们",     descEn: "Contact form + FAQ",                    descZh: "联系表单与常见问题" },
+      { file: "blog-article.html",            tag: "blog",      titleEn: "Blog Article",          titleZh: "博客文章",     descEn: "Medium-style article reader",           descZh: "Medium 风格文章阅读页" },
+      { file: "file-manager.html",            tag: "cloud",     titleEn: "File Manager",          titleZh: "文件管理",     descEn: "Google Drive-style manager",            descZh: "云盘风格文件管理" },
+      { file: "live-stream-room.html",        tag: "live",      titleEn: "Live Stream Room",      titleZh: "直播间",       descEn: "Twitch / Bilibili style",               descZh: "Twitch 或 B 站风格" },
     ];
 
     const TAG_LABELS = {
@@ -134,9 +133,19 @@
       live:      'linear-gradient(135deg,#dc2626,#fb7185)',
     };
 
+    const PREVIEW_SLUGS = new Set([
+      'admin-dashboard', 'analytics-dashboard', 'blog-article', 'cart-drawer', 'chat-room',
+      'checkout-layout', 'company-about', 'contact-us', 'content-home', 'documentation-layout',
+      'ecommerce-product-grid', 'editorial-layout', 'file-manager', 'generic-home', 'lead-capture',
+      'live-stream-room', 'login-page', 'message-thread', 'news-layout', 'onboarding-guide',
+      'personal-profile', 'portfolio-layout', 'product-detail', 'product-launch', 'saas-home',
+      'shop-home', 'social-profile', 'survey-layout', 'video-home', 'video-listing',
+      'video-platform', 'video-player', 'wizard-form',
+    ]);
+
     const COPY = {
       en: { searchPlaceholder: "Find a template, industry, or layout", empty: "No template matched that search." },
-      zh: { searchPlaceholder: "搜索模板 / 行业 / 版式", empty: "没有匹配的模板。" },
+      zh: { searchPlaceholder: "搜索模板、行业或布局", empty: "没有匹配的模板。" },
     };
 
     const galleryEl = document.getElementById('gallery');
@@ -184,14 +193,13 @@
         card.className = 'card';
         card.href = t.file;
         const slug = t.file.replace(/\.html$/, '');
-        const previewUrl = `/pages/_previews/${slug}.jpg`;
         const fallbackBg = TAG_COLORS[t.tag] || TAG_COLORS.frontpage;
-        // Use background-image with gradient fallback layered behind. Image
-        // simply won't render if the file doesn't exist (no broken icon)
-        // because we use background-image, not <img>.
-        const thumbStyle = `background:url('${previewUrl}'),${fallbackBg};background-size:cover,auto;background-position:top center;`;
+        const hasPreview = PREVIEW_SLUGS.has(slug);
+        const thumbStyle = hasPreview
+          ? `background:url('/pages/_previews/${slug}.jpg'),${fallbackBg};background-size:cover,auto;background-position:top center;`
+          : `background:${fallbackBg};`;
         card.innerHTML = `
-          <div class="thumb has-preview" style="${thumbStyle}">
+          <div class="thumb ${hasPreview ? 'has-preview' : ''}" style="${thumbStyle}">
             <span class="thumb-tag">${tagLabel(t.tag)}</span>
             <div class="thumb-title">${templateTitle(t)}</div>
           </div>

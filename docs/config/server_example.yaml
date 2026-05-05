@@ -22,7 +22,7 @@ server_config:
   # 是否公开 /ai/* 别名；/_internal/ai/* 始终是 internal 入口
   expose_ai_service: false
 
-  # 是否启用 RTC chatroom 相关公开路由
+  # 是否启用 RTC chatroom 功能；路由始终挂在 /_internal/rtc_room/*
   enable_rtc_chatroom: false
 
   # 可选：注入前端页面的 base URL

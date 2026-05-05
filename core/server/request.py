@@ -5,6 +5,8 @@ from typing import Any, Self
 
 from fastapi import Request
 
+from core.utils.text_utils.language import Language
+
 from .data_types.apikey import extract_apikey_from_request, get_apikey_by_key, get_apikey_identity_from_cache
 
 
@@ -24,6 +26,10 @@ class FuzzyDict:
 
 
 class AdvanceRequest(Request):
+    @property
+    def locale(self) -> Language | str | None:
+        return getattr(self, "_locale", None) or self.scope.get("_locale")
+
     @property
     def apikey(self) -> str | None:
         return getattr(self, "_apikey", None)
@@ -70,16 +76,20 @@ class AdvanceRequest(Request):
         if isinstance(request, cls):
             if not hasattr(request, "_apikey"):
                 object.__setattr__(request, "_apikey", extract_apikey_from_request(request))
+            if not hasattr(request, "_locale"):
+                object.__setattr__(request, "_locale", request.scope.get("_locale"))
             return request
 
         request.__class__ = cls
         object.__setattr__(request, "_apikey", extract_apikey_from_request(request))
+        object.__setattr__(request, "_locale", request.scope.get("_locale"))
         return request
 
     @classmethod
     def New(cls, scope: dict[str, Any], receive: Any) -> Self:
         request = cls(scope=scope, receive=receive)
         object.__setattr__(request, "_apikey", extract_apikey_from_request(request))
+        object.__setattr__(request, "_locale", scope.get("_locale"))
         return request
 
 

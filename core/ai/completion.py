@@ -1416,7 +1416,7 @@ class CompletionClient(CompletionCallableMixin, ServiceClientBase[ChatCompletePa
     ) -> 'CompletionClient':
         model_filter = kwargs.get('model_filter')
         apikey = kwargs.get('apikey')
-        key = apikey or _env_first('TTS_APIKEY')
+        key = apikey or _env_first('TTS_APIKEY', 'TTS_API_KEY')
         api_url = kwargs.get('base_url') or _env_first('TTS_API_BASEURL')
         if not api_url:
             api_url = _detect_local_tts_base_url()
@@ -1461,9 +1461,9 @@ class CompletionClient(CompletionCallableMixin, ServiceClientBase[ChatCompletePa
     ) -> 'CompletionClient':
         apikey = kwargs.get('apikey')
         model = kwargs.get('model')
-        key = apikey or _env_first('OPENROUTER_API_KEY')
+        key = apikey or _env_first('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY')
         if not key:
-            raise ValueError('OpenRouter apikey not provided. Please pass `apikey` or set OPENROUTER_API_KEY.')
+            raise ValueError('OpenRouter apikey not provided. Please pass `apikey` or set OPENROUTER_APIKEY / OPENROUTER_API_KEY.')
 
         base_url = kwargs.get('base_url') or _env_first('OPENROUTER_API_URL') or 'https://openrouter.ai/api/v1'
         final_model = model or _env_first(
@@ -2054,7 +2054,7 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
         except Exception as exc:
             _logger.warning(f'Failed to create ThinkThinkSyn OMNI client: {exc}')
 
-        or_key = _env_first('OPENROUTER_API_KEY')
+        or_key = _env_first('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY')
         if or_key:
             try:
                 or_client = CompletionClient.CreateOpenRouterClient(
@@ -2069,7 +2069,7 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
         if not clients:
             raise RuntimeError(
                 'Cannot create default CompletionService: no client could be initialized. '
-                'Please ensure thinkthinksyn is installed or set OPENROUTER_API_KEY.'
+                'Please ensure thinkthinksyn is installed or set OPENROUTER_APIKEY / OPENROUTER_API_KEY.'
             )
         return cls(*clients, key='default')
 
@@ -2645,7 +2645,7 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
             if total == 0:
                 raise RuntimeError(
                     'No completion client is configured. '
-                    'Check AI provider env keys (TTS_APIKEY / OPENROUTER_API_KEY / OPENAI_API_KEY) '
+                    'Check AI provider env keys (TTS_APIKEY / TTS_API_KEY / OPENROUTER_APIKEY / OPENROUTER_API_KEY / OPENAI_APIKEY / OPENAI_API_KEY) '
                     'and CompletionService configuration.'
                 )
             now = time.time()

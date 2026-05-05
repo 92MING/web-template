@@ -206,7 +206,7 @@ async function doRerank() {
 
   try {
     const t0 = performance.now();
-    const resp = await fetch('/ai/rerank', {
+    const resp = await fetch(window.projAiApiPath('/ai/rerank'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

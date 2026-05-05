@@ -40,7 +40,7 @@ try:
     from dotenv import load_dotenv
     env = Path(ROOT) / '.env'
     if env.exists():
-        load_dotenv(dotenv_path=env, override=False)
+        load_dotenv(dotenv_path=env, override=False, encoding='utf-8-sig')
     print(f'[{time.strftime("%H:%M:%S")}] .env loaded')
 
     # Patch ConcurrentPool

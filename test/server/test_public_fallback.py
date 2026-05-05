@@ -201,7 +201,7 @@ class GalleryTestMediaRouteTest(unittest.IsolatedAsyncioTestCase):
         await self.client.aclose()
 
     async def test_gallery_serves_test_media_from_resources(self):
-        response = await self.client.get("/test-media/gallery-sample-video.mp4")
+        response = await self.client.get("/test-media/sample-video.mp4")
         self.assertEqual(response.status_code, 200)
         self.assertIn("video", response.headers.get("content-type", ""))
 

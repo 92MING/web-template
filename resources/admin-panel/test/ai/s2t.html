@@ -312,7 +312,7 @@ async function runS2T() {
   const startTime = performance.now();
 
   try {
-    const res = await fetch('/ai/s2t', { method: 'POST', body: formData });
+    const res = await fetch(window.projAiApiPath('/ai/s2t'), { method: 'POST', body: formData });
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     const data = await res.json();
@@ -363,7 +363,7 @@ async function runCompare() {
 
   const t0 = performance.now();
 
-  const s2tPromise = fetch('/ai/s2t', { method: 'POST', body: formS2T })
+  const s2tPromise = fetch(window.projAiApiPath('/ai/s2t'), { method: 'POST', body: formS2T })
     .then(async res => {
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`S2T HTTP ${res.status}`);
@@ -377,7 +377,7 @@ async function runCompare() {
       document.getElementById('cmpS2tLoading').classList.add('hidden');
     });
 
-  const asrPromise = fetch('/ai/asr', { method: 'POST', body: formASR })
+  const asrPromise = fetch(window.projAiApiPath('/ai/asr'), { method: 'POST', body: formASR })
     .then(async res => {
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`ASR HTTP ${res.status}`);

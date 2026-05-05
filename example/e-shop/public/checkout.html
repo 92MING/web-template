@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#f5f5f5">
 <title>结算 - e-Shop</title>
-<script type="module" src="/shared/components.js"></script>
-<script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
+  <script type="module" src="/shared/templates/ecommerce.js"></script>
 <style>
   body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
   .page-wrap { max-width: 1040px; margin: 0 auto; padding: 1rem; }
@@ -103,15 +104,15 @@ let cartTotal = 0;
   const orderItems = items.map(item => {
     const itemTotal = (item.price || 0) * item.quantity;
     total += itemTotal;
-    return { title: item.name, qty: item.quantity, price: '¥' + item.price };
+    return { title: item.name, qty: item.quantity, price: '￥' + item.price };
   });
   cartTotal = total;
 
   const tpl = $('checkout-tpl');
   tpl.items = orderItems;
-  tpl.subtotal = '¥' + total;
-  tpl.shipping = '¥0';
-  tpl.total = '¥' + total;
+  tpl.subtotal = '￥' + total;
+  tpl.shipping = '￥0';
+  tpl.total = '￥' + total;
   tpl.labels = {
     'checkout.shippingAddress': await t('eshop.shipping_info'),
     'checkout.firstName': await t('eshop.first_name') || 'First Name',
@@ -142,10 +143,10 @@ $('btn-apply-coupon').addEventListener('click', async () => {
     if (res?.ok) {
       currentCoupon = code;
       currentDiscount = res.coupon.discount;
-      $('coupon-msg').textContent = `${res.coupon.description}，立减 ¥${currentDiscount}`;
+      $('coupon-msg').textContent = `${res.coupon.description}，立减 ￥${currentDiscount}`;
       $('coupon-msg').style.color = 'var(--builtin-primary)';
       const tpl = $('checkout-tpl');
-      tpl.total = '¥' + Math.max(0, cartTotal - currentDiscount);
+      tpl.total = '￥' + Math.max(0, cartTotal - currentDiscount);
       BuiltinToast.show(await t('eshop.coupon_applied'), { type: 'success' });
     } else {
       $('coupon-msg').textContent = res?.error || '优惠券无效';

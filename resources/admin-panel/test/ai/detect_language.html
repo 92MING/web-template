@@ -215,7 +215,7 @@ function setLoading(btnId, spinnerId, loading) {
 }
 
 async function callDetect(text) {
-  const resp = await fetch('/ai/detect-language', {
+  const resp = await fetch(window.projAiApiPath('/ai/detect-language'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),

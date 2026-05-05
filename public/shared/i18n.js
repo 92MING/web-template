@@ -2,17 +2,51 @@ const DEFAULT_LANG = "en";
 const CATALOG_CACHE = new Map();
 
 function currentLanguage() {
-  if (typeof document !== "undefined" && document.documentElement && document.documentElement.lang) {
-    return normalizeLang(document.documentElement.lang);
-  }
+  const pathLang = languageFromPath();
+  if (pathLang) return pathLang;
+  const cookieLang = languageFromCookie();
+  if (cookieLang) return cookieLang;
+  const navigatorLang = languageFromNavigator();
+  if (navigatorLang) return navigatorLang;
   if (typeof navigator !== "undefined" && navigator.language) {
     return normalizeLang(navigator.language);
+  }
+  if (typeof document !== "undefined" && document.documentElement && document.documentElement.lang) {
+    return normalizeLang(document.documentElement.lang);
   }
   return DEFAULT_LANG;
 }
 
 function normalizeLang(lang) {
   return String(lang || DEFAULT_LANG).trim().toLowerCase().replaceAll("_", "-");
+}
+
+function languageFromPath() {
+  if (typeof location === "undefined") return null;
+  const first = String(location.pathname || "").split("/").filter(Boolean)[0];
+  if (!first) return null;
+  const normalized = normalizeLang(decodeURIComponent(first));
+  return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(normalized) ? normalized : null;
+}
+
+function languageFromCookie() {
+  if (typeof document === "undefined" || !document.cookie) return null;
+  const candidates = new Map(document.cookie.split(";").map((part) => {
+    const [rawKey, ...rest] = part.split("=");
+    return [decodeURIComponent(String(rawKey || "").trim()), decodeURIComponent(rest.join("=").trim())];
+  }));
+  for (const key of ["locale", "lang", "language"]) {
+    const value = candidates.get(key);
+    if (value) return normalizeLang(value);
+  }
+  return null;
+}
+
+function languageFromNavigator() {
+  if (typeof navigator === "undefined") return null;
+  const languages = Array.isArray(navigator.languages) ? navigator.languages : [];
+  const first = languages.find((item) => item);
+  return first ? normalizeLang(first) : null;
 }
 
 function resolveUrl(url) {
@@ -238,11 +272,52 @@ export async function requestTranslations(options = {}) {
   return fetchCatalog(opts.lang || currentLanguage(), opts);
 }
 
+export function useTranslations(category = null, lang = null, options = {}) {
+  let resolvedCategory = category;
+  let resolvedLang = lang;
+  let opts = options;
+  if (category && typeof category === "object") {
+    opts = category;
+    resolvedCategory = opts.category || null;
+    resolvedLang = opts.lang || lang;
+  }
+  const normalized = normalizeLang(resolvedLang || currentLanguage());
+  const encodedLang = encodeURIComponent(normalized);
+  const path = resolvedCategory
+    ? `/locales/${encodeURIComponent(String(resolvedCategory))}/${encodedLang}.json`
+    : `/locales/${encodedLang}.json`;
+  const loadOptions = Object.assign({}, opts, { path });
+  let catalog = {};
+  let activeLang = normalized;
+  const t = function (key, values = undefined) {
+    return translate(key, catalog, values);
+  };
+  t.ready = fetchCatalog(activeLang, loadOptions).then((nextCatalog) => {
+    catalog = nextCatalog;
+    return t;
+  });
+  t.setLang = async function (nextLang) {
+    activeLang = normalizeLang(nextLang || currentLanguage());
+    const nextPath = resolvedCategory
+      ? `/locales/${encodeURIComponent(String(resolvedCategory))}/${encodeURIComponent(activeLang)}.json`
+      : `/locales/${encodeURIComponent(activeLang)}.json`;
+    catalog = await fetchCatalog(activeLang, Object.assign({}, loadOptions, { path: nextPath }));
+    return t;
+  };
+  t.setCatalog = function (nextCatalog) {
+    catalog = resolveCatalogPayload(nextCatalog, activeLang);
+  };
+  t.lang = () => activeLang;
+  t.catalog = () => Object.assign({}, catalog);
+  return t;
+}
+
 const api = {
   loadI18n,
   createTranslator,
   requestTranslation,
   requestTranslations,
+  useTranslations,
   currentLanguage,
   normalizeLang,
   resolveCatalogUrl,
@@ -250,3 +325,4 @@ const api = {
 
 globalThis.ProjectI18n = Object.assign({}, globalThis.ProjectI18n || {}, api);
 globalThis.requestTranslation = globalThis.requestTranslation || requestTranslation;
+globalThis.useTranslations = globalThis.useTranslations || useTranslations;

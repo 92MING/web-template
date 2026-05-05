@@ -15,16 +15,16 @@ for _path in (str(_PROJECT_ROOT), str(_APP_DIR)):
         sys.path.insert(0, _path)
 
 from core.server.data_types.config import Config, ServerConfig
-from core.server.translate import register_translation, TranslationLanguage
+from core.server.translate import _register_internal_translation, TranslationLanguage
 from core.server.routes.panel.main import register_panel_routes
 
 
 def test_ui_translate_endpoints() -> None:
     Config.SetConfig(Config(server_config=ServerConfig()))
     key = "test.ui.translate.route"
-    register_translation(key, TranslationLanguage.EN, "Hello")
-    register_translation(key, TranslationLanguage.ZH_CN, "你好")
-    register_translation(key, TranslationLanguage.ZH_TW, "你好")
+    _register_internal_translation(key, TranslationLanguage.EN, "Hello")
+    _register_internal_translation(key, TranslationLanguage.ZH_CN, "你好")
+    _register_internal_translation(key, TranslationLanguage.ZH_TW, "你好")
 
     app = FastAPI()
     register_panel_routes(app)
@@ -32,11 +32,11 @@ def test_ui_translate_endpoints() -> None:
     async def _run_checks() -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            one = await client.get("/api/ui_translate", params={"keys": key, "lang": "zh-cn"})
+            one = await client.get("/_internal/admin/api/ui_translate", params={"keys": key, "lang": "zh-cn"})
             assert one.status_code == 200
             assert one.json()["translations"][key] == "你好"
 
-            all_items = await client.get("/api/ui_translate/all")
+            all_items = await client.get("/_internal/admin/api/ui_translate/all")
             assert all_items.status_code == 200
             assert all_items.json()["translations"]["en"][key] == "Hello"
 

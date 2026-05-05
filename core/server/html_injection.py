@@ -34,7 +34,7 @@ _CSS_IMPORT_RE = re.compile(
 # Caching
 # ---------------------------------------------------------------------------
 # Bootstrap script only depends on frontend_baseurl; cache it.
-_bootstrap_cache: tuple[str | None, str] | None = None  # (baseurl, script)
+_bootstrap_cache: tuple[str | None, str, str] | None = None  # (baseurl, admin_urls_signature, script)
 
 # Fully-injected HTML per file path.
 # key: resolved path string  ->  value: (mtime, baseurl, dependencies, injected_html)
@@ -403,11 +403,34 @@ def get_frontend_baseurl() -> str | None:
 def build_frontend_bootstrap_script() -> str:
     global _bootstrap_cache
     baseurl = get_frontend_baseurl()
-    if _bootstrap_cache is not None and _bootstrap_cache[0] == baseurl:
-        return _bootstrap_cache[1]
+    try:
+        server_cfg = Config.GetConfig().server_config
+        admin_urls = {
+            "admin_base": server_cfg.get_internal_admin_path(),
+            "server_config": server_cfg.get_internal_admin_path("api/server/config"),
+            "ui_translate": server_cfg.get_internal_admin_path("api/ui_translate"),
+            "ui_translate_all": server_cfg.get_internal_admin_path("api/ui_translate/all"),
+        }
+        rtc_room_urls = {
+            "room": server_cfg.get_internal_path("rtc_room/room"),
+            "create": server_cfg.get_internal_path("rtc_room/create"),
+            "join": server_cfg.get_internal_path("rtc_room/join"),
+            "test_audio": server_cfg.get_internal_path("rtc_room/test-audio"),
+        }
+        ai_api_base = server_cfg.get_internal_path("ai")
+    except Exception:
+        admin_urls = {}
+        rtc_room_urls = {}
+        ai_api_base = ""
+    admin_urls_signature = json.dumps({"admin": admin_urls, "rtc_room": rtc_room_urls, "ai_api_base": ai_api_base}, sort_keys=True)
+    if _bootstrap_cache is not None and _bootstrap_cache[0] == baseurl and _bootstrap_cache[1] == admin_urls_signature:
+        return _bootstrap_cache[2]
 
     payload = {
         "frontend_baseurl": baseurl,
+        "admin_urls": admin_urls,
+        "rtc_room_urls": rtc_room_urls,
+        "ai_api_base": ai_api_base,
     }
     payload_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     script = f"""
@@ -419,7 +442,8 @@ def build_frontend_bootstrap_script() -> str:
   window.__FRONTEND_BOOTSTRAPPED__ = true;
 
   var payload = {payload_json};
-  var baseUrl = typeof payload.frontend_baseurl === 'string' ? payload.frontend_baseurl.replace(/\\/$/, '') : '';
+  var baseUrl = typeof payload.frontend_baseurl === 'string' ? payload.frontend_baseurl : '';
+  if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
 
   function isAbsoluteUrl(url) {{
     return /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//');
@@ -442,13 +466,43 @@ def build_frontend_bootstrap_script() -> str:
   window.__FRONTEND_CONFIG__ = Object.assign({{}}, window.__FRONTEND_CONFIG__ || {{}}, payload, {{
     resolveUrl: resolveUrl,
   }});
+  window.__ADMIN_URLS__ = Object.assign({{}}, window.__ADMIN_URLS__ || {{}}, payload.admin_urls || {{}});
+  window.__RTC_ROOM_URLS__ = Object.assign({{}}, window.__RTC_ROOM_URLS__ || {{}}, payload.rtc_room_urls || {{}});
+  window.__AI_API_BASE__ = typeof payload.ai_api_base === 'string' ? payload.ai_api_base : '';
   window.projResolveUrl = resolveUrl;
+
+  function resolveInternalUrl(url) {{
+    if (typeof url !== 'string') return url;
+    var adminUrls = payload.admin_urls || {{}};
+    var adminBase = typeof adminUrls.admin_base === 'string' ? adminUrls.admin_base : '';
+    if (adminBase.endsWith('/')) adminBase = adminBase.slice(0, -1);
+    if (url === '/api/server/config') return adminUrls.server_config || url;
+    if (url === '/api/ui_translate') return adminUrls.ui_translate || url;
+    if (url.startsWith('/api/ui_translate?')) return (adminUrls.ui_translate || '/api/ui_translate') + url.slice('/api/ui_translate'.length);
+    if (url === '/api/ui_translate/all') return adminUrls.ui_translate_all || url;
+    if (url.startsWith('/api/ui_translate/all?')) return (adminUrls.ui_translate_all || '/api/ui_translate/all') + url.slice('/api/ui_translate/all'.length);
+    if (adminBase && url === '/admin') return adminBase;
+    if (adminBase && url.startsWith('/admin/')) return adminBase + url.slice('/admin'.length);
+    return url;
+  }}
+
+  function resolveAiApiPath(url) {{
+    if (typeof url !== 'string') return url;
+    var aiBase = typeof payload.ai_api_base === 'string' ? payload.ai_api_base : '';
+    if (aiBase.endsWith('/')) aiBase = aiBase.slice(0, -1);
+    if (!aiBase) return url;
+    if (url === '/ai') return aiBase;
+    if (url.startsWith('/ai/')) return aiBase + url.slice('/ai'.length);
+    return url;
+  }}
+
+  window.projAiApiPath = resolveAiApiPath;
 
   if (!window.__FETCH_PATCHED__ && typeof window.fetch === 'function') {{
     var originalFetch = window.fetch.bind(window);
     window.fetch = function(input, init) {{
       if (typeof input === 'string') {{
-        return originalFetch(resolveUrl(input), init);
+        return originalFetch(resolveUrl(resolveInternalUrl(input)), init);
       }}
       if (input instanceof URL) {{
         return originalFetch(new URL(resolveUrl(String(input))), init);
@@ -465,7 +519,7 @@ def build_frontend_bootstrap_script() -> str:
     var originalOpen = window.XMLHttpRequest.prototype.open;
     window.XMLHttpRequest.prototype.open = function(method, url) {{
       if (typeof url === 'string') {{
-        arguments[1] = resolveUrl(url);
+        arguments[1] = resolveUrl(resolveInternalUrl(url));
       }}
       return originalOpen.apply(this, arguments);
     }};
@@ -474,7 +528,7 @@ def build_frontend_bootstrap_script() -> str:
 }})();
 </script>
 """.strip()
-    _bootstrap_cache = (baseurl, script)
+    _bootstrap_cache = (baseurl, admin_urls_signature, script)
     return script
 
 def inject_frontend_config(html: str) -> str:
@@ -507,7 +561,7 @@ def html_response_from_content(
         baseurl=baseurl,
     )
     if cached_html is not None:
-        return HTMLResponse(cached_html)
+      return HTMLResponse(cached_html)
 
     prepared_html, dependencies = _prepare_html_content(html, source_path=source_path)
     _store_cached_content_html(

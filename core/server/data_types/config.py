@@ -6,6 +6,7 @@ import socket
 import logging
 import argparse
 
+from collections.abc import Sequence
 from pathlib import Path
 from datetime import datetime
 from typing import Any, ClassVar, Literal, Self, TypedDict
@@ -33,6 +34,7 @@ from core.server.constants import (
 )
 from core.storage.config import StorageConfig
 from core.utils.log_utils import ORMLogHandler
+from core.utils.text_utils.language import Language
 
 _logger = logging.getLogger(__name__)
 
@@ -327,7 +329,7 @@ class ServerConfig(_AutoDocstringModel):
     system_terminal_max_sessions: int = Field(default_factory=lambda: _get_int_env("SYSTEM_TERMINAL_MAX_SESSIONS", 6))
     """Per-worker cap for concurrent interactive terminal sessions."""
     internal_path_prefix: str | None = Field(default_factory=lambda: os.getenv("INTERNAL_PATH_PREFIX", "/_internal"))
-    """Prefix for internal routes. ``None`` exposes them without an additional prefix."""
+    """Prefix for internal routes."""
     expose_internal_prefix: bool = Field(default_factory=lambda: _get_bool_env("EXPOSE_INTERNAL_PREFIX", True))
     """Whether internal routes and admin panel routes are exposed."""
     internal_path_allowed_ip: str | list[str] | Literal["all"] = Field(
@@ -344,11 +346,21 @@ class ServerConfig(_AutoDocstringModel):
     """Additional public/static file directories to serve (str or list of str)."""
     extra_resources_paths: str | list[str] | None = Field(default=None)
     """Additional resource directories (not directly exposed via HTTP) (str or list of str)."""
+    valid_locales: str | Language | Sequence[str | Language] | None = Field(default=None)
+    """Optional locale prefixes accepted in URLs before route matching."""
 
     def model_post_init(self, __context: Any) -> None:
-        if self.internal_path_prefix is not None:
-            text = str(self.internal_path_prefix).strip()
-            self.internal_path_prefix = None if not text else "/" + text.strip("/")
+        text = str(self.internal_path_prefix or "/_internal").strip()
+        self.internal_path_prefix = "/_internal" if not text else "/" + text.strip("/")
+        if self.valid_locales is not None:
+            from core.server.translate import normalize_language
+
+            raw_locales = [self.valid_locales] if isinstance(self.valid_locales, (str, Language)) else list(self.valid_locales)
+            self.valid_locales = list(dict.fromkeys(
+                normalize_language(item)
+                for item in raw_locales
+                if str(item or "").strip()
+            ))
 
     def is_ai_service_exposed(self) -> bool:
         return bool(self.expose_ai_service)
@@ -360,9 +372,7 @@ class ServerConfig(_AutoDocstringModel):
         normalized = "/" + str(path or "").strip("/")
         if normalized == "/":
             normalized = ""
-        prefix = self.internal_path_prefix
-        if prefix is None:
-            return normalized or "/"
+        prefix = self.internal_path_prefix or "/_internal"
         return (prefix.rstrip("/") + normalized) or "/"
 
     def get_internal_admin_path(self, path: str = "") -> str:
@@ -371,9 +381,7 @@ class ServerConfig(_AutoDocstringModel):
 
     def is_internal_path(self, path: str) -> bool:
         normalized = "/" + str(path or "").lstrip("/")
-        if self.internal_path_prefix is None:
-            return normalized.startswith("/admin") or normalized.startswith("/ai")
-        prefix = self.internal_path_prefix.rstrip("/")
+        prefix = (self.internal_path_prefix or "/_internal").rstrip("/")
         return normalized == prefix or normalized.startswith(prefix + "/")
 
     def get_internal_path_allowed_ip_patterns(self) -> list[str] | None:
@@ -901,7 +909,7 @@ class Config(_AutoDocstringModel):
         p.add_argument("--system-default-root", type=str, default=default.server_config.system_default_root, help="[server] Preferred default root for terminal/file manager")
         p.add_argument("--system-terminal-default-cwd", type=str, default=default.server_config.system_terminal_default_cwd, help="[server] Default cwd for terminal sessions")
         p.add_argument("--system-terminal-max-sessions", type=int, default=default.server_config.system_terminal_max_sessions, help="[server] Max concurrent terminal sessions per worker")
-        p.add_argument("--internal-path-prefix", type=str, default=default.server_config.internal_path_prefix, help="[server] Internal route prefix; use empty string for no prefix")
+        p.add_argument("--internal-path-prefix", type=str, default=default.server_config.internal_path_prefix, help="[server] Internal route prefix")
         p.add_argument("--expose-internal-prefix", action="store_true", default=None, help="[server] Expose internal routes and admin panel")
         p.add_argument("--hide-internal-prefix", action="store_true", help="[server] Hide internal routes and admin panel")
         p.add_argument("--internal-path-allowed-ip", type=str, default=None, help="[server] Internal IP allow list: localhost, all, wildcard, or comma-separated patterns")
@@ -965,11 +973,8 @@ class Config(_AutoDocstringModel):
         config.server_config.system_terminal_default_cwd = getattr(args, "system_terminal_default_cwd", config.server_config.system_terminal_default_cwd)
         config.server_config.system_terminal_max_sessions = getattr(args, "system_terminal_max_sessions", config.server_config.system_terminal_max_sessions)
         raw_internal_prefix = getattr(args, "internal_path_prefix", config.server_config.internal_path_prefix)
-        if raw_internal_prefix == "":
-            config.server_config.internal_path_prefix = None
-        else:
-            config.server_config.internal_path_prefix = raw_internal_prefix
-            config.server_config.model_post_init(None)
+        config.server_config.internal_path_prefix = raw_internal_prefix or "/_internal"
+        config.server_config.model_post_init(None)
         if getattr(args, "hide_internal_prefix", False):
             config.server_config.expose_internal_prefix = False
         elif getattr(args, "expose_internal_prefix", None) is not None:

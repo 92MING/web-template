@@ -7,7 +7,7 @@ from core.constants import PUBLIC_DIR
 from core.rtc_chat.room import WebRTCRoom, WebRTCRoomCreationResponse, WebRTCRoomJoinResponse
 from core.utils.type_utils import AdvancedBaseModel
 
-from ..app import get_resources, redirect_to_worker
+from ..app import get_resources, internal_path, on_before_app_created, redirect_to_worker
 from ..html_injection import html_response_from_path_with_mobile
 from ..rtc_room import build_room_create_request, build_room_join_request, ensure_rtc_room_enabled
 from ..shared import AppSharedData
@@ -53,8 +53,11 @@ def _register_room_worker(room: WebRTCRoom) -> None:
     room.add_on_close_callback(_unregister)
 
 
+@on_before_app_created
 def register_rtc_room_routes(app: FastAPI) -> None:
-    @app.get("/api/test-audio/{filename}")
+    rtc_path = lambda path: internal_path(f"rtc_room/{path}")
+
+    @app.get(rtc_path("test-audio/{filename}"))
     async def serve_test_audio(filename: str) -> FileResponse:
         ensure_rtc_room_enabled()
         path = get_resources("test", filename)
@@ -62,23 +65,15 @@ def register_rtc_room_routes(app: FastAPI) -> None:
             raise HTTPException(404, "Not found")
         return FileResponse(path, media_type="audio/mpeg")
 
-    @app.post("/api/rooms/create", response_model=WebRTCRoomCreationResponse)
-    async def create_rtc_room_legacy(data: RTCRoomCreateRequest, request: Request) -> WebRTCRoomCreationResponse:
-        return await _create_rtc_room(data, request)
-
-    @app.post("/api/rooms/join", response_model=WebRTCRoomJoinResponse)
-    async def join_rtc_room_legacy(data: RTCRoomJoinRequest, request: Request) -> WebRTCRoomJoinResponse:
-        return await _join_rtc_room(data, request)
-
-    @app.post("/rtc_room/create", response_model=WebRTCRoomCreationResponse)
+    @app.post(rtc_path("create"), response_model=WebRTCRoomCreationResponse)
     async def create_rtc_room(data: RTCRoomCreateRequest, request: Request) -> WebRTCRoomCreationResponse:
         return await _create_rtc_room(data, request)
 
-    @app.post("/rtc_room/join", response_model=WebRTCRoomJoinResponse)
+    @app.post(rtc_path("join"), response_model=WebRTCRoomJoinResponse)
     async def join_rtc_room(data: RTCRoomJoinRequest, request: Request) -> WebRTCRoomJoinResponse:
         return await _join_rtc_room(data, request)
 
-    @app.get("/rtc_room/room", response_class=HTMLResponse)
+    @app.get(rtc_path("room"), response_class=HTMLResponse)
     async def room_html() -> HTMLResponse:
         ensure_rtc_room_enabled()
         return html_response_from_path_with_mobile(

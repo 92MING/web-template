@@ -30,6 +30,8 @@ python -m app --server-port 8000 --server-worker 1
 - `http://127.0.0.1:8000/_internal/admin`：管理面板，默认只允许 localhost 访问
 - `http://127.0.0.1:8000/_internal/admin/openapi.json`：OpenAPI JSON
 
+内部路由默认统一挂在 `/_internal` 下，`/admin` 和 `/ai` 不会被框架自动当成内部路径；业务应用可以正常定义这些公开路径。`expose_ai_service=true` 只会额外公开带 public 标记的 AI 业务接口，AI service 管理接口始终只走 `/_internal/ai/*`。
+
 生产模式通常显式加上：
 
 ```powershell

@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 RTC_ROOM_COMPONENT_HTML_PATH = "/shared/components/rtc_room.html"
 RTC_ROOM_COMPONENT_MOBILE_HTML_PATH = "/shared/components/rtc_room.m.html"
-RTC_ROOM_LEGACY_HTML_PATH = "/rtc_room/room"
 RTC_ROOM_CREATE_TOKEN_SUB = "rtc-room-create"
 RTC_ROOM_JOIN_TOKEN_SUB = "rtc-room-join"
 
@@ -242,14 +241,12 @@ def is_rtc_room_public_path(path: str) -> bool:
     return normalized in {
         RTC_ROOM_COMPONENT_HTML_PATH,
         RTC_ROOM_COMPONENT_MOBILE_HTML_PATH,
-        RTC_ROOM_LEGACY_HTML_PATH,
     }
 
 
 __all__ = [
     "RTC_ROOM_COMPONENT_HTML_PATH",
     "RTC_ROOM_COMPONENT_MOBILE_HTML_PATH",
-    "RTC_ROOM_LEGACY_HTML_PATH",
     "RTC_ROOM_CREATE_TOKEN_SUB",
     "RTC_ROOM_JOIN_TOKEN_SUB",
     "RTCRoomCreateTokenClaims",

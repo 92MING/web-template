@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#f5f5f5">
-<title>我的收藏 - e-Shop</title>
-<script type="module" src="/shared/components.js"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>?????? - e-Shop</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
   .container { max-width: 1140px; margin: 0 auto; padding: 1rem; }
@@ -31,17 +31,17 @@
 <div class="container">
   <div class="header">
     <builtin-icon name="heart" size="24" variant="outlined"></builtin-icon>
-    <h1 data-i18n="eshop.favorites">我的收藏</h1>
+    <h1 data-i18n="eshop.favorites">??????</h1>
     <div class="header-actions">
       <div class="nav-links">
-        <a href="index.html" data-i18n="eshop.back_to_mall">返回商城</a>
-        <a href="user-profile.html" data-i18n="eshop.user_profile">个人中心</a>
+        <a href="index.html" data-i18n="eshop.back_to_mall">???????</a>
+        <a href="user-profile.html" data-i18n="eshop.user_profile">????????</a>
       </div>
-      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"??"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
       <builtin-theme-toggle></builtin-theme-toggle>
     </div>
   </div>
-  <div id="favorites-list" data-i18n="eshop.loading">加载中...</div>
+  <div id="favorites-list" data-i18n="eshop.loading">??????...</div>
 </div>
 <script type="module">
 import { initEshop, api, t, applyI18n, USER_ID, BuiltinToast } from './eshop-utils.js';
@@ -64,8 +64,8 @@ async function loadFavorites() {
   pg.products = items.map(p => ({
     id: p.id,
     title: p.name,
-    price: '¥' + p.price,
-    originalPrice: p.old_price ? '¥' + p.old_price : undefined,
+    price: '??' + p.price,
+    originalPrice: p.old_price ? '??' + p.old_price : undefined,
     image: p.image,
     rating: p.rating,
     sales: p.sales,
@@ -86,7 +86,7 @@ async function loadFavorites() {
       const pid = items[idx]?.id;
       if (!pid) return;
       const btn = document.createElement('button');
-      btn.textContent = '取消收藏';
+      btn.textContent = '??????';
       btn.style.cssText = 'margin-top:6px;width:100%;padding:6px;border:1px solid var(--builtin-color-danger);border-radius:var(--builtin-radius,6px);background:transparent;color:var(--builtin-color-danger);cursor:pointer;font:inherit;font-size:12px;';
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();

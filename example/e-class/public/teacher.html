@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
 <title>老师端 - 在线课堂</title>
-<script type="module" src="/shared/components.js?v=20260429-2"></script>
-<script type="module" src="/shared/templates.js"></script>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
+  <script type="module" src="/shared/templates/dashboard.js"></script>
 <style>
   body {
     margin: 0;
@@ -151,9 +152,9 @@
 </builtin-tpl-dashboard-workspace>
 
 <script type="module">
-import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+import { createEClassPageShell } from './page-shell.js?v=20260429-2';
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: 'eclass.teacher',
   fallbackProfileName: 'Teacher',
   validateRole: (role) => role === 'teacher',

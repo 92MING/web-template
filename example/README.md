@@ -1,7 +1,7 @@
 # Example Projects
 
 These projects demonstrate how to use the proj-template framework with `extra_app_paths` and `extra_public_paths`.
-They can also reuse framework public helpers such as `/shared/i18n.js`, which loads translation catalogs from the core `/i18n/{lang}` endpoint by default, or from a custom static catalog like `/translate.json` when a page passes `path` to `createTranslator()`.
+They can also reuse framework public helpers such as `/shared/i18n.js`, which loads translation catalogs from `/locales/{lang}.json` or `/locales/{category}/{lang}.json` by default, or from a custom static catalog like `/translate.json` when a page passes `path` to `createTranslator()`.
 
 ## e-Shop
 

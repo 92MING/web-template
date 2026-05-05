@@ -322,26 +322,26 @@ summary_service = CompletionService.GetInstance("summary")
 
 AI HTTP API 的实际暴露规则由服务端配置决定：
 
-- 管理面板启用时，会注册 `/admin/ai/*`
-- `server_config.is_ai_service_exposed()` 为真时，会额外注册 `/ai/*`
-- 两套前缀是别名，底层由同一套路由处理
+- 管理侧 AI 接口始终注册在 `server_config.internal_path_prefix` 下，默认是 `/_internal/ai/*`
+- `server_config.expose_ai_service` 为真时，只会额外公开带 public 标记的 AI 业务接口到 `/ai/*`
+- `/ai/services` 不公开；service/client 管理信息只走 `/_internal/ai/services*`
 
 常见端点包括：
 
-- `GET /admin/ai/services` 或 `GET /ai/services`
-- `POST /admin/ai/complete` 或 `POST /ai/complete`
-- `POST /admin/ai/embedding` 或 `POST /ai/embedding`
-- `POST /admin/ai/s2t` 或 `POST /ai/s2t`
-- `POST /admin/ai/t2s` 或 `POST /ai/t2s`
+- `GET /_internal/ai/services`
+- `POST /_internal/ai/complete`，可按配置公开为 `POST /ai/complete`
+- `POST /_internal/ai/embedding`，可按配置公开为 `POST /ai/embedding`
+- `POST /_internal/ai/s2t`，可按配置公开为 `POST /ai/s2t`
+- `POST /_internal/ai/t2s`，可按配置公开为 `POST /ai/t2s`
 
 管理面板页本身走另一套前缀：
 
-- `/admin/ai-services/overview`
-- `/admin/ai-services/settings`
+- `/_internal/admin/ai-services/overview`
+- `/_internal/admin/ai-services/settings`
 
 ## 健康状态与共享上下文
 
-框架会维护 service/client 的运行时状态，并通过 AI 面板和 `/ai/services/*` 系列接口暴露聚合信息。与 AI 相关的共享上下文优先使用存储里的 `kv.ai_services_context` client；若未配置，则回退到默认 KV。
+框架会维护 service/client 的运行时状态，并通过 AI 面板和 `/_internal/ai/services/*` 系列接口暴露聚合信息。与 AI 相关的共享上下文优先使用存储里的 `kv.ai_services_context` client；若未配置，则回退到默认 KV。
 
 ## 配置排查建议
 

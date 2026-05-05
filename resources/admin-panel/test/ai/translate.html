@@ -185,7 +185,7 @@
     const list = document.getElementById('targetLangOptions');
     if (!list) return;
     try {
-      const resp = await fetch('/ai/languages');
+      const resp = await fetch(window.projAiApiPath('/ai/languages'));
       if (!resp.ok) return;
       const rows = await resp.json();
       if (!Array.isArray(rows)) return;
@@ -255,7 +255,7 @@
   async function translateLine(text, lang) {
     const req = { text, target_language: lang };
     const started = performance.now();
-    const resp = await fetch('/ai/translate', {
+    const resp = await fetch(window.projAiApiPath('/ai/translate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),

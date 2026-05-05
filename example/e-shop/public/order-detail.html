@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#f5f5f5">
-<title>订单详情 - e-Shop</title>
-<script type="module" src="/shared/components.js"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>???????? - e-Shop</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/data.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
   .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
@@ -36,16 +37,16 @@
 <div class="container">
   <div class="header">
     <builtin-icon name="file-text" size="24" variant="outlined"></builtin-icon>
-    <h1 data-i18n="eshop.order_detail">订单详情</h1>
+    <h1 data-i18n="eshop.order_detail">????????</h1>
     <div class="header-actions">
       <div class="nav-links">
-        <a href="orders.html" data-i18n="eshop.back_to_orders">返回订单列表</a>
+        <a href="orders.html" data-i18n="eshop.back_to_orders">????????б?</a>
       </div>
-      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"??"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
       <builtin-theme-toggle></builtin-theme-toggle>
     </div>
   </div>
-  <div id="order-detail" data-i18n="eshop.loading">加载中...</div>
+  <div id="order-detail" data-i18n="eshop.loading">??????...</div>
 </div>
 <script type="module">
 import { initEshop, api, t, applyI18n, USER_ID } from './eshop-utils.js';
@@ -57,13 +58,13 @@ const orderId = new URLSearchParams(location.search).get('order_id');
 
 (async () => {
   if (!orderId) {
-    $('order-detail').innerHTML = '<builtin-alert variant="error" data-i18n="eshop.missing_order_id">缺少订单号</builtin-alert>';
+    $('order-detail').innerHTML = '<builtin-alert variant="error" data-i18n="eshop.missing_order_id">????????</builtin-alert>';
     await applyI18n();
     return;
   }
   const r = await api('/shop/orders/' + encodeURIComponent(orderId) + '?user_id=' + USER_ID);
   if (!r || r.error || !r.order) {
-    $('order-detail').innerHTML = '<builtin-alert variant="error" data-i18n="eshop.order_not_found">订单不存在</builtin-alert>';
+    $('order-detail').innerHTML = '<builtin-alert variant="error" data-i18n="eshop.order_not_found">??????????</builtin-alert>';
     await applyI18n();
     return;
   }
@@ -76,21 +77,21 @@ const orderId = new URLSearchParams(location.search).get('order_id');
     return `
       <div class="item-row">
         <span>${i.name || i.product_id} x${i.quantity}</span>
-        <span>¥${subtotal}</span>
+        <span>??${subtotal}</span>
       </div>
     `;
   }).join('');
 
   const timelineItems = [];
-  timelineItems.push({ time: new Date(o.created_at * 1000).toLocaleString(), title: await t('eshop.order_created') || '订单创建', description: await t('eshop.order_submitted') || '订单已提交', dotColor: '#2563eb' });
+  timelineItems.push({ time: new Date(o.created_at * 1000).toLocaleString(), title: await t('eshop.order_created') || '????????', description: await t('eshop.order_submitted') || '????????', dotColor: '#2563eb' });
   if (o.status !== 'pending') {
-    timelineItems.push({ time: new Date((o.created_at + 3600) * 1000).toLocaleString(), title: await t('eshop.order_confirmed') || '订单确认', description: await t('eshop.order_confirmed_desc') || '商家已确认订单', dotColor: '#16a34a' });
+    timelineItems.push({ time: new Date((o.created_at + 3600) * 1000).toLocaleString(), title: await t('eshop.order_confirmed') || '???????', description: await t('eshop.order_confirmed_desc') || '???????????', dotColor: '#16a34a' });
   }
   if (o.status === 'shipped' || o.status === 'delivered') {
-    timelineItems.push({ time: new Date((o.created_at + 86400) * 1000).toLocaleString(), title: await t('eshop.order_shipped') || '已发货', description: await t('eshop.order_shipped_desc') || '商品已发出', dotColor: '#d97706' });
+    timelineItems.push({ time: new Date((o.created_at + 86400) * 1000).toLocaleString(), title: await t('eshop.order_shipped') || '?????', description: await t('eshop.order_shipped_desc') || '????????', dotColor: '#d97706' });
   }
   if (o.status === 'delivered') {
-    timelineItems.push({ time: new Date((o.created_at + 172800) * 1000).toLocaleString(), title: await t('eshop.order_delivered') || '已送达', description: await t('eshop.order_delivered_desc') || '订单已完成', dotColor: '#16a34a' });
+    timelineItems.push({ time: new Date((o.created_at + 172800) * 1000).toLocaleString(), title: await t('eshop.order_delivered') || '?????', description: await t('eshop.order_delivered_desc') || '?????????', dotColor: '#16a34a' });
   }
 
   const finalTotal = o.final_total !== undefined ? o.final_total : total;
@@ -98,24 +99,24 @@ const orderId = new URLSearchParams(location.search).get('order_id');
 
   $('order-detail').innerHTML = `
     <builtin-card variant="elevated" style="margin-bottom:1rem;">
-      <div slot="header"><strong data-i18n="eshop.order_info">订单信息</strong></div>
+      <div slot="header"><strong data-i18n="eshop.order_info">???????</strong></div>
       <div class="order-meta-grid">
-        <div><strong data-i18n="eshop.order_id">订单号</strong>: ${o.order_id}</div>
-        <div><strong data-i18n="eshop.status">状态</strong>: <builtin-badge variant="success" text="${o.status}"></builtin-badge></div>
-        <div><strong data-i18n="eshop.created_at">创建时间</strong>: ${new Date(o.created_at * 1000).toLocaleString()}</div>
-        <div><strong data-i18n="eshop.user_id">用户ID</strong>: ${o.user_id}</div>
+        <div><strong data-i18n="eshop.order_id">??????</strong>: ${o.order_id}</div>
+        <div><strong data-i18n="eshop.status">??</strong>: <builtin-badge variant="success" text="${o.status}"></builtin-badge></div>
+        <div><strong data-i18n="eshop.created_at">???????</strong>: ${new Date(o.created_at * 1000).toLocaleString()}</div>
+        <div><strong data-i18n="eshop.user_id">???ID</strong>: ${o.user_id}</div>
       </div>
     </builtin-card>
     <builtin-card variant="elevated" style="margin-bottom:1rem;">
-      <div slot="header"><strong data-i18n="eshop.product_list">商品列表</strong></div>
+      <div slot="header"><strong data-i18n="eshop.product_list">????б?</strong></div>
       ${itemsHtml}
-      ${discount > 0 ? `<div style="margin-top:0.5rem;text-align:right;color:var(--builtin-color-muted);font-size:14px;">优惠: -¥${discount}</div>` : ''}
+      ${discount > 0 ? `<div style="margin-top:0.5rem;text-align:right;color:var(--builtin-color-muted);font-size:14px;">???: -??${discount}</div>` : ''}
       <div class="total-bar">
-        <strong data-i18n="eshop.total">合计</strong>: <span>¥${finalTotal}</span>
+        <strong data-i18n="eshop.total">???</strong>: <span>??${finalTotal}</span>
       </div>
     </builtin-card>
     <builtin-card variant="elevated" style="margin-bottom:1rem;">
-      <div slot="header"><strong data-i18n="eshop.order_tracking">订单跟踪</strong></div>
+      <div slot="header"><strong data-i18n="eshop.order_tracking">????????</strong></div>
       <builtin-timeline id="order-timeline"></builtin-timeline>
     </builtin-card>
   `;

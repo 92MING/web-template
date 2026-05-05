@@ -392,7 +392,7 @@
       let audioBase64 = null;
 
       if (mode === 'stream') {
-        const resp = await fetch('/ai/t2s/stream', {
+        const resp = await fetch(window.projAiApiPath('/ai/t2s/stream'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload),
@@ -411,7 +411,7 @@
           header_mode: resp.headers.get('X-AI-Mode') || 't2s-stream',
         };
       } else {
-        const resp = await fetch('/ai/t2s', {
+        const resp = await fetch(window.projAiApiPath('/ai/t2s'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload),

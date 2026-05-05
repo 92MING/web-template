@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
-<title>发布通告 - 在线课堂</title>
-<script type="module" src="/shared/components.js?v=20260429-2"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>??????? - ???????</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/form.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
+  <script type="module" src="/shared/components/social.js"></script>
 <style>
   builtin-app-shell { --builtin-shell-max-width: 820px; --builtin-shell-padding: 32px 16px 56px; }
 </style>
@@ -15,23 +17,23 @@
 <body>
 <builtin-app-shell id="app-shell">
   <section class="card">
-    <builtin-schema-form id="ann-form" submit-label="发布通告" layout="vertical" style="margin-top:24px;"></builtin-schema-form>
+    <builtin-schema-form id="ann-form" submit-label="???????" layout="vertical" style="margin-top:24px;"></builtin-schema-form>
   </section>
   <section class="card timeline-wrap">
-    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">历史通告</h2>
+    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">??????</h2>
     <builtin-activity-feed id="notice-feed"></builtin-activity-feed>
   </section>
 </builtin-app-shell>
 
 <script type="module">
 import { BuiltinToast } from '/shared/components.js?v=20260429-2';
-import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+import { createEClassPageShell } from './page-shell.js?v=20260429-2';
 
 const copy = {
   'zh-cn': {
-    back: '返回老师端', eyebrow: '老师端工作台', title: '发布通告', lead: '课堂通知从首页拆出来，老师在这里向指定教室发布通告。',
-    list_title: '历史通告', class_id: '教室 ID', ann_title: '通告标题', ann_body: '通告内容',
-    submit: '发布通告', ok: '通告已发布', fill: '请填写教室 ID、标题和内容'
+    back: '?????????', eyebrow: '?????????', title: '???????', lead: '?????????????????????????????????????????档',
+    list_title: '??????', class_id: '???? ID', ann_title: '??????', ann_body: '???????',
+    submit: '???????', ok: '????????', fill: '????д???? ID???????????'
   },
   en: {
     back: 'Back to Teacher', eyebrow: 'Teacher Workspace', title: 'Post Notice', lead: 'Class notices are split out from home into this dedicated publishing page.',
@@ -42,7 +44,7 @@ const copy = {
 
 const $ = id => document.getElementById(id);
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: 'eclass.announcements',
   validateRole: (role) => role === 'teacher',
   getInvalidRoleRedirect: () => 'student.html',
@@ -58,7 +60,7 @@ const shell = createPageBootstrap({
       { label: labels.back, href: 'teacher.html' },
       { label: labels.title },
     ];
-    appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+    appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '???', action: 'logout' }];
     updateForm();
     render();
   },
@@ -72,12 +74,12 @@ function d() { return copy[lang] || copy['zh-cn']; }
 function render() {
   document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
   document.querySelectorAll('[data-copy]').forEach(el => el.textContent = d()[el.dataset.copy] || el.textContent);
-  $('notice-feed').emptyTitle = lang === 'en' ? 'No notices yet' : '还没有历史通告';
-  $('notice-feed').emptyDescription = lang === 'en' ? 'Published notices will appear here for the selected classroom.' : '当前教室已发布的通告会在这里显示。';
-  $('notice-feed').loadingTitle = lang === 'en' ? 'Loading notices' : '正在加载通告';
-  $('notice-feed').loadingDescription = lang === 'en' ? 'Fetching the latest classroom announcements.' : '正在获取当前教室的历史通告。';
-  $('notice-feed').errorTitle = lang === 'en' ? 'Failed to load notices' : '加载通告失败';
-  $('notice-feed').errorDescription = lang === 'en' ? 'Try again after checking your classroom selection.' : '请确认教室后重试。';
+  $('notice-feed').emptyTitle = lang === 'en' ? 'No notices yet' : '???????????';
+  $('notice-feed').emptyDescription = lang === 'en' ? 'Published notices will appear here for the selected classroom.' : '?????????????????????????????';
+  $('notice-feed').loadingTitle = lang === 'en' ? 'Loading notices' : '??????????';
+  $('notice-feed').loadingDescription = lang === 'en' ? 'Fetching the latest classroom announcements.' : '???????????????????档';
+  $('notice-feed').errorTitle = lang === 'en' ? 'Failed to load notices' : '??????????';
+  $('notice-feed').errorDescription = lang === 'en' ? 'Try again after checking your classroom selection.' : '??????????????';
 }
 
 const form = $('ann-form');

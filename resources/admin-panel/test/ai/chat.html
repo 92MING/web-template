@@ -879,7 +879,7 @@ const ACTIVE_KEY = 'proj_chat_active_id';
 const SIDEBAR_COLLAPSED_KEY = 'proj_ai_chat_history_sidebar_collapsed';
 const SIDEBAR_WIDTH_KEY = 'proj_ai_chat_history_sidebar_width';
 let _aiApiBase = '/ai';
-const DEFAULT_COMPLETION_API_URL = `${_aiApiBase}/complete`;
+const DEFAULT_COMPLETION_API_URL = '/ai/complete';
 const RENDER_HTML_API_URL = '/api/render/to_html';
 const RICH_COMPONENTS = new Set(['markdown', 'mermaid', 'latex', 'tikz']);
 const richRenderCache = new Map();
@@ -1231,6 +1231,10 @@ function renderHistoryList() {
 // Tabs / Special Clients
 // ══════════════════════════════════════════════════════════════════════════════
 async function initAiApiBase() {
+  if (typeof window.projAiApiPath === 'function') {
+    _aiApiBase = window.projAiApiPath('/ai');
+    return;
+  }
   try {
     const resp = await fetch('/api/server/config', { cache: 'no-store' });
     if (resp.ok) {
@@ -1312,7 +1316,7 @@ function onCredentialsChange() {
 function getCompletionApiUrl() {
   if (currentTab === 'thinkthinksyn') return `${_aiApiBase}/test_thinkthinksyn_complete`;
   if (currentTab === 'openrouter') return `${_aiApiBase}/test_openrouter_complete`;
-  return DEFAULT_COMPLETION_API_URL;
+  return typeof window.projAiApiPath === 'function' ? window.projAiApiPath(DEFAULT_COMPLETION_API_URL) : `${_aiApiBase}/complete`;
 }
 
 function reloadModelsForCurrentTab() {
@@ -1534,7 +1538,7 @@ async function refreshClientStatusPanel() {
   const summaryText = document.getElementById('client-status-panel-summary-text');
   const kind = TAB_TO_KIND[currentTab] || 'completion';
   try {
-    const r = await fetch(`/ai/services/${kind}`);
+    const r = await fetch(window.projAiApiPath(`/ai/services/${kind}`));
     if (!r.ok) {
       summaryText.textContent = `Client 状态 · 加载失败 (HTTP ${r.status})`;
       grid.innerHTML = '';

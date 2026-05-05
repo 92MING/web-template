@@ -35,20 +35,19 @@ class TestPanelPageRoutes(FullAppTestBase):
 
     async def test_rtc_room_runtime_routes_exist(self):
         shared_room_page = await self._client.get("/shared/components/rtc_room.html")
-        self.assertEqual(shared_room_page.status_code, 200)
-        self.assertIn("/rtc_room/create", shared_room_page.text)
+        self.assertEqual(shared_room_page.status_code, 404)
 
-        room_page = await self._client.get("/rtc_room/room")
+        room_page = await self._client.get("/_internal/rtc_room/room")
         self.assertEqual(room_page.status_code, 200)
-        self.assertIn("/api/test-audio/test.mp3", room_page.text)
+        self.assertIn("__RTC_ROOM_URLS__", room_page.text)
 
-        test_audio = await self._client.get("/api/test-audio/__missing__.mp3")
+        test_audio = await self._client.get("/_internal/rtc_room/test-audio/__missing__.mp3")
         self.assertEqual(test_audio.status_code, 404)
 
-        create = await self._client.post("/api/rooms/create", json={})
+        create = await self._client.post("/_internal/rtc_room/create", json={})
         self.assertEqual(create.status_code, 422)
 
-        join = await self._client.post("/api/rooms/join", json={})
+        join = await self._client.post("/_internal/rtc_room/join", json={})
         self.assertEqual(join.status_code, 422)
 
     async def test_nested_vendor_assets_are_served(self):

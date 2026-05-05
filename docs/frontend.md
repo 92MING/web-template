@@ -68,23 +68,24 @@ index.m.html
 from core.server.translate import register_translation, TranslationLanguage
 
 
-register_translation("welcome", TranslationLanguage.EN, "Welcome")
-register_translation("welcome", TranslationLanguage.ZH_CN, "欢迎")
-register_translation("welcome", TranslationLanguage.ZH_TW, "歡迎")
+register_translation("welcome", TranslationLanguage.EN, "Welcome", category="demo")
+register_translation("welcome", TranslationLanguage.ZH_CN, "欢迎", category="demo")
+register_translation("welcome", TranslationLanguage.ZH_TW, "歡迎", category="demo")
 ```
 
 前端调用：
 
 ```html
 <script type="module">
-  import { createTranslator } from "/shared/i18n.js";
+  import { useTranslations } from "/shared/i18n.js";
 
-  const t = createTranslator({ lang: document.documentElement.lang || "en" });
-  document.getElementById("title").textContent = await t("welcome");
+  const t = useTranslations("demo", document.documentElement.lang || "en");
+  await t.ready;
+  document.getElementById("title").textContent = t("welcome");
 </script>
 ```
 
-如果你希望页面直接使用静态翻译 dict，而不是走预设的后端 `/i18n/{lang}`，可以给 i18n 实例传自定义路径：
+如果你希望页面直接使用静态翻译 dict，而不是走默认的 `/locales/{lang}.json` 或 `/locales/{category}/{lang}.json`，可以给 i18n 实例传自定义路径：
 
 ```html
 <script type="module">
@@ -101,18 +102,20 @@ register_translation("welcome", TranslationLanguage.ZH_TW, "歡迎")
 `path` 支持两种常用格式：
 
 - 单个多语言 dict 文件，例如 `/translate.json`，内容既可以是 `lang -> { key -> text }`，也可以是 `key -> { lang -> text }`
-- 带 `{lang}` 占位符的模板路径，例如 `/i18n/{lang}.json`
+- 带 `{lang}` 占位符的模板路径，例如 `/locales/{lang}.json`
 
 对应的 HTTP 入口是：
 
 ```text
-GET /i18n/{lang}
+GET /locales/{lang}.json
+GET /locales/{category}/{lang}.json
 ```
 
 例如：
 
 ```text
-GET /i18n/zh-cn
+GET /locales/zh-cn.json
+GET /locales/demo/zh-cn.json
 ```
 
 `/shared/i18n.js` 还提供这些常用接口：
@@ -121,6 +124,7 @@ GET /i18n/zh-cn
 - `loadI18n()`
 - `requestTranslation()`
 - `requestTranslations()`
+- `useTranslations()`
 
 ## 共享 Web Components
 

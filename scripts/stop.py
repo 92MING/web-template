@@ -59,7 +59,10 @@ def _http_request(
 
 
 def _find_admin_password() -> str | None:
-    """Scan project *.env files for ADMIN_PW (mirrors restart.py)."""
+    """Find ADMIN_PW from current env or project *.env files."""
+    env_password = os.getenv("ADMIN_PW", "").strip()
+    if env_password:
+        return env_password
     env_files = list(_PROJECT_ROOT.rglob("*.env"))
     env_files.sort(key=lambda path: (len(path.parts), str(path)))
     for env_path in env_files:

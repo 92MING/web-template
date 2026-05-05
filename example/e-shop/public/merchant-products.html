@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>商品管理 - e-Shop</title>
-<script type="module" src="/shared/components.js"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>??????? - e-Shop</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/data.js"></script>
+  <script type="module" src="/shared/components/form.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
   .product-list { display: grid; gap: 0.75rem; }
@@ -21,15 +23,15 @@
 <body>
 <builtin-app-shell id="app-shell">
   <section class="card">
-    <builtin-schema-form id="product-form" submit-label="保存商品" layout="vertical"></builtin-schema-form>
+    <builtin-schema-form id="product-form" submit-label="???????" layout="vertical"></builtin-schema-form>
   </section>
   <section class="card list-wrap">
-    <h2 style="margin:0;font-size:1.5rem;" data-copy="list_title">商品列表</h2>
+    <h2 style="margin:0;font-size:1.5rem;" data-copy="list_title">????б?</h2>
     <div id="list-state"></div>
     <div id="product-list" class="product-list"></div>
   </section>
   <builtin-card slot="secondary">
-    <div slot="header"><strong id="context-title">商品管理上下文</strong></div>
+    <div slot="header"><strong id="context-title">?????????????</strong></div>
     <builtin-metadata-list id="product-context" columns="1" compact></builtin-metadata-list>
   </builtin-card>
 </builtin-app-shell>
@@ -47,40 +49,40 @@ const $ = id => document.getElementById(id);
 const form = $('product-form');
 const copy = {
   'zh-cn': {
-    back: '返回商家后台',
-    eyebrow: '商家商品',
-    title: '商品管理',
-    documentTitle: '商品管理 - e-Shop',
-    lead: '在独立页面里创建、编辑和整理商品，列表与表单保持同一视觉基座。',
-    list_title: '商品列表',
-    contextTitle: '商品管理上下文',
-    productId: '商品 ID',
-    productName: '商品名称',
-    price: '价格',
-    originalPrice: '原价',
-    category: '分类',
-    stock: '库存',
-    image: '图片 URL',
-    tags: '标签',
-    description: '描述',
-    tagsHint: '标签，逗号分隔',
-    add: '新增商品',
-    save: '保存商品',
-    cancel: '取消编辑',
-    ok_save: '商品已保存',
-    ok_delete: '商品已删除',
-    fill: '请至少填写商品 ID、名称和价格',
-    loadingTitle: '正在加载商品',
-    loadingDescription: '正在获取当前商家可管理的商品列表。',
-    emptyTitle: '还没有商品',
-    emptyDescription: '创建第一件商品后，这里会出现商品列表。',
-    errorTitle: '加载商品失败',
-    errorDescription: '请稍后重试，或返回商家后台重新进入。',
-    totalLabel: '商品总数',
-    categoryLabel: '分类数量',
-    editingLabel: '当前编辑',
-    edit: '编辑',
-    delete: '删除',
+    back: '?????????',
+    eyebrow: '??????',
+    title: '???????',
+    documentTitle: '??????? - e-Shop',
+    lead: '????????????????????????????б????????????????????',
+    list_title: '????б?',
+    contextTitle: '?????????????',
+    productId: '??? ID',
+    productName: '???????',
+    price: '???',
+    originalPrice: '???',
+    category: '????',
+    stock: '???',
+    image: '?? URL',
+    tags: '???',
+    description: '????',
+    tagsHint: '???????????',
+    add: '???????',
+    save: '???????',
+    cancel: '?????',
+    ok_save: '????????',
+    ok_delete: '????????',
+    fill: '????????д??? ID?????????',
+    loadingTitle: '??????????',
+    loadingDescription: '?????????????????????б??',
+    emptyTitle: '????????',
+    emptyDescription: '??????????????????????????б??',
+    errorTitle: '??????????',
+    errorDescription: '??????????????????????????',
+    totalLabel: '???????',
+    categoryLabel: '????????',
+    editingLabel: '?????',
+    edit: '??',
+    delete: '???',
   },
   en: {
     back: 'Back to Merchant',
@@ -142,7 +144,7 @@ function applyShellCopy() {
     { label: labels.back, href: 'merchant.html' },
     { label: labels.title },
   ];
-  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '???', action: 'logout' }];
   $('context-title').textContent = labels.contextTitle;
   document.querySelectorAll('[data-copy]').forEach((el) => {
     el.textContent = labels[el.dataset.copy] || el.textContent;
@@ -190,7 +192,7 @@ function updateContext() {
   $('product-context').items = [
     { icon: 'shopping', label: labels.totalLabel, value: String(products.length) },
     { icon: 'tag', label: labels.categoryLabel, value: String(categoryCount) },
-    { icon: 'edit', label: labels.editingLabel, value: editingProductId || '—' },
+    { icon: 'edit', label: labels.editingLabel, value: editingProductId || '??' },
   ];
 }
 
@@ -246,14 +248,14 @@ function renderList() {
       <div class="product-title">${p.name || ''}</div>
       <div class="product-desc">${p.description || ''}</div>
       <div class="product-meta">
-        <span>${labels.price}: ¥${p.price || 0}</span>
-        <span>${labels.category}: ${p.category || '—'}</span>
+        <span>${labels.price}: ??${p.price || 0}</span>
+        <span>${labels.category}: ${p.category || '??'}</span>
         <span>${labels.stock}: ${p.stock || 0}</span>
         <span>${awaitSafeText(p.sales)}</span>
       </div>
       <div class="product-meta">
         <span>${labels.productId}: ${p.id || ''}</span>
-        <span>${labels.tags}: ${(p.tags || []).join(', ') || '—'}</span>
+        <span>${labels.tags}: ${(p.tags || []).join(', ') || '??'}</span>
       </div>
       <div class="product-actions">
         <button class="ghost-btn btn-edit" type="button" data-id="${p.id}"><builtin-icon name="edit" size="14"></builtin-icon> ${labels.edit}</button>
@@ -271,7 +273,7 @@ function renderList() {
 }
 
 function awaitSafeText(sales) {
-  return `${d().stock === '库存' ? '销量' : 'Sales'}: ${sales || 0}`;
+  return `${d().stock === '???' ? '????' : 'Sales'}: ${sales || 0}`;
 }
 
 async function load() {

@@ -32,7 +32,7 @@ from core.constants import PROJECT_DIR
 
 from ._client_view import build_client_info as build_ai_service_client_info
 from ...html_injection import html_response_from_path
-from ...app import get_resources, on_before_app_created, send_message_to_worker
+from ...app import get_resources, internal_admin_path, on_before_app_created, send_message_to_worker
 from ...shared import (
     AIServiceConfigSnapshot,
     AIServiceReloadStateRow,
@@ -580,23 +580,24 @@ async def _reload_workers(
 
 @on_before_app_created
 def register_ai_services_panel_routes(app: FastAPI):
+    admin_path = internal_admin_path
 
     # ── HTML pages ────────────────────────────────────────────────────────
 
-    @app.get("/admin/panel/ai-services/overview", response_class=HTMLResponse)
+    @app.get(admin_path("panel/ai-services/overview"), response_class=HTMLResponse)
     async def panel_ai_services_overview_html():
         path = get_resources("admin-panel", "panel", "ai_services_overview.html") or Path("ai_services_overview.html")
         return html_response_from_path(path, not_found_message="ai_services_overview.html not found")
 
-    @app.get("/admin/panel/ai-services/settings", response_class=HTMLResponse)
+    @app.get(admin_path("panel/ai-services/settings"), response_class=HTMLResponse)
     async def panel_ai_services_settings_html():
         path = get_resources("admin-panel", "panel", "ai_services_settings.html") or Path("ai_services_settings.html")
         return html_response_from_path(path, not_found_message="ai_services_settings.html not found")
 
     # ── API endpoints ─────────────────────────────────────────────────────
 
-    @app.get("/admin/api/ai-services/overview", response_model=AIServicesOverviewResponse, include_in_schema=False)
-    @app.get("/admin/ai-services/overview", response_model=AIServicesOverviewResponse)
+    @app.get(admin_path("api/ai-services/overview"), response_model=AIServicesOverviewResponse, include_in_schema=False)
+    @app.get(admin_path("ai-services/overview"), response_model=AIServicesOverviewResponse)
     async def api_ai_services_overview() -> AIServicesOverviewResponse:
         """Return registered AI service instances and their client health status."""
         shared = _get_shared()
@@ -617,13 +618,13 @@ def register_ai_services_panel_routes(app: FastAPI):
         shared.set_cache(cache_key, payload.model_dump(mode="python"), ttl_seconds=5)
         return payload
 
-    @app.get('/admin/api/ai-services/settings', response_model=AIServicesSettingsResponse, include_in_schema=False)
-    @app.get('/admin/ai-services/settings', response_model=AIServicesSettingsResponse)
+    @app.get(admin_path('api/ai-services/settings'), response_model=AIServicesSettingsResponse, include_in_schema=False)
+    @app.get(admin_path('ai-services/settings'), response_model=AIServicesSettingsResponse)
     async def api_ai_services_settings() -> AIServicesSettingsResponse:
         return _build_settings_payload()
 
-    @app.post('/admin/api/ai-services/settings/apply', response_model=AIServicesSettingsApplyResponse, include_in_schema=False)
-    @app.post('/admin/ai-services/settings/apply', response_model=AIServicesSettingsApplyResponse)
+    @app.post(admin_path('api/ai-services/settings/apply'), response_model=AIServicesSettingsApplyResponse, include_in_schema=False)
+    @app.post(admin_path('ai-services/settings/apply'), response_model=AIServicesSettingsApplyResponse)
     async def api_ai_services_settings_apply(
         payload: AIServicesSettingsApplyRequest,
         request: Request,
@@ -712,8 +713,8 @@ def register_ai_services_panel_routes(app: FastAPI):
             message=f'AI 服务配置已写入 {written_path}，并同步到全部 worker。',
         )
 
-    @app.post('/admin/api/ai-services/runtime-service-client/{service_type}/{service_key}/{client_key:path}', response_model=ClientStatusInfo, include_in_schema=False)
-    @app.post('/admin/ai-services/runtime-service-client/{service_type}/{service_key}/{client_key:path}', response_model=ClientStatusInfo)
+    @app.post(admin_path('api/ai-services/runtime-service-client/{service_type}/{service_key}/{client_key:path}'), response_model=ClientStatusInfo, include_in_schema=False)
+    @app.post(admin_path('ai-services/runtime-service-client/{service_type}/{service_key}/{client_key:path}'), response_model=ClientStatusInfo)
     async def api_ai_services_runtime_service_client_update(
         service_type: str,
         service_key: str,
@@ -762,8 +763,8 @@ def register_ai_services_panel_routes(app: FastAPI):
         shared.invalidate_cache('ai-services:')
         return local_status
 
-    @app.post("/admin/api/ai-services/probe/{service_type}/{service_key}", response_model=AIServiceProbeResponse, include_in_schema=False)
-    @app.post("/admin/ai-services/probe/{service_type}/{service_key}", response_model=AIServiceProbeResponse)
+    @app.post(admin_path("api/ai-services/probe/{service_type}/{service_key}"), response_model=AIServiceProbeResponse, include_in_schema=False)
+    @app.post(admin_path("ai-services/probe/{service_type}/{service_key}"), response_model=AIServiceProbeResponse)
     async def api_ai_services_probe(service_type: str, service_key: str) -> AIServiceProbeResponse:
         """Trigger a health probe on all clients of the specified service instance."""
         from core.ai.base import ServiceBase

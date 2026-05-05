@@ -392,7 +392,7 @@ async function ocrSingle(imgObj) {
   fd.append('file', imgObj.file);
   const t0 = performance.now();
   try {
-    const resp = await fetch('/ai/ocr', { method: 'POST', body: fd });
+    const resp = await fetch(window.projAiApiPath('/ai/ocr'), { method: 'POST', body: fd });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     imgObj.resultText = data.text || '(空结果)';

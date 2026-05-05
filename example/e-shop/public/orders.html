@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#f5f5f5">
-<title>我的订单 - e-Shop</title>
-<script type="module" src="/shared/components.js"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>?????? - e-Shop</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   body { margin: 0; font-family: system-ui, sans-serif; background: var(--builtin-header-bg, #f5f5f5); }
   .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
@@ -42,18 +42,18 @@
 <div class="container">
   <div class="header">
     <builtin-icon name="shopping" size="24" variant="outlined"></builtin-icon>
-    <h1 data-i18n="eshop.my_orders">我的订单</h1>
+    <h1 data-i18n="eshop.my_orders">??????</h1>
     <div class="header-actions">
       <div class="nav-links">
-        <a href="index.html" data-i18n="eshop.back_to_mall">返回商城</a>
-        <a href="user-profile.html" data-i18n="eshop.user_profile">个人中心</a>
-        <a href="cart.html" data-i18n="eshop.cart">购物车</a>
+        <a href="index.html" data-i18n="eshop.back_to_mall">???????</a>
+        <a href="user-profile.html" data-i18n="eshop.user_profile">????????</a>
+        <a href="cart.html" data-i18n="eshop.cart">????</a>
       </div>
-      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
+      <builtin-lang-switcher id="lang-switcher" langs='[{"code":"zh-cn","label":"??"},{"code":"en","label":"EN"}]' display="buttons"></builtin-lang-switcher>
       <builtin-theme-toggle></builtin-theme-toggle>
     </div>
   </div>
-  <div id="orders-list" data-i18n="eshop.loading">加载中...</div>
+  <div id="orders-list" data-i18n="eshop.loading">??????...</div>
 </div>
 <script type="module">
 import { initEshop, api, t, applyI18n, USER_ID } from './eshop-utils.js';
@@ -70,7 +70,7 @@ const apiCall = async (path, opts = {}) => {
   const orders = (r && r.orders) || [];
   const container = document.getElementById('orders-list');
   if (!orders.length) {
-    container.innerHTML = '<builtin-alert variant="info" data-i18n="eshop.no_orders">暂无订单</builtin-alert>';
+    container.innerHTML = '<builtin-alert variant="info" data-i18n="eshop.no_orders">???????</builtin-alert>';
     await applyI18n();
     return;
   }
@@ -82,16 +82,16 @@ const apiCall = async (path, opts = {}) => {
       <builtin-card class="order-card" variant="elevated">
         <div slot="header">
           <div class="order-meta">
-            <span><strong data-i18n="eshop.order_id">订单号:</strong> ${o.order_id}</span>
+            <span><strong data-i18n="eshop.order_id">??????:</strong> ${o.order_id}</span>
             <builtin-badge variant="success" text="${statusLabels[idx]}"></builtin-badge>
           </div>
         </div>
         <div class="order-items">${itemsText}</div>
         <div style="margin-top:0.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
           <div class="order-date">${new Date(o.created_at * 1000).toLocaleString()}</div>
-          <div style="font-weight:700;color:var(--builtin-primary);">¥${total}</div>
+          <div style="font-weight:700;color:var(--builtin-primary);">??${total}</div>
         </div>
-        <a href="order-detail.html?order_id=${o.order_id}" class="view-btn" data-i18n="eshop.view_details">查看详情</a>
+        <a href="order-detail.html?order_id=${o.order_id}" class="view-btn" data-i18n="eshop.view_details">??????</a>
       </builtin-card>
     `;
   }).join('');

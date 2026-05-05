@@ -254,7 +254,8 @@ function launch() {
     return;
   }
 
-  let url = `/rtc_room/room?mode=${mode}&user_name=${userName}`;
+  const rtcRoomUrl = (window.__RTC_ROOM_URLS__ && window.__RTC_ROOM_URLS__.room) || '/_internal/rtc_room/room';
+  let url = `${rtcRoomUrl}?mode=${mode}&user_name=${userName}`;
   if (mode === 'create') url += `&name=${name}${closeQ}${debugQ}`;
   else url += `&room_id=${roomId}${debugQ}`;
   if (password) url += `&password=${encodeURIComponent(password)}`;

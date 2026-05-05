@@ -52,7 +52,7 @@ from core.server.data_types.apikey import (
 
 
 
-from ...app import on_before_app_created
+from ...app import internal_admin_path, on_before_app_created
 
 
 
@@ -218,7 +218,9 @@ async def _serialize_apikey(api_key: Any) -> AdminAPIKeyItemResponse:
 
 @on_before_app_created
 def register_admin_apikey_routes(app: FastAPI) -> None:
-    @app.get("/admin/apikeys", response_model=AdminAPIKeyListResponse)
+    admin_path = internal_admin_path
+
+    @app.get(admin_path("apikeys"), response_model=AdminAPIKeyListResponse)
     async def admin_apikey_list(
         request: Request,
         limit: int = Query(default=100, ge=1, le=500),
@@ -233,7 +235,7 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             offset=offset,
         )
 
-    @app.post("/admin/apikeys", response_model=AdminAPIKeyItemResponse)
+    @app.post(admin_path("apikeys"), response_model=AdminAPIKeyItemResponse)
     async def admin_apikey_create(body: AdminAPIKeyCreateBody, request: Request) -> AdminAPIKeyItemResponse:
         _ensure_local_request(request)
         try:
@@ -242,13 +244,13 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             raise HTTPException(400, str(exc)) from exc
         return await _serialize_apikey(api_key)
 
-    @app.get("/admin/apikeys/{object_id}", response_model=AdminAPIKeyItemResponse)
+    @app.get(admin_path("apikeys/{object_id}"), response_model=AdminAPIKeyItemResponse)
     async def admin_apikey_get(object_id: str, request: Request) -> AdminAPIKeyItemResponse:
         _ensure_local_request(request)
         api_key = await _require_apikey(object_id)
         return await _serialize_apikey(api_key)
 
-    @app.patch("/admin/apikeys/{object_id}", response_model=AdminAPIKeyItemResponse)
+    @app.patch(admin_path("apikeys/{object_id}"), response_model=AdminAPIKeyItemResponse)
     async def admin_apikey_patch(
         object_id: str,
         body: AdminAPIKeyPatchBody,
@@ -262,7 +264,7 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             raise HTTPException(404, str(exc)) from exc
         return await _serialize_apikey(api_key)
 
-    @app.delete("/admin/apikeys/{object_id}")
+    @app.delete(admin_path("apikeys/{object_id}"))
     async def admin_apikey_delete(object_id: str, request: Request) -> dict[str, object]:
         _ensure_local_request(request)
         deleted = await delete_apikey(object_id)
@@ -270,7 +272,7 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             raise HTTPException(404, f"API key not found: {object_id}")
         return {"ok": True, "deleted": True, "id": object_id}
 
-    @app.post("/admin/apikeys/{object_id}/credit", response_model=AdminAPIKeyItemResponse)
+    @app.post(admin_path("apikeys/{object_id}/credit"), response_model=AdminAPIKeyItemResponse)
     async def admin_apikey_credit(
         object_id: str,
         body: AdminAPIKeyCreditBody,
@@ -292,7 +294,7 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             raise HTTPException(400, str(exc)) from exc
         return await _serialize_apikey(api_key)
 
-    @app.post("/admin/apikeys/validate", response_model=APIKeyValidationResult)
+    @app.post(admin_path("apikeys/validate"), response_model=APIKeyValidationResult)
     async def admin_apikey_validate(body: AdminAPIKeyValidateBody, request: Request) -> APIKeyValidationResult:
         _ensure_local_request(request)
         result = await validate_apikey_route(
@@ -305,7 +307,7 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             raise HTTPException(_validation_http_status(result), result.detail or result.reason)
         return result
 
-    @app.post("/admin/apikeys/{object_id}/charge", response_model=AdminAPIKeyStatsResponse)
+    @app.post(admin_path("apikeys/{object_id}/charge"), response_model=AdminAPIKeyStatsResponse)
     async def admin_apikey_charge(
         object_id: str,
         body: AdminAPIKeyChargeBody,
@@ -323,7 +325,7 @@ def register_admin_apikey_routes(app: FastAPI) -> None:
             stats=stats,
         )
 
-    @app.get("/admin/apikeys/{object_id}/stats", response_model=AdminAPIKeyStatsResponse)
+    @app.get(admin_path("apikeys/{object_id}/stats"), response_model=AdminAPIKeyStatsResponse)
     async def admin_apikey_stats(object_id: str, request: Request) -> AdminAPIKeyStatsResponse:
         _ensure_local_request(request)
         api_key = await _require_apikey(object_id)

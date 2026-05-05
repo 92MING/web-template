@@ -1,5 +1,5 @@
 import { BuiltinToast } from "/shared/components.js?v=20260429-2";
-import { createPageBootstrap } from "/shared/page-bootstrap.js?v=20260429-2";
+import { createEClassPageShell } from "./page-shell.js?v=20260429-2";
 
 const copy = {
   "zh-cn": {
@@ -280,7 +280,7 @@ let pendingSubmissionHomeworkId = "";
 let shouldBroadcastWhiteboard = false;
 let activeReviewHomeworkId = "";
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: "eclass.chatroom",
   translationPath: "/translate.json?v=20260429-2",
   validateRole: (role) => role === "teacher" || role === "student",

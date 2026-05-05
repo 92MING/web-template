@@ -276,7 +276,7 @@ export class BuiltinTplFrontpageVideo extends BuiltinBaseElement {
     const [c1, c2] = video.palette;
     const angle = 90 + (idx % 6) * 35;
     return html`
-      <a class="thumb" href="javascript:void(0)" aria-label="${video.title}"
+      <button class="thumb" type="button" aria-label="${video.title}"
          @click="${() => this.dispatchEvent(new CustomEvent('builtin-video-click', { bubbles: true, composed: true, detail: { title: video.title, channel: video.channel, index: idx } }))}">
         <div class="thumb-bg" style="background:linear-gradient(${angle}deg, ${c1}, ${c2});">${video.initial}</div>
         <span class="thumb-duration">${video.duration}</span>
@@ -291,7 +291,7 @@ export class BuiltinTplFrontpageVideo extends BuiltinBaseElement {
             <span>${video.ago}</span>
           </div>
         </div>
-      </a>
+      </button>
     `;
   }
 

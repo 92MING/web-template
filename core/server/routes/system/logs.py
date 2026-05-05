@@ -18,7 +18,7 @@ from core.utils.type_utils import AdvancedBaseModel
 from core.server.data_types.config import Config
 
 from ...html_injection import html_response_from_path
-from ...app import get_resources, on_before_app_created
+from ...app import get_resources, internal_admin_path, on_before_app_created
 from ...shared import AppSharedData, RuntimeMeta
 
 if TYPE_CHECKING:
@@ -256,6 +256,7 @@ async def _get_cached_backend_log_total(store) -> int:
 
 @on_before_app_created
 def register_log_routes(app: FastAPI):
+    admin_path = internal_admin_path
 
     # ── Log sub-page serving ──────────────────────────────────────────────
 
@@ -263,29 +264,29 @@ def register_log_routes(app: FastAPI):
         path = get_resources("admin-panel", "log", f"log_{name}.html") or Path(f"log_{name}.html")
         return html_response_from_path(path, not_found_message=f"log/log_{name}.html not found")
 
-    @app.get("/admin/log/overview", response_class=HTMLResponse)
+    @app.get(admin_path("log/overview"), response_class=HTMLResponse)
     async def log_overview_page():
         return _serve_log_html("overview")
 
-    @app.get("/admin/log/service", response_class=HTMLResponse)
+    @app.get(admin_path("log/service"), response_class=HTMLResponse)
     async def log_service_page():
         return _serve_log_html("service")
 
-    @app.get("/admin/log/backend", response_class=HTMLResponse)
+    @app.get(admin_path("log/backend"), response_class=HTMLResponse)
     async def log_backend_page():
         return _serve_log_html("backend")
 
-    @app.get("/admin/log/analysis", response_class=HTMLResponse)
+    @app.get(admin_path("log/analysis"), response_class=HTMLResponse)
     async def log_analysis_page():
         return _serve_log_html("backend")
 
-    @app.get("/admin/log/detail", response_class=HTMLResponse)
+    @app.get(admin_path("log/detail"), response_class=HTMLResponse)
     async def log_detail_page():
         return _serve_log_html("backend")
 
     # ── GET /admin/api/logs/config ────────────────────────────────────────
 
-    @app.get("/admin/api/logs/config", response_model=LogsConfigResponse)
+    @app.get(admin_path("api/logs/config"), response_model=LogsConfigResponse)
     async def logs_config() -> LogsConfigResponse:
         cfg = Config.GetConfig().log_config
         db_enabled = "db" in cfg.log_method
@@ -298,13 +299,13 @@ def register_log_routes(app: FastAPI):
             **_runtime_meta(),
         })
 
-    @app.get("/admin/api/logs/meta", response_model=LogsRuntimeMeta)
+    @app.get(admin_path("api/logs/meta"), response_model=LogsRuntimeMeta)
     async def logs_meta() -> LogsRuntimeMeta:
         return LogsRuntimeMeta.model_validate(_runtime_meta())
 
     # ── GET /admin/api/logs ───────────────────────────────────────────────
 
-    @app.get("/admin/api/logs", response_model=LogsQueryResponse)
+    @app.get(admin_path("api/logs"), response_model=LogsQueryResponse)
     async def query_logs(
         level: Optional[str] = Query(None, description="Exact level string, e.g. INFO"),
         min_levelno: Optional[int] = Query(None, description="Minimum levelno, e.g. 20 for INFO"),
@@ -364,7 +365,7 @@ def register_log_routes(app: FastAPI):
 
     # ── GET /admin/api/logs/aggregate ─────────────────────────────────────
 
-    @app.get("/admin/api/logs/aggregate", response_model=LogsAggregateResponse)
+    @app.get(admin_path("api/logs/aggregate"), response_model=LogsAggregateResponse)
     async def aggregate_logs(
         hours: int = Query(24, ge=1, le=168),
         bucket_minutes: int = Query(60, ge=1, le=180),
@@ -575,7 +576,7 @@ def register_log_routes(app: FastAPI):
             "meta": _runtime_meta(),
         })
 
-    @app.delete("/admin/api/logs", response_model=LogsDeleteResponse)
+    @app.delete(admin_path("api/logs"), response_model=LogsDeleteResponse)
     async def delete_all_logs() -> LogsDeleteResponse:
         cfg = Config.GetConfig().log_config
         if "db" not in cfg.log_method:
@@ -587,7 +588,7 @@ def register_log_routes(app: FastAPI):
 
     # ── DELETE /admin/api/logs/before/{timestamp} ─────────────────────────
 
-    @app.delete("/admin/api/logs/before/{timestamp:path}", response_model=LogsDeleteResponse)
+    @app.delete(admin_path("api/logs/before/{timestamp:path}"), response_model=LogsDeleteResponse)
     async def delete_logs_before(timestamp: str) -> LogsDeleteResponse:
         cfg = Config.GetConfig().log_config
         if "db" not in cfg.log_method:
@@ -601,7 +602,7 @@ def register_log_routes(app: FastAPI):
     # Service call logs (AI services QueryCallLogs / QueryCallStats)
     # ══════════════════════════════════════════════════════════════════════
 
-    @app.get("/admin/api/logs/service/logs", response_model=list[ServiceCallLogEntry])
+    @app.get(admin_path("api/logs/service/logs"), response_model=list[ServiceCallLogEntry])
     async def query_service_call_logs(
         limit: int = Query(100, ge=1, le=5000),
         success: Optional[bool] = Query(None),
@@ -626,7 +627,7 @@ def register_log_routes(app: FastAPI):
         except Exception as e:
             raise HTTPException(500, f"Query service logs failed: {e}")
 
-    @app.get("/admin/api/logs/service/stats", response_model=list[ServiceCallStatEntry])
+    @app.get(admin_path("api/logs/service/stats"), response_model=list[ServiceCallStatEntry])
     async def query_service_call_stats(
         group_by: Literal["service_kind", "operation", "client_class"] = Query("operation"),
         success: Optional[bool] = Query(None),
@@ -667,7 +668,7 @@ def register_log_routes(app: FastAPI):
         except Exception as e:
             raise HTTPException(500, f"Query service stats failed: {e}")
 
-    @app.get("/admin/api/logs/service/timeline", response_model=list[ServiceCallTimelineEntry])
+    @app.get(admin_path("api/logs/service/timeline"), response_model=list[ServiceCallTimelineEntry])
     async def service_call_timeline(
         hours: int = Query(24, ge=1, le=168),
         bucket_minutes: int = Query(60, ge=1, le=1440),
@@ -712,7 +713,7 @@ def register_log_routes(app: FastAPI):
         except Exception as e:
             raise HTTPException(500, f"Timeline query failed: {e}")
 
-    @app.get("/admin/api/logs/overview", response_model=LogsOverviewResponse)
+    @app.get(admin_path("api/logs/overview"), response_model=LogsOverviewResponse)
     async def logs_overview() -> LogsOverviewResponse:
         """Aggregated overview for the dashboard: recent errors, service health, and backend log summary."""
         shared = _get_shared()

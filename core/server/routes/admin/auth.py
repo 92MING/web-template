@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from ...app import get_resources, on_app_created, on_before_app_created
+from ...app import get_resources, internal_admin_path, on_app_created, on_before_app_created
 from ...html_injection import html_response_from_path
 from ...security.admin_password import has_admin_password, verify_admin_password
 from core.server.data_types.apikey import (
@@ -355,9 +355,10 @@ def _install_admin_panel_auth_on_app_created(app: FastAPI):
 def register_admin_auth_routes(app: FastAPI):
     if not Config.GetConfig().server_config.is_internal_exposed():
         return
+    admin_path = internal_admin_path
     login_path = get_resources("admin-panel", "panel_login.html") or Path("panel_login.html")
 
-    @app.get("/admin/login", response_class=HTMLResponse)
+    @app.get(admin_path("login"), response_class=HTMLResponse)
     async def panel_login_page(request: Request, next: str | None = None):
         redirect_to = _normalize_next_path(next)
         api_key, result = await _resolve_authenticated_apikey(_extract_admin_apikey_from_request(request))
@@ -370,7 +371,7 @@ def register_admin_auth_routes(app: FastAPI):
             media_type=response.media_type,
         )
 
-    @app.get("/admin/session", response_model=AdminSessionResponse)
+    @app.get(admin_path("session"), response_model=AdminSessionResponse)
     async def admin_session_status(request: Request) -> AdminSessionResponse:
         api_key, result = await _resolve_authenticated_apikey(_extract_admin_apikey_from_request(request))
         if api_key is None or result is None or not result.ok:
@@ -379,7 +380,7 @@ def register_admin_auth_routes(app: FastAPI):
         expires_at = None if ttl_seconds is None else (time.time() + float(ttl_seconds))
         return AdminSessionResponse(authenticated=True, expires_at=expires_at)
 
-    @app.post("/admin/login", response_model=AdminLoginResponse)
+    @app.post(admin_path("login"), response_model=AdminLoginResponse)
     async def admin_login(body: AdminLoginRequest, response: Response) -> AdminLoginResponse:
         if not has_admin_password():
             raise HTTPException(503, "Admin password is not initialized.")
@@ -404,7 +405,7 @@ def register_admin_auth_routes(app: FastAPI):
             redirect_to=redirect_to,
         )
 
-    @app.post("/admin/logout")
+    @app.post(admin_path("logout"))
     async def admin_logout(request: Request, response: Response) -> dict[str, bool]:
         await _revoke_admin_login_apikey(_extract_admin_apikey_from_request(request))
         response.delete_cookie(ADMIN_APIKEY_COOKIE_NAME, path="/")

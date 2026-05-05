@@ -184,6 +184,7 @@ def _titleize_openapi_segment(segment: str) -> str:
 def _derive_openapi_tag(path: str) -> tuple[str, str | None]:
     parts = [part for part in str(path or "").split("/") if part]
     server_cfg = None
+    stripped_internal_prefix = False
     try:
         from core.server.data_types.config import Config
 
@@ -191,12 +192,13 @@ def _derive_openapi_tag(path: str) -> tuple[str, str | None]:
         prefix_parts = [part for part in str(server_cfg.internal_path_prefix or "").split("/") if part]
         if prefix_parts and parts[:len(prefix_parts)] == prefix_parts:
             parts = parts[len(prefix_parts):]
+            stripped_internal_prefix = True
     except Exception:
         pass
 
     def visible_prefix(prefix_parts: list[str]) -> str:
         raw_prefix = "/" + "/".join(prefix_parts)
-        if server_cfg is not None and prefix_parts[:1] in (["admin"], ["html-assets"]):
+        if stripped_internal_prefix and server_cfg is not None:
             return server_cfg.get_internal_path(raw_prefix)
         return raw_prefix
 
@@ -207,7 +209,7 @@ def _derive_openapi_tag(path: str) -> tuple[str, str | None]:
         label = "Static Assets" if parts[0] == "html-assets" else "Vendor Assets"
         return label, visible_prefix(parts[:1])
 
-    is_admin = parts[0] == "admin"
+    is_admin = stripped_internal_prefix and parts[0] == "admin"
     scope_prefix = "Admin" if is_admin else "API"
     start = 1 if is_admin else 0
 
@@ -324,9 +326,9 @@ def register_i18n_routes(app: FastAPI) -> None:
 
     @app.get("/i18n/{lang}", tags=["I18N"])
     async def i18n_catalog(lang: str) -> dict[str, str]:
-        from .translate import get_all_global_translations
+        from .translate import get_all_public_translations
 
-        return get_all_global_translations(lang)
+        return get_all_public_translations("default", lang)
 
     app.state._i18n_routes_registered = True
 
@@ -336,6 +338,8 @@ def _is_admin_route_module(rel_path: Path) -> bool:
     if len(parts) < 2 or parts[0] != "routes":
         return False
     if parts[1] in {"admin", "panel", "storage", "system", "distributed"}:
+        return True
+    if parts[1] == "rtc_room":
         return True
     if parts[1] == "ai_services" and len(parts) >= 3 and parts[2] == "panel":
         return True
@@ -350,6 +354,7 @@ def _is_admin_callback(callback: AppCallback) -> bool:
         "core.server.routes.storage",
         "core.server.routes.system",
         "core.server.routes.distributed",
+        "core.server.routes.rtc_room",
         "core.server.routes.ai_services.panel",
     )
     return module.startswith(admin_prefixes)
@@ -368,69 +373,43 @@ def _config_existing_dirs(value: str | list[str] | None) -> list[Path]:
     return [Path(p) for p in paths if Path(p).is_dir()]
 
 
-def _install_internal_path_rewriter(app: FastAPI, server_cfg: Any) -> None:
-    if getattr(app.state, "_internal_path_rewriter_installed", False):
-        return
+def internal_path(path: str = "") -> str:
+    from core.server.data_types.config import Config
 
-    expose_internal = server_cfg.is_internal_exposed()
-    original_add_api_route = app.add_api_route
-    original_add_api_websocket_route = app.add_api_websocket_route
-    original_include_router = app.include_router
-    original_router_add_api_route = app.router.add_api_route
-    original_router_add_api_websocket_route = app.router.add_api_websocket_route
+    return Config.GetConfig().server_config.get_internal_path(path)
 
-    def _is_internal_route_path(path: str) -> bool:
-        normalized = "/" + str(path or "").lstrip("/")
-        return normalized.startswith("/admin") or normalized.startswith("/html-assets")
 
-    def _rewrite(path: str) -> str | None:
-        normalized = "/" + str(path or "").lstrip("/")
-        if not _is_internal_route_path(normalized):
-            return path
-        if not expose_internal:
-            return None
-        return server_cfg.get_internal_path(normalized)
+def internal_admin_path(path: str = "") -> str:
+    from core.server.data_types.config import Config
 
-    def add_api_route(path: str, endpoint: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        rewritten = _rewrite(path)
-        if rewritten is None:
-            return None
-        return original_add_api_route(rewritten, endpoint, *args, **kwargs)
+    return Config.GetConfig().server_config.get_internal_admin_path(path)
 
-    def router_add_api_route(path: str, endpoint: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        rewritten = _rewrite(path)
-        if rewritten is None:
-            return None
-        return original_router_add_api_route(rewritten, endpoint, *args, **kwargs)
 
-    def add_api_websocket_route(path: str, endpoint: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        rewritten = _rewrite(path)
-        if rewritten is None:
-            return None
-        return original_add_api_websocket_route(rewritten, endpoint, *args, **kwargs)
+def _discover_locale_file_languages() -> set[str]:
+    from .translate import normalize_language
 
-    def router_add_api_websocket_route(path: str, endpoint: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        rewritten = _rewrite(path)
-        if rewritten is None:
-            return None
-        return original_router_add_api_websocket_route(rewritten, endpoint, *args, **kwargs)
+    languages: set[str] = set()
+    root = PUBLIC_DIR / "locales"
+    if not root.is_dir():
+        return languages
+    for path in root.glob("*.json"):
+        languages.add(normalize_language(path.stem))
+    for category_dir in root.iterdir():
+        if not category_dir.is_dir():
+            continue
+        for path in category_dir.glob("*.json"):
+            languages.add(normalize_language(path.stem))
+    return {lang for lang in languages if lang}
 
-    def include_router(router, *args: Any, **kwargs: Any) -> None:
-        route_paths = [str(getattr(route, "path", "")) for route in getattr(router, "routes", [])]
-        if any(_is_internal_route_path(path) for path in route_paths):
-            if not expose_internal:
-                return None
-            prefix = str(kwargs.pop("prefix", "") or "")
-            internal_prefix = server_cfg.internal_path_prefix or ""
-            kwargs["prefix"] = prefix + internal_prefix
-        return original_include_router(router, *args, **kwargs)
 
-    app.add_api_route = add_api_route  # type: ignore[method-assign]
-    app.add_api_websocket_route = add_api_websocket_route  # type: ignore[method-assign]
-    app.router.add_api_route = router_add_api_route  # type: ignore[method-assign]
-    app.router.add_api_websocket_route = router_add_api_websocket_route  # type: ignore[method-assign]
-    app.include_router = include_router  # type: ignore[method-assign]
-    app.state._internal_path_rewriter_installed = True
+def _valid_locale_codes() -> set[str]:
+    from core.server.data_types.config import Config
+    from .translate import get_registered_languages, normalize_language
+
+    configured = Config.GetConfig().server_config.valid_locales
+    if configured is not None:
+        return {normalize_language(item) for item in configured if str(item or "").strip()}
+    return set(get_registered_languages()) | _discover_locale_file_languages()
 
 
 def get_resources(*path: str) -> Path | None:
@@ -1288,9 +1267,9 @@ def register_public_fallback(app: FastAPI, config=None) -> None:
         if _has_registered_route_match(app, request.scope):
             handled_response = await resolver.error_response_for_response(request, response)
             return handled_response or response
-        from .rtc_room import is_rtc_room_enabled, is_rtc_room_public_path
+        from .rtc_room import is_rtc_room_public_path
 
-        if is_rtc_room_public_path(request.url.path) and not is_rtc_room_enabled(cfg):
+        if is_rtc_room_public_path(request.url.path):
             return response
         fallback_response = resolver.response_for_path(request.url.path)
         if fallback_response is None:
@@ -1316,7 +1295,6 @@ def create_app(config=None) -> FastAPI:
     cfg = Config.GetConfig()
     server_cfg = cfg.server_config
     expose_internal = server_cfg.is_internal_exposed()
-    enable_rtc_chatroom = bool(server_cfg.enable_rtc_chatroom)
 
     # ---- Import all route modules ----
     curr_dir = Path(__file__).resolve().parent
@@ -1328,8 +1306,6 @@ def create_app(config=None) -> FastAPI:
                 continue
             rel = py_file.relative_to(curr_dir)
             if not expose_internal and _is_admin_route_module(rel):
-                continue
-            if not enable_rtc_chatroom and rel.with_suffix("").parts == ("routes", "rtc_room"):
                 continue
             module_name = str(rel.with_suffix("")).replace(os.sep, ".")
             full_module = f"core.server.{module_name}"
@@ -1423,7 +1399,6 @@ def create_app(config=None) -> FastAPI:
         redoc_url=None,
         openapi_url=server_cfg.get_internal_admin_path("openapi.json") if expose_internal else None,
     )
-    _install_internal_path_rewriter(app, server_cfg)
     ensure_openapi_customization(app)
     register_i18n_routes(app)
 
@@ -1506,6 +1481,22 @@ def create_app(config=None) -> FastAPI:
             elapsed_ms,
         )
         return response
+
+    @app.middleware("http")
+    async def _locale_path_middleware(request: Request, call_next):
+        path = request.scope.get("path") or ""
+        if path.startswith("/"):
+            parts = path.split("/", 2)
+            if len(parts) >= 2 and parts[1]:
+                from .translate import normalize_language
+
+                locale = normalize_language(parts[1])
+                if locale in _valid_locale_codes():
+                    stripped = "/" + (parts[2] if len(parts) > 2 else "")
+                    request.scope["_locale"] = locale
+                    request.scope["path"] = stripped if stripped != "/" else "/"
+                    request.scope["raw_path"] = request.scope["path"].encode("utf-8")
+        return await call_next(request)
 
     _app = app
 
@@ -1981,6 +1972,8 @@ __all__ = [
     "invoke_uvicorn_close",
     "redirect_to_worker",
     "send_message_to_worker",
+    "internal_path",
+    "internal_admin_path",
     "create_app",
     "get_app",
 ]

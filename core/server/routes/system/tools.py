@@ -37,7 +37,7 @@ from pydantic import Field
 from core.constants import PROJECT_DIR
 from core.utils.type_utils import AdvancedBaseModel
 
-from ...app import get_resources, on_app_shutdown, on_before_app_created
+from ...app import get_resources, internal_admin_path, on_app_shutdown, on_before_app_created
 from ...shared import AppSharedData
 from .._office_preview import (
     office_preview_cache_key,
@@ -1320,44 +1320,45 @@ def _close_all_terminal_sessions():
 
 @on_before_app_created
 def register_system_tools_routes(app: FastAPI):
+    admin_path = internal_admin_path
     terminal_html_path = get_resources("admin-panel", "panel", "system_terminal.html") or Path("system_terminal.html")
     files_html_path = get_resources("admin-panel", "panel", "system_files.html") or Path("system_files.html")
     processes_html_path = get_resources("admin-panel", "panel", "system_processes.html") or Path("system_processes.html")
     ports_html_path = get_resources("admin-panel", "panel", "system_ports.html") or Path("system_ports.html")
 
-    @app.get("/admin/panel/system/terminal", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/terminal"), response_class=HTMLResponse)
     async def panel_system_terminal_html():
         return html_response_from_path(
             terminal_html_path,
             not_found_message="panel/system_terminal.html not found",
         )
 
-    @app.get("/admin/panel/system/files", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/files"), response_class=HTMLResponse)
     async def panel_system_files_html():
         return html_response_from_path(
             files_html_path,
             not_found_message="panel/system_files.html not found",
         )
 
-    @app.get("/admin/panel/system/processes", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/processes"), response_class=HTMLResponse)
     async def panel_system_processes_html():
         return html_response_from_path(
             processes_html_path,
             not_found_message="panel/system_processes.html not found",
         )
 
-    @app.get("/admin/panel/system/ports", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/ports"), response_class=HTMLResponse)
     async def panel_system_ports_html():
         return html_response_from_path(
             ports_html_path,
             not_found_message="panel/system_ports.html not found",
         )
 
-    @app.get("/admin/api/system/tools/config", response_model=SystemToolsConfig)
+    @app.get(admin_path("api/system/tools/config"), response_model=SystemToolsConfig)
     async def system_tools_config() -> SystemToolsConfig:
         return _build_system_tools_config()
 
-    @app.get("/admin/api/system/processes", response_model=ProcessListResponse)
+    @app.get(admin_path("api/system/processes"), response_model=ProcessListResponse)
     async def system_processes_list(
         search: str | None = Query(default=None),
         limit: int = Query(default=500, ge=1, le=5000),
@@ -1382,7 +1383,7 @@ def register_system_tools_routes(app: FastAPI):
             )
         return await asyncio.to_thread(_collect)
 
-    @app.get("/admin/api/system/processes/{pid}", response_model=ProcessEntry)
+    @app.get(admin_path("api/system/processes/{pid}"), response_model=ProcessEntry)
     async def system_process_detail(pid: int) -> ProcessEntry:
         def _collect_detail() -> ProcessEntry:
             if pid <= 0:
@@ -1399,21 +1400,21 @@ def register_system_tools_routes(app: FastAPI):
             return detail
         return await asyncio.to_thread(_collect_detail)
 
-    @app.post("/admin/api/system/processes/{pid}/terminate", response_model=ProcessActionResponse)
+    @app.post(admin_path("api/system/processes/{pid}/terminate"), response_model=ProcessActionResponse)
     async def system_process_terminate(
         pid: int,
         wait_timeout: float = Query(default=3.0, ge=0.1, le=30.0),
     ) -> ProcessActionResponse:
         return _execute_process_action(pid, "terminate", wait_timeout=wait_timeout)
 
-    @app.post("/admin/api/system/processes/{pid}/kill", response_model=ProcessActionResponse)
+    @app.post(admin_path("api/system/processes/{pid}/kill"), response_model=ProcessActionResponse)
     async def system_process_kill(
         pid: int,
         wait_timeout: float = Query(default=3.0, ge=0.1, le=30.0),
     ) -> ProcessActionResponse:
         return _execute_process_action(pid, "kill", wait_timeout=wait_timeout)
 
-    @app.get("/admin/api/system/ports", response_model=PortListResponse)
+    @app.get(admin_path("api/system/ports"), response_model=PortListResponse)
     async def system_ports_list(
         search: str | None = Query(default=None),
         listen_only: bool = Query(default=False),
@@ -1448,7 +1449,7 @@ def register_system_tools_routes(app: FastAPI):
             )
         return await asyncio.to_thread(_collect)
 
-    @app.get("/admin/api/system/files/list", response_model=FileListResponse)
+    @app.get(admin_path("api/system/files/list"), response_model=FileListResponse)
     async def system_files_list(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1463,7 +1464,7 @@ def register_system_tools_routes(app: FastAPI):
             parent_path = "/".join(parent_parts)
         return FileListResponse(root=root_info, current_path=normalized, parent_path=parent_path, entries=entries)
 
-    @app.get("/admin/api/system/files/text", response_model=TextPreviewResponse)
+    @app.get(admin_path("api/system/files/text"), response_model=TextPreviewResponse)
     async def system_files_text_preview(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1489,7 +1490,7 @@ def register_system_tools_routes(app: FastAPI):
             content=text,
         )
 
-    @app.put("/admin/api/system/files/text")
+    @app.put(admin_path("api/system/files/text"))
     async def system_files_text_write(
         body: TextWriteRequest,
         root: str | None = Query(default=None),
@@ -1518,7 +1519,7 @@ def register_system_tools_routes(app: FastAPI):
             'modified_at': datetime.fromtimestamp(target.stat().st_mtime).isoformat(),
         }
 
-    @app.get("/admin/api/system/files/office-preview")
+    @app.get(admin_path("api/system/files/office-preview"))
     async def system_files_office_preview(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1532,7 +1533,7 @@ def register_system_tools_routes(app: FastAPI):
             thumb_url_builder=lambda preview_path, page: f"{_internal_admin_path('api/system/files/office-preview/thumb')}?root={quote(root_info.key, safe='')}&path={quote(preview_path, safe='')}&page={page}",
         )
 
-    @app.get("/admin/api/system/files/office-preview/pdf")
+    @app.get(admin_path("api/system/files/office-preview/pdf"))
     async def system_files_office_preview_pdf(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1552,7 +1553,7 @@ def register_system_tools_routes(app: FastAPI):
             )
         return FileResponse(pdf_path, media_type='application/pdf', filename=f'{Path(normalized).stem or "preview"}.pdf')
 
-    @app.get("/admin/api/system/files/office-preview/thumb")
+    @app.get(admin_path("api/system/files/office-preview/thumb"))
     async def system_files_office_preview_thumb(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1576,7 +1577,7 @@ def register_system_tools_routes(app: FastAPI):
                 raise HTTPException(404, 'Preview page not found')
         return FileResponse(thumb_path, media_type='image/png')
 
-    @app.get("/admin/api/system/files/raw")
+    @app.get(admin_path("api/system/files/raw"))
     async def system_files_raw(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1587,7 +1588,7 @@ def register_system_tools_routes(app: FastAPI):
         media_type, _ = mimetypes.guess_type(str(target))
         return FileResponse(target, media_type=media_type)
 
-    @app.get("/admin/api/system/files/download")
+    @app.get(admin_path("api/system/files/download"))
     async def system_files_download(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1598,7 +1599,7 @@ def register_system_tools_routes(app: FastAPI):
         media_type, _ = mimetypes.guess_type(str(target))
         return FileResponse(target, media_type=media_type, filename=target.name)
 
-    @app.post("/admin/api/system/files/upload")
+    @app.post(admin_path("api/system/files/upload"))
     async def system_files_upload(
         root: str = Form(...),
         path: str = Form(default=""),
@@ -1641,7 +1642,7 @@ def register_system_tools_routes(app: FastAPI):
             "files": written,
         }
 
-    @app.post("/admin/api/system/files/mkdir")
+    @app.post(admin_path("api/system/files/mkdir"))
     async def system_files_mkdir(
         root: str = Form(...),
         path: str = Form(default=""),
@@ -1664,7 +1665,7 @@ def register_system_tools_routes(app: FastAPI):
             "entry": _file_entry(root_path, destination).model_dump(),
         }
 
-    @app.delete("/admin/api/system/files/item")
+    @app.delete(admin_path("api/system/files/item"))
     async def system_files_delete(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1692,7 +1693,7 @@ def register_system_tools_routes(app: FastAPI):
             "recursive": recursive,
         }
 
-    @app.post("/admin/api/system/files/rename")
+    @app.post(admin_path("api/system/files/rename"))
     async def system_files_rename(body: FileRenameRequest) -> dict[str, Any]:
         root_info, target, normalized = _resolve_target(body.root, body.path, must_exist=True)
         if not normalized:
@@ -1726,7 +1727,7 @@ def register_system_tools_routes(app: FastAPI):
             raise HTTPException(403, "目标路径超出允许范围。")
         return src_root, src_target, src_normalized, dst_root_info, dst_dir, dst_normalized, destination
 
-    @app.post("/admin/api/system/files/copy")
+    @app.post(admin_path("api/system/files/copy"))
     async def system_files_copy(body: FileTransferRequest) -> dict[str, Any]:
         _src_root, src_target, _src_normalized, dst_root_info, _dst_dir, _dst_normalized, destination = _resolve_transfer(body)
         if destination.exists():
@@ -1747,7 +1748,7 @@ def register_system_tools_routes(app: FastAPI):
             "entry": _file_entry(Path(dst_root_info.path), destination).model_dump(),
         }
 
-    @app.post("/admin/api/system/files/move")
+    @app.post(admin_path("api/system/files/move"))
     async def system_files_move(body: FileTransferRequest) -> dict[str, Any]:
         _src_root, src_target, src_normalized, dst_root_info, _dst_dir, _dst_normalized, destination = _resolve_transfer(body)
         if not src_normalized:
@@ -1767,7 +1768,7 @@ def register_system_tools_routes(app: FastAPI):
             "entry": _file_entry(Path(dst_root_info.path), destination).model_dump(),
         }
 
-    @app.get("/admin/api/system/files/extract-preview")
+    @app.get(admin_path("api/system/files/extract-preview"))
     async def system_files_extract_preview(
         root: str | None = Query(default=None),
         path: str = Query(default=""),
@@ -1804,7 +1805,7 @@ def register_system_tools_routes(app: FastAPI):
             "default_extractor": extractor_labels[0] if extractor_labels else None,
         }
 
-    @app.post("/admin/api/system/files/extract")
+    @app.post(admin_path("api/system/files/extract"))
     async def system_files_extract(body: FileExtractRequest) -> dict[str, Any]:
         root_info, target, normalized = _resolve_target(body.root, body.path, must_exist=True, expect_dir=False)
         root_path = Path(root_info.path)
@@ -1893,7 +1894,7 @@ def register_system_tools_routes(app: FastAPI):
             "entry": _file_entry(root_path, dest_dir).model_dump(),
         }
 
-    @app.websocket("/admin/ws/panel/system/terminal")
+    @app.websocket(admin_path("ws/panel/system/terminal"))
     async def system_terminal_ws(websocket: WebSocket):
         config = _build_system_tools_config()
         await websocket.accept()

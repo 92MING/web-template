@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
-<title>课程管理 - 在线课堂</title>
-<script type="module" src="/shared/components.js?v=20260429-2"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>?γ???? - ???????</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/data.js"></script>
+  <script type="module" src="/shared/components/form.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
   .course-item { display: grid; gap: 0.5rem; padding: 1rem; border-bottom: 1px solid var(--line); }
@@ -21,54 +23,54 @@
 <body>
 <builtin-app-shell id="app-shell">
   <section class="card">
-    <builtin-schema-form id="course-form" submit-label="创建课程" layout="vertical"></builtin-schema-form>
+    <builtin-schema-form id="course-form" submit-label="?????γ?" layout="vertical"></builtin-schema-form>
   </section>
   <section class="card list-wrap">
-    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">课程列表</h2>
+    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">?γ??б?</h2>
     <div id="list-state"></div>
     <div id="course-list"></div>
   </section>
   <builtin-card slot="secondary">
-    <div slot="header"><strong id="context-title">课程管理上下文</strong></div>
+    <div slot="header"><strong id="context-title">?γ??????????</strong></div>
     <builtin-metadata-list id="course-context" columns="1" compact></builtin-metadata-list>
   </builtin-card>
 </builtin-app-shell>
 
 <script type="module">
 import { BuiltinToast } from '/shared/components.js?v=20260429-2';
-import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+import { createEClassPageShell } from './page-shell.js?v=20260429-2';
 
 const copy = {
   'zh-cn': {
-    back: '返回老师端',
-    eyebrow: '老师端课程',
-    title: '课程管理',
-    documentTitle: '课程管理 - 在线课堂',
-    lead: '创建、编辑和管理班级课程，学生端会实时同步。',
-    list_title: '课程列表',
-    class_id: '教室 ID',
-    course_title: '课程标题',
-    course_desc: '课程描述',
-    syllabus: '教学大纲',
-    syllabus_hint: '每行一个章节',
-    submit: '创建课程',
-    update: '更新课程',
-    ok_create: '课程已创建',
-    ok_update: '课程已更新',
-    ok_delete: '课程已删除',
-    fill: '请填写教室 ID 和课程标题',
-    contextTitle: '课程管理上下文',
-    loadingTitle: '正在加载课程列表',
-    loadingDescription: '正在获取当前教室下已创建的课程。',
-    emptyTitle: '还没有课程',
-    emptyDescription: '创建第一条课程后，这里会出现当前教室的课程列表。',
-    errorTitle: '加载课程失败',
-    errorDescription: '请稍后重试，或返回老师端重新进入。',
-    classLabel: '当前教室',
-    totalLabel: '课程总数',
-    edit: '编辑',
-    delete: '删除',
-    cancel: '取消',
+    back: '?????????',
+    eyebrow: '?????γ?',
+    title: '?γ????',
+    documentTitle: '?γ???? - ???????',
+    lead: '???????????????γ???????????????',
+    list_title: '?γ??б?',
+    class_id: '???? ID',
+    course_title: '?γ????',
+    course_desc: '?γ?????',
+    syllabus: '??????',
+    syllabus_hint: '?????????',
+    submit: '?????γ?',
+    update: '????γ?',
+    ok_create: '?γ??????',
+    ok_update: '?γ??????',
+    ok_delete: '?γ??????',
+    fill: '????д???? ID ??γ????',
+    contextTitle: '?γ??????????',
+    loadingTitle: '???????γ??б?',
+    loadingDescription: '??????????????????????γ??',
+    emptyTitle: '????пγ?',
+    emptyDescription: '??????????γ?????????????????γ??б??',
+    errorTitle: '????γ????',
+    errorDescription: '??????????????????????????',
+    classLabel: '???????',
+    totalLabel: '?γ?????',
+    edit: '??',
+    delete: '???',
+    cancel: '???',
   },
   en: {
     back: 'Back to Teacher',
@@ -103,7 +105,7 @@ const copy = {
   }
 };
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: 'eclass.courses',
   translationPath: '/translate.json?v=20260429-2',
   validateRole: (role) => role === 'teacher',
@@ -137,7 +139,7 @@ function applyShellCopy() {
     { label: labels.back, href: 'teacher.html' },
     { label: labels.title },
   ];
-  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '???', action: 'logout' }];
   $('context-title').textContent = labels.contextTitle;
 }
 

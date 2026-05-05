@@ -180,4 +180,4 @@ _TRANSLATIONS = {
 
 for key, langs in _TRANSLATIONS.items():
     for lang, text in langs.items():
-        register_translation(key, lang, text)
+        register_translation(key, lang, text, category="eshop")

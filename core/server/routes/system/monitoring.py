@@ -43,7 +43,7 @@ from core.storage import StorageConfig, make_orm_system_metrics_store
 
 from core.server.data_types.config import Config
 from ...html_injection import html_response_from_path
-from ...app import get_resources, on_before_app_created
+from ...app import get_resources, internal_admin_path, on_before_app_created
 from ...shared import AppSharedData, SystemSnapshotPayload
 
 logger = logging.getLogger(__name__)
@@ -548,8 +548,10 @@ def stop_main_process_system_refresh() -> None:
 
 @on_before_app_created
 def register_system_monitoring_routes(app: FastAPI):
+    admin_path = internal_admin_path
 
-    @app.get("/admin/api/system", response_model=SystemSnapshot)
+
+    @app.get(admin_path("api/system"), response_model=SystemSnapshot)
     async def system_snapshot() -> SystemSnapshot:
         """Latest system metrics snapshot."""
         cached = _latest_cached_system_snapshot()
@@ -559,7 +561,7 @@ def register_system_monitoring_routes(app: FastAPI):
         _remember_system_snapshot(snapshot)
         return snapshot
 
-    @app.get("/admin/api/system/cpu", response_model=CpuDetails)
+    @app.get(admin_path("api/system/cpu"), response_model=CpuDetails)
     async def system_cpu_details() -> CpuDetails:
         """Detailed CPU metrics for the CPU panel."""
         shared = _get_shared()
@@ -583,7 +585,7 @@ def register_system_monitoring_routes(app: FastAPI):
         shared.set_cache(cache_key, payload, ttl_seconds=_SYSTEM_CPU_CACHE_TTL_SECONDS)
         return _remember_local_cpu_details(details) if use_local_mirror else details
 
-    @app.get("/admin/api/system/gpu", response_model=GpuDetails)
+    @app.get(admin_path("api/system/gpu"), response_model=GpuDetails)
     async def system_gpu_details() -> GpuDetails:
         """Cross-vendor GPU summary with graceful fallback when no GPU exists."""
         shared = _get_shared()
@@ -612,7 +614,7 @@ def register_system_monitoring_routes(app: FastAPI):
         shared.set_cache(cache_key, payload, ttl_seconds=_SYSTEM_GPU_CACHE_TTL_SECONDS)
         return _remember_local_gpu_details(details) if use_local_mirror else details
 
-    @app.get("/admin/api/system_last_infos", response_model=list[SystemSnapshot])
+    @app.get(admin_path("api/system_last_infos"), response_model=list[SystemSnapshot])
     async def system_history(seconds: int = Query(default=60, ge=1, le=3600)) -> list[SystemSnapshot]:
         """Return system metric snapshots from the last N seconds."""
         cached_rows = _cached_system_history(seconds)
@@ -629,7 +631,7 @@ def register_system_monitoring_routes(app: FastAPI):
                 pass
         return []
 
-    @app.get("/admin/api/system/extended", response_model=ExtendedHostInfo)
+    @app.get(admin_path("api/system/extended"), response_model=ExtendedHostInfo)
     async def system_info_extended() -> ExtendedHostInfo:
         """Host info + service uptime."""
         shared = _get_shared()
@@ -649,7 +651,7 @@ def register_system_monitoring_routes(app: FastAPI):
 
     # 注册 WebSocket 推送式系统指标端点
 
-    @app.websocket("/admin/ws/system/metrics")
+    @app.websocket(admin_path("ws/system/metrics"))
     async def system_metrics_ws(websocket: WebSocket):
         """Push system snapshots to the client every 2 seconds."""
         await websocket.accept()
@@ -675,18 +677,18 @@ def register_system_monitoring_routes(app: FastAPI):
     panel_system_cpu_path = get_resources("admin-panel", "panel", "system_cpu.html") or Path("system_cpu.html")
     panel_system_gpu_path = get_resources("admin-panel", "panel", "system_gpu.html") or Path("system_gpu.html")
 
-    @app.get("/admin/panel/system", response_class=HTMLResponse)
-    @app.get("/admin/panel/system/overview", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system"), response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/overview"), response_class=HTMLResponse)
     async def panel_system_html():
         """Standalone system overview page used by the panel iframe shell."""
         return html_response_from_path(panel_system_path, not_found_message="system_overview.html not found")
 
-    @app.get("/admin/panel/system/cpu", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/cpu"), response_class=HTMLResponse)
     async def panel_system_cpu_html():
         """Standalone detailed CPU page used by the panel iframe shell."""
         return html_response_from_path(panel_system_cpu_path, not_found_message="system_cpu.html not found")
 
-    @app.get("/admin/panel/system/gpu", response_class=HTMLResponse)
+    @app.get(admin_path("panel/system/gpu"), response_class=HTMLResponse)
     async def panel_system_gpu_html():
         """Standalone GPU page used by the panel iframe shell."""
         return html_response_from_path(panel_system_gpu_path, not_found_message="system_gpu.html not found")

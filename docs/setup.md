@@ -79,8 +79,8 @@ python scripts/install.py
 
 ### 5.2 AI provider
 
-- `TTS_APIKEY` / `TTS_API_BASEURL`：ThinkThinkSyn completion/TTS 相关默认 client。
-- `OPENROUTER_API_KEY` / `OPENROUTER_API_URL`：OpenRouter 默认 client。
+- `TTS_APIKEY` / `TTS_API_KEY` / `TTS_API_BASEURL`：ThinkThinkSyn completion/TTS 相关默认 client。
+- `OPENROUTER_APIKEY` / `OPENROUTER_API_KEY` / `OPENROUTER_API_URL`：OpenRouter 默认 client。
 - `OPENROUTER_MODEL` / `OPENROUTER_MODEL_FILTER`：OpenRouter 默认模型筛选。
 - `OPENROUTER_HTTP_REFERER` / `OPENROUTER_X_TITLE`：OpenRouter 请求头透传。
 - `OPENAI_APIKEY` / `OPENAI_API_KEY`：OpenAI-like client API key。

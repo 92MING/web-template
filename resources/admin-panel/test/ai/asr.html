@@ -224,7 +224,7 @@ async function loadLanguageSuggestions() {
   const list = document.getElementById('expectedLangOptions');
   if (!list) return;
   try {
-    const resp = await fetch('/ai/languages');
+    const resp = await fetch(window.projAiApiPath('/ai/languages'));
     if (!resp.ok) return;
     const rows = await resp.json();
     if (!Array.isArray(rows)) return;
@@ -396,7 +396,7 @@ async function submitAudio() {
       const asrPrompt = document.getElementById('asrPrompt').value.trim();
       if (expectedLangs) formData.append('expected_languages', expectedLangs);
       if (asrPrompt) formData.append('prompt', asrPrompt);
-      const res = await fetch('/ai/asr', { method: 'POST', body: formData });
+      const res = await fetch(window.projAiApiPath('/ai/asr'), { method: 'POST', body: formData });
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();
@@ -411,7 +411,7 @@ async function submitAudio() {
       if (roles) formData.append('roles', roles);
       if (expectedLangs) formData.append('expected_languages', expectedLangs);
       if (asrPrompt) formData.append('prompt', asrPrompt);
-      const res = await fetch('/ai/transcript', { method: 'POST', body: formData });
+      const res = await fetch(window.projAiApiPath('/ai/transcript'), { method: 'POST', body: formData });
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();

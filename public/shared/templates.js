@@ -1,142 +1,128 @@
 /**
  * @fileoverview Shared frontend page templates entry point (Lit-based).
  *
- * Imports all builtin-tpl-* template web components and registers them automatically.
+ * Templates are grouped by scene so pages import only the category they need
+ * instead of loading every template at once.
  *
- * Usage:
- *   <script type="module" src="/shared/components.js"></script>
- *   <script type="module" src="/shared/templates.js"></script>
- *   <builtin-tpl-frontpage-generic></builtin-tpl-frontpage-generic>
+ * ## Category entry points
+ *   /shared/templates/auth.js
+ *   /shared/templates/blog.js
+ *   /shared/templates/chat.js
+ *   /shared/templates/cloud.js
+ *   /shared/templates/company.js
+ *   /shared/templates/dashboard.js
+ *   /shared/templates/ecommerce.js
+ *   /shared/templates/form.js
+ *   /shared/templates/frontpage.js
+ *   /shared/templates/landing.js
+ *   /shared/templates/live.js
+ *   /shared/templates/magazine.js
+ *   /shared/templates/profile.js
+ *   /shared/templates/social.js
+ *   /shared/templates/tutorial.js
+ *   /shared/templates/video.js
+ *
+ * ## Usage
+ * Import everything (backward-compatible, loads all categories):
+ *   import { BuiltinTplDashboardAnalytics } from "/shared/templates.js";
+ *
+ * Import only what you need (recommended):
+ *   import "/shared/templates/dashboard.js";
  */
 
-export { BuiltinTplFrontpageGeneric } from "./templates/frontpage/generic-home.js";
-export { BuiltinTplFrontpageContent } from "./templates/frontpage/content-home.js";
-export { BuiltinTplFrontpageVideo } from "./templates/frontpage/video-home.js";
-export { BuiltinTplFrontpageShop } from "./templates/frontpage/shop-home.js";
-export { BuiltinTplFrontpageSaas } from "./templates/frontpage/saas-home.js";
+export { BuiltinTplAuthLogin } from "./templates/auth.js";
+export { BuiltinTplBlogArticle } from "./templates/blog.js";
+export { BuiltinTplChatRoom, BuiltinTplChatMessageThread } from "./templates/chat.js";
+export { BuiltinTplFileManager } from "./templates/cloud.js";
+export { BuiltinTplCompanyAbout, BuiltinTplContactUs } from "./templates/company.js";
+export {
+  BuiltinTplDashboardAdmin, BuiltinTplDashboardAnalytics,
+  BuiltinTplDashboardMasterDetail, BuiltinTplDashboardWorkspace,
+} from "./templates/dashboard.js";
+export {
+  BuiltinTplEcommerceCartDrawer, BuiltinTplEcommerceCheckout,
+  BuiltinTplEcommerceProductDetail, BuiltinTplEcommerceProductGrid,
+} from "./templates/ecommerce.js";
+export { BuiltinTplFormSurvey, BuiltinTplFormWizard } from "./templates/form.js";
+export {
+  BuiltinTplFrontpageContent, BuiltinTplFrontpageGeneric,
+  BuiltinTplFrontpageSaas, BuiltinTplFrontpageShop, BuiltinTplFrontpageVideo,
+} from "./templates/frontpage.js";
+export { BuiltinTplLandingLeadCapture, BuiltinTplLandingProductLaunch } from "./templates/landing.js";
+export { BuiltinTplLiveStreamRoom } from "./templates/live.js";
+export { BuiltinTplMagazineEditorial, BuiltinTplMagazineNews } from "./templates/magazine.js";
+export { BuiltinTplProfilePersonal, BuiltinTplProfilePortfolio } from "./templates/profile.js";
+export { BuiltinTplSocialProfile } from "./templates/social.js";
+export { BuiltinTplTutorialDocumentation, BuiltinTplTutorialOnboarding } from "./templates/tutorial.js";
+export {
+  BuiltinTplVideoListing, BuiltinTplVideoPlatform, BuiltinTplVideoPlayerPage,
+} from "./templates/video.js";
 
-export { BuiltinTplMagazineEditorial } from "./templates/magazine/editorial-layout.js";
-export { BuiltinTplMagazineNews } from "./templates/magazine/news-layout.js";
-
-export { BuiltinTplTutorialOnboarding } from "./templates/tutorial/onboarding-guide.js?v=20260429-4";
-export { BuiltinTplTutorialDocumentation } from "./templates/tutorial/documentation-layout.js";
-
-export { BuiltinTplFormWizard } from "./templates/form/wizard-form.js";
-export { BuiltinTplFormSurvey } from "./templates/form/survey-layout.js";
-
-export { BuiltinTplVideoPlayerPage } from "./templates/video/video-player-page.js";
-export { BuiltinTplVideoListing } from "./templates/video/video-listing.js";
-
-export { BuiltinTplEcommerceProductDetail } from "./templates/ecommerce/product-detail.js";
-export { BuiltinTplEcommerceProductGrid } from "./templates/ecommerce/product-grid.js";
-export { BuiltinTplEcommerceCheckout } from "./templates/ecommerce/checkout-layout.js";
-export { BuiltinTplEcommerceCartDrawer } from "./templates/ecommerce/cart-drawer.js";
-
-export { BuiltinTplProfilePersonal } from "./templates/profile/personal-profile.js";
-export { BuiltinTplProfilePortfolio } from "./templates/profile/portfolio-layout.js";
-
-export { BuiltinTplChatRoom } from "./templates/chat/chat-room.js?v=20260501-2";
-export { BuiltinTplChatMessageThread } from "./templates/chat/message-thread.js?v=20260501-2";
-
-export { BuiltinTplDashboardAnalytics } from "./templates/dashboard/analytics-dashboard.js";
-export { BuiltinTplDashboardAdmin } from "./templates/dashboard/admin-dashboard.js";
-export { BuiltinTplDashboardWorkspace } from "./templates/dashboard/workspace-home.js";
-export { BuiltinTplDashboardMasterDetail } from "./templates/dashboard/master-detail.js";
-
-export { BuiltinTplLandingProductLaunch } from "./templates/landing/product-launch.js";
-export { BuiltinTplLandingLeadCapture } from "./templates/landing/lead-capture.js";
-
-export { BuiltinTplAuthLogin } from "./templates/auth/login-page.js";
-export { BuiltinTplVideoPlatform } from "./templates/video/video-platform.js";
-export { BuiltinTplSocialProfile } from "./templates/social/social-profile.js?v=20260429-4";
-export { BuiltinTplCompanyAbout } from "./templates/company/company-about.js";
-export { BuiltinTplContactUs } from "./templates/company/contact-us.js";
-export { BuiltinTplBlogArticle } from "./templates/blog/blog-article.js";
-export { BuiltinTplFileManager } from "./templates/cloud/file-manager.js";
-export { BuiltinTplLiveStreamRoom } from "./templates/live/live-stream-room.js";
-
-import { BuiltinTplFrontpageGeneric } from "./templates/frontpage/generic-home.js";
-import { BuiltinTplFrontpageContent } from "./templates/frontpage/content-home.js";
-import { BuiltinTplFrontpageVideo } from "./templates/frontpage/video-home.js";
-import { BuiltinTplFrontpageShop } from "./templates/frontpage/shop-home.js";
-import { BuiltinTplFrontpageSaas } from "./templates/frontpage/saas-home.js";
-
-import { BuiltinTplMagazineEditorial } from "./templates/magazine/editorial-layout.js";
-import { BuiltinTplMagazineNews } from "./templates/magazine/news-layout.js";
-
-import { BuiltinTplTutorialOnboarding } from "./templates/tutorial/onboarding-guide.js?v=20260429-4";
-import { BuiltinTplTutorialDocumentation } from "./templates/tutorial/documentation-layout.js";
-
-import { BuiltinTplFormWizard } from "./templates/form/wizard-form.js";
-import { BuiltinTplFormSurvey } from "./templates/form/survey-layout.js";
-
-import { BuiltinTplVideoPlayerPage } from "./templates/video/video-player-page.js";
-import { BuiltinTplVideoListing } from "./templates/video/video-listing.js";
-
-import { BuiltinTplEcommerceProductDetail } from "./templates/ecommerce/product-detail.js";
-import { BuiltinTplEcommerceProductGrid } from "./templates/ecommerce/product-grid.js";
-import { BuiltinTplEcommerceCheckout } from "./templates/ecommerce/checkout-layout.js";
-import { BuiltinTplEcommerceCartDrawer } from "./templates/ecommerce/cart-drawer.js";
-
-import { BuiltinTplProfilePersonal } from "./templates/profile/personal-profile.js";
-import { BuiltinTplProfilePortfolio } from "./templates/profile/portfolio-layout.js";
-
-import { BuiltinTplChatRoom } from "./templates/chat/chat-room.js?v=20260501-2";
-import { BuiltinTplChatMessageThread } from "./templates/chat/message-thread.js?v=20260501-2";
-
-import { BuiltinTplDashboardAnalytics } from "./templates/dashboard/analytics-dashboard.js";
-import { BuiltinTplDashboardAdmin } from "./templates/dashboard/admin-dashboard.js";
-import { BuiltinTplDashboardWorkspace } from "./templates/dashboard/workspace-home.js";
-import { BuiltinTplDashboardMasterDetail } from "./templates/dashboard/master-detail.js";
-
-import { BuiltinTplLandingProductLaunch } from "./templates/landing/product-launch.js";
-import { BuiltinTplLandingLeadCapture } from "./templates/landing/lead-capture.js";
-
-import { BuiltinTplAuthLogin } from "./templates/auth/login-page.js";
-import { BuiltinTplVideoPlatform } from "./templates/video/video-platform.js";
-import { BuiltinTplSocialProfile } from "./templates/social/social-profile.js?v=20260429-4";
-import { BuiltinTplCompanyAbout } from "./templates/company/company-about.js";
-import { BuiltinTplContactUs } from "./templates/company/contact-us.js";
-import { BuiltinTplBlogArticle } from "./templates/blog/blog-article.js";
-import { BuiltinTplFileManager } from "./templates/cloud/file-manager.js";
-import { BuiltinTplLiveStreamRoom } from "./templates/live/live-stream-room.js";
+// Backward-compat: re-import for the registry helper and global namespace.
+import { BuiltinTplAuthLogin } from "./templates/auth.js";
+import { BuiltinTplBlogArticle } from "./templates/blog.js";
+import { BuiltinTplChatRoom, BuiltinTplChatMessageThread } from "./templates/chat.js";
+import { BuiltinTplFileManager } from "./templates/cloud.js";
+import { BuiltinTplCompanyAbout, BuiltinTplContactUs } from "./templates/company.js";
+import {
+  BuiltinTplDashboardAdmin, BuiltinTplDashboardAnalytics,
+  BuiltinTplDashboardMasterDetail, BuiltinTplDashboardWorkspace,
+} from "./templates/dashboard.js";
+import {
+  BuiltinTplEcommerceCartDrawer, BuiltinTplEcommerceCheckout,
+  BuiltinTplEcommerceProductDetail, BuiltinTplEcommerceProductGrid,
+} from "./templates/ecommerce.js";
+import { BuiltinTplFormSurvey, BuiltinTplFormWizard } from "./templates/form.js";
+import {
+  BuiltinTplFrontpageContent, BuiltinTplFrontpageGeneric,
+  BuiltinTplFrontpageSaas, BuiltinTplFrontpageShop, BuiltinTplFrontpageVideo,
+} from "./templates/frontpage.js";
+import { BuiltinTplLandingLeadCapture, BuiltinTplLandingProductLaunch } from "./templates/landing.js";
+import { BuiltinTplLiveStreamRoom } from "./templates/live.js";
+import { BuiltinTplMagazineEditorial, BuiltinTplMagazineNews } from "./templates/magazine.js";
+import { BuiltinTplProfilePersonal, BuiltinTplProfilePortfolio } from "./templates/profile.js";
+import { BuiltinTplSocialProfile } from "./templates/social.js";
+import { BuiltinTplTutorialDocumentation, BuiltinTplTutorialOnboarding } from "./templates/tutorial.js";
+import {
+  BuiltinTplVideoListing, BuiltinTplVideoPlatform, BuiltinTplVideoPlayerPage,
+} from "./templates/video.js";
 
 const TPL_MAP = [
-  ["builtin-tpl-frontpage-generic", BuiltinTplFrontpageGeneric],
-  ["builtin-tpl-frontpage-content", BuiltinTplFrontpageContent],
-  ["builtin-tpl-frontpage-video", BuiltinTplFrontpageVideo],
-  ["builtin-tpl-frontpage-shop", BuiltinTplFrontpageShop],
-  ["builtin-tpl-frontpage-saas", BuiltinTplFrontpageSaas],
-  ["builtin-tpl-magazine-editorial", BuiltinTplMagazineEditorial],
-  ["builtin-tpl-magazine-news", BuiltinTplMagazineNews],
-  ["builtin-tpl-tutorial-onboarding", BuiltinTplTutorialOnboarding],
-  ["builtin-tpl-tutorial-documentation", BuiltinTplTutorialDocumentation],
-  ["builtin-tpl-form-wizard", BuiltinTplFormWizard],
-  ["builtin-tpl-form-survey", BuiltinTplFormSurvey],
-  ["builtin-tpl-video-player", BuiltinTplVideoPlayerPage],
-  ["builtin-tpl-video-listing", BuiltinTplVideoListing],
-  ["builtin-tpl-ecommerce-product-detail", BuiltinTplEcommerceProductDetail],
-  ["builtin-tpl-ecommerce-product-grid", BuiltinTplEcommerceProductGrid],
-  ["builtin-tpl-ecommerce-checkout", BuiltinTplEcommerceCheckout],
-  ["builtin-tpl-ecommerce-cart-drawer", BuiltinTplEcommerceCartDrawer],
-  ["builtin-tpl-profile-personal", BuiltinTplProfilePersonal],
-  ["builtin-tpl-profile-portfolio", BuiltinTplProfilePortfolio],
+  ["builtin-tpl-auth-login", BuiltinTplAuthLogin],
+  ["builtin-tpl-blog-article", BuiltinTplBlogArticle],
   ["builtin-tpl-chat-room", BuiltinTplChatRoom],
   ["builtin-tpl-chat-message-thread", BuiltinTplChatMessageThread],
-  ["builtin-tpl-dashboard-analytics", BuiltinTplDashboardAnalytics],
-  ["builtin-tpl-dashboard-admin", BuiltinTplDashboardAdmin],
-  ["builtin-tpl-dashboard-workspace", BuiltinTplDashboardWorkspace],
-  ["builtin-tpl-dashboard-master-detail", BuiltinTplDashboardMasterDetail],
-  ["builtin-tpl-landing-product-launch", BuiltinTplLandingProductLaunch],
-  ["builtin-tpl-landing-lead-capture", BuiltinTplLandingLeadCapture],
-  ["builtin-tpl-auth-login", BuiltinTplAuthLogin],
-  ["builtin-tpl-video-platform", BuiltinTplVideoPlatform],
-  ["builtin-tpl-social-profile", BuiltinTplSocialProfile],
+  ["builtin-tpl-file-manager", BuiltinTplFileManager],
   ["builtin-tpl-company-about", BuiltinTplCompanyAbout],
   ["builtin-tpl-contact-us", BuiltinTplContactUs],
-  ["builtin-tpl-blog-article", BuiltinTplBlogArticle],
-  ["builtin-tpl-file-manager", BuiltinTplFileManager],
+  ["builtin-tpl-dashboard-admin", BuiltinTplDashboardAdmin],
+  ["builtin-tpl-dashboard-analytics", BuiltinTplDashboardAnalytics],
+  ["builtin-tpl-dashboard-master-detail", BuiltinTplDashboardMasterDetail],
+  ["builtin-tpl-dashboard-workspace", BuiltinTplDashboardWorkspace],
+  ["builtin-tpl-ecommerce-cart-drawer", BuiltinTplEcommerceCartDrawer],
+  ["builtin-tpl-ecommerce-checkout", BuiltinTplEcommerceCheckout],
+  ["builtin-tpl-ecommerce-product-detail", BuiltinTplEcommerceProductDetail],
+  ["builtin-tpl-ecommerce-product-grid", BuiltinTplEcommerceProductGrid],
+  ["builtin-tpl-form-survey", BuiltinTplFormSurvey],
+  ["builtin-tpl-form-wizard", BuiltinTplFormWizard],
+  ["builtin-tpl-frontpage-content", BuiltinTplFrontpageContent],
+  ["builtin-tpl-frontpage-generic", BuiltinTplFrontpageGeneric],
+  ["builtin-tpl-frontpage-saas", BuiltinTplFrontpageSaas],
+  ["builtin-tpl-frontpage-shop", BuiltinTplFrontpageShop],
+  ["builtin-tpl-frontpage-video", BuiltinTplFrontpageVideo],
+  ["builtin-tpl-landing-lead-capture", BuiltinTplLandingLeadCapture],
+  ["builtin-tpl-landing-product-launch", BuiltinTplLandingProductLaunch],
   ["builtin-tpl-live-stream-room", BuiltinTplLiveStreamRoom],
+  ["builtin-tpl-magazine-editorial", BuiltinTplMagazineEditorial],
+  ["builtin-tpl-magazine-news", BuiltinTplMagazineNews],
+  ["builtin-tpl-profile-personal", BuiltinTplProfilePersonal],
+  ["builtin-tpl-profile-portfolio", BuiltinTplProfilePortfolio],
+  ["builtin-tpl-social-profile", BuiltinTplSocialProfile],
+  ["builtin-tpl-tutorial-documentation", BuiltinTplTutorialDocumentation],
+  ["builtin-tpl-tutorial-onboarding", BuiltinTplTutorialOnboarding],
+  ["builtin-tpl-video-listing", BuiltinTplVideoListing],
+  ["builtin-tpl-video-platform", BuiltinTplVideoPlatform],
+  ["builtin-tpl-video-player", BuiltinTplVideoPlayerPage],
 ];
 
 export function defineSharedTemplates() {
@@ -149,16 +135,18 @@ defineSharedTemplates();
 
 globalThis.ProjectSharedTemplates = Object.assign({}, globalThis.ProjectSharedTemplates || {}, {
   defineSharedTemplates,
-  BuiltinTplFrontpageGeneric, BuiltinTplFrontpageContent, BuiltinTplFrontpageVideo, BuiltinTplFrontpageShop, BuiltinTplFrontpageSaas,
-  BuiltinTplMagazineEditorial, BuiltinTplMagazineNews,
-  BuiltinTplTutorialOnboarding, BuiltinTplTutorialDocumentation,
-  BuiltinTplFormWizard, BuiltinTplFormSurvey,
-  BuiltinTplVideoPlayerPage, BuiltinTplVideoListing,
-  BuiltinTplEcommerceProductDetail, BuiltinTplEcommerceProductGrid, BuiltinTplEcommerceCheckout, BuiltinTplEcommerceCartDrawer,
-  BuiltinTplProfilePersonal, BuiltinTplProfilePortfolio,
+  BuiltinTplAuthLogin, BuiltinTplBlogArticle,
   BuiltinTplChatRoom, BuiltinTplChatMessageThread,
-  BuiltinTplDashboardAnalytics, BuiltinTplDashboardAdmin, BuiltinTplDashboardWorkspace, BuiltinTplDashboardMasterDetail,
-  BuiltinTplLandingProductLaunch, BuiltinTplLandingLeadCapture,
-  BuiltinTplAuthLogin, BuiltinTplVideoPlatform, BuiltinTplSocialProfile, BuiltinTplCompanyAbout, BuiltinTplContactUs,
-  BuiltinTplBlogArticle, BuiltinTplFileManager, BuiltinTplLiveStreamRoom,
+  BuiltinTplFileManager, BuiltinTplCompanyAbout, BuiltinTplContactUs,
+  BuiltinTplDashboardAdmin, BuiltinTplDashboardAnalytics, BuiltinTplDashboardMasterDetail, BuiltinTplDashboardWorkspace,
+  BuiltinTplEcommerceCartDrawer, BuiltinTplEcommerceCheckout, BuiltinTplEcommerceProductDetail, BuiltinTplEcommerceProductGrid,
+  BuiltinTplFormSurvey, BuiltinTplFormWizard,
+  BuiltinTplFrontpageContent, BuiltinTplFrontpageGeneric, BuiltinTplFrontpageSaas, BuiltinTplFrontpageShop, BuiltinTplFrontpageVideo,
+  BuiltinTplLandingLeadCapture, BuiltinTplLandingProductLaunch,
+  BuiltinTplLiveStreamRoom,
+  BuiltinTplMagazineEditorial, BuiltinTplMagazineNews,
+  BuiltinTplProfilePersonal, BuiltinTplProfilePortfolio,
+  BuiltinTplSocialProfile,
+  BuiltinTplTutorialDocumentation, BuiltinTplTutorialOnboarding,
+  BuiltinTplVideoListing, BuiltinTplVideoPlatform, BuiltinTplVideoPlayerPage,
 });

@@ -1,7 +1,7 @@
 from .shared import *
 from .config import *
 from .base import ServiceBase
-from .completion import CompletionService
+from .completion import CompletionClient, CompletionService, OpenAILikedCompletionClient, ThinkThinkSynCompletionClient
 from .embedding import EmbeddingService
 from .s2t import S2TService
 from .t2s import T2SService

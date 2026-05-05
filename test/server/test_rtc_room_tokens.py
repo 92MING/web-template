@@ -120,7 +120,7 @@ class TestRTCRoomDisabledGating(unittest.IsolatedAsyncioTestCase):
     async def test_create_route_returns_404_when_disabled(self):
         token = create_room_token(name="Disabled Room")
         response = await self.client.post(
-            "/rtc_room/create",
+            "/_internal/rtc_room/create",
             json={
                 "token": token,
                 "sdp": "v=0",

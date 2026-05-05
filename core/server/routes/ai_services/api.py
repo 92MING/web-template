@@ -5,11 +5,10 @@ import base64
 import logging
 import time as _time
 
-from typing import Any, Annotated, AsyncGenerator, Literal, Optional, Protocol, Union
-
+from typing import Any, AsyncGenerator, Literal, Optional, Protocol, Union
 from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Header, Request
 from fastapi.responses import Response, StreamingResponse
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from core.utils.type_utils import AdvancedBaseModel
 from core.ai.shared import AIServiceKind
@@ -22,10 +21,25 @@ from ...data_types.config import Config
 logger = logging.getLogger("proj-template.ai_services")
 
 
+def _env_first(*keys: str) -> str:
+    import os
+    for key in keys:
+        value = os.environ.get(key)
+        if value:
+            return value
+    return ''
+
+
+def _public(func):
+    setattr(func, "__public__", True)
+    return func
+
+
 class _AIAliasRouteRegistrar:
-    def __init__(self, app: FastAPI, prefixes: list[str]):
+    def __init__(self, app: FastAPI, *, internal_prefixes: list[str], public_prefixes: list[str]):
         self._app = app
-        self._prefixes = prefixes
+        self._internal_prefixes = internal_prefixes
+        self._public_prefixes = public_prefixes
 
     def _alias_path(self, path: str, prefix: str) -> str:
         if path == "/ai":
@@ -36,16 +50,22 @@ class _AIAliasRouteRegistrar:
 
     def get(self, path: str, **kwargs: Any):
         def _decorator(func):
-            for prefix in self._prefixes:
+            for prefix in self._internal_prefixes:
                 self._app.get(self._alias_path(path, prefix), **kwargs)(func)
+            if getattr(func, "__public__", False):
+                for prefix in self._public_prefixes:
+                    self._app.get(self._alias_path(path, prefix), **kwargs)(func)
             return func
 
         return _decorator
 
     def post(self, path: str, **kwargs: Any):
         def _decorator(func):
-            for prefix in self._prefixes:
+            for prefix in self._internal_prefixes:
                 self._app.post(self._alias_path(path, prefix), **kwargs)(func)
+            if getattr(func, "__public__", False):
+                for prefix in self._public_prefixes:
+                    self._app.post(self._alias_path(path, prefix), **kwargs)(func)
             return func
 
         return _decorator
@@ -615,11 +635,10 @@ def _make_temp_completion_client(
 
 
 def _check_temp_client_env_key(provider: AITempClientProvider) -> bool:
-    import os
     if provider == 'thinkthinksyn':
-        return bool(os.environ.get('TTS_APIKEY'))
+        return bool(_env_first('TTS_APIKEY', 'TTS_API_KEY'))
     if provider == 'openrouter':
-        return bool(os.environ.get('OPENROUTER_API_KEY'))
+        return bool(_env_first('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY'))
     return False
 
 
@@ -788,14 +807,15 @@ async def _run_completion_request(req: _BaseCompletionRequest, svc: _CompletionC
 @on_before_app_created
 def register_ai_service_routes(app: FastAPI):
     server_cfg = Config.GetConfig().server_config
-    prefixes: list[str] = []
+    internal_prefixes: list[str] = []
+    public_prefixes: list[str] = []
     if server_cfg.is_internal_exposed():
-        prefixes.append(server_cfg.get_internal_path("/ai"))
+        internal_prefixes.append(server_cfg.get_internal_path("/ai"))
     if server_cfg.is_ai_service_exposed():
-        prefixes.append("/ai")
-    if not prefixes:
+        public_prefixes.append("/ai")
+    if not internal_prefixes and not public_prefixes:
         return
-    app = _AIAliasRouteRegistrar(app, prefixes)  # type: ignore[assignment]
+    app = _AIAliasRouteRegistrar(app, internal_prefixes=internal_prefixes, public_prefixes=public_prefixes)  # type: ignore[assignment]
 
     # ── Service discovery (Sec 5.1) ───────────────────────────────────────
 
@@ -906,9 +926,9 @@ def register_ai_service_routes(app: FastAPI):
         api_url = (creds.base_url
                    or os.environ.get('TTS_API_BASEURL')
                    or 'https://api.thinkthinksyn.com')
-        api_key = creds.apikey or os.environ.get('TTS_APIKEY') or ''
+        api_key = creds.apikey or _env_first('TTS_APIKEY', 'TTS_API_KEY')
         if not api_key:
-            raise HTTPException(400, 'ThinkThinkSyn API key required (请传 apikey 或设置 TTS_APIKEY)')
+            raise HTTPException(400, 'ThinkThinkSyn API key required (请传 apikey 或设置 TTS_APIKEY / TTS_API_KEY)')
         url = f"{api_url.rstrip('/')}/tts/ai/completion/openai/v1/models"
         return await _proxy_models_request(url, api_key)
 
@@ -918,15 +938,16 @@ def register_ai_service_routes(app: FastAPI):
         import os
         creds = req or TempClientCredentials()
         base_url = creds.base_url or os.environ.get('OPENROUTER_API_URL') or 'https://openrouter.ai/api/v1'
-        api_key = creds.apikey or os.environ.get('OPENROUTER_API_KEY') or ''
+        api_key = creds.apikey or _env_first('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY')
         if not api_key:
-            raise HTTPException(400, 'OpenRouter API key required (请传 apikey 或设置 OPENROUTER_API_KEY)')
+            raise HTTPException(400, 'OpenRouter API key required (请传 apikey 或设置 OPENROUTER_APIKEY / OPENROUTER_API_KEY)')
         url = f"{base_url.rstrip('/')}/models"
         return await _proxy_models_request(url, api_key)
 
 
     # ── Completion (non-stream + SSE stream) ──────────────────────────────
     @app.post("/ai/complete", response_model=CompletionResponse)
+    @_public
     async def complete(req: CompletionRequest) -> StreamingResponse | CompletionResponse:
         """默认 CompletionService 文本补全 / 聊天接口。"""
         return await _run_completion_request(req, await _resolve_ai_service_instance('completion', req.service_key))
@@ -970,6 +991,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── Translate ─────────────────────────────────────────────────────────
 
     @app.post("/ai/translate", response_model=TranslateResponse)
+    @_public
     async def translate(req: TranslateRequest) -> TranslateResponse:
         """文本翻译。"""
         svc = await _get_completion_service()
@@ -988,6 +1010,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── Detect Language ───────────────────────────────────────────────────
 
     @app.post("/ai/detect-language", response_model=DetectLanguageResponse)
+    @_public
     async def detect_language(req: DetectLanguageRequest) -> DetectLanguageResponse:
         """语言检测。"""
         svc = await _get_completion_service()
@@ -1007,6 +1030,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── OCR (upload image) ────────────────────────────────────────────────
 
     @app.post("/ai/ocr", response_model=TextOperationResponse)
+    @_public
     async def ocr(file: UploadFile = File(...)) -> TextOperationResponse:
         """图片 OCR 文字识别。"""
         svc = await _get_completion_service()
@@ -1031,6 +1055,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── ASR (upload audio) ────────────────────────────────────────────────
 
     @app.post("/ai/asr", response_model=TextOperationResponse)
+    @_public
     async def asr(
         file: UploadFile = File(...),
         expected_languages: str = Form(""),
@@ -1067,6 +1092,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── Summarize ─────────────────────────────────────────────────────────
 
     @app.post("/ai/summarize", response_model=SummarizeResponse)
+    @_public
     async def summarize(req: SummarizeRequest) -> StreamingResponse | SummarizeResponse:
         """文本摘要。支持 chunk_size / sliding_window_size / prompt / stream 参数。"""
         svc = await _get_completion_service()
@@ -1115,6 +1141,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── S2T (upload audio) ────────────────────────────────────────────────
 
     @app.post("/ai/s2t", response_model=TextOperationResponse)
+    @_public
     async def s2t(file: UploadFile = File(...), service_key: str = Form('default')) -> TextOperationResponse:
         """语音转文字 (S2T)。"""
         svc = await _resolve_ai_service_instance('s2t', service_key)
@@ -1139,6 +1166,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── T2S ───────────────────────────────────────────────────────────────
 
     @app.post("/ai/t2s", response_model=T2SResponse)
+    @_public
     async def t2s(req: T2SRequest) -> T2SResponse:
         """文字转语音 (T2S)。返回 Base64 编码的音频数据。"""
         svc = await _resolve_ai_service_instance('t2s', req.service_key)
@@ -1161,6 +1189,7 @@ def register_ai_service_routes(app: FastAPI):
             raise HTTPException(500, f"T2S failed: {e}")
 
     @app.post('/ai/t2s/stream')
+    @_public
     async def t2s_stream(req: T2SRequest) -> StreamingResponse:
         """文字转语音流式输出。按音频字节块返回响应流。"""
         svc = await _resolve_ai_service_instance('t2s', req.service_key)
@@ -1183,6 +1212,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── Embedding ─────────────────────────────────────────────────────────
 
     @app.post("/ai/embedding", response_model=EmbeddingResponse)
+    @_public
     async def embedding(req: EmbeddingRequest) -> EmbeddingResponse:
         """文本向量化。"""
         svc = await _resolve_ai_service_instance('embedding', req.service_key)
@@ -1208,6 +1238,7 @@ def register_ai_service_routes(app: FastAPI):
             raise HTTPException(500, f"Embedding failed: {e}")
 
     @app.post("/ai/embedding/rerank", response_model=RankedItemsResponse)
+    @_public
     async def embedding_rerank(req: EmbeddingRerankRequest) -> RankedItemsResponse:
         """基于语义相似度的重排序。"""
         svc = await _resolve_ai_service_instance('embedding', req.service_key)
@@ -1223,6 +1254,7 @@ def register_ai_service_routes(app: FastAPI):
             raise HTTPException(500, f"Embedding rerank failed: {e}")
 
     @app.post("/ai/embedding/chunking", response_model=EmbeddingChunkingResponse)
+    @_public
     async def embedding_chunking(req: EmbeddingChunkingRequest) -> EmbeddingChunkingResponse:
         """长文本分块并向量化。"""
         svc = await _resolve_ai_service_instance('embedding', req.service_key)
@@ -1246,6 +1278,7 @@ def register_ai_service_routes(app: FastAPI):
             raise HTTPException(500, f"Embedding chunking failed: {e}")
 
     @app.post("/ai/embedding/diversity", response_model=RankedItemsResponse)
+    @_public
     async def embedding_diversity(req: EmbeddingDiversityRequest) -> RankedItemsResponse:
         """基于多样性的候选文本重排序。"""
         svc = await _resolve_ai_service_instance('embedding', req.service_key)
@@ -1279,6 +1312,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── Transcript (diarization) ──────────────────────────────────────────
 
     @app.post("/ai/transcript", response_model=TranscriptResponse)
+    @_public
     async def transcript(
         file: UploadFile = File(...),
         roles: str = Form(""),
@@ -1319,6 +1353,7 @@ def register_ai_service_routes(app: FastAPI):
     # ── LLM Rerank ────────────────────────────────────────────────────────
 
     @app.post("/ai/rerank", response_model=RankedItemsResponse)
+    @_public
     async def completion_rerank(req: CompletionRerankRequest) -> RankedItemsResponse:
         """基于 LLM 的语义重排序 (0–10 评分)。"""
         svc = await _get_completion_service()
@@ -1354,6 +1389,7 @@ def register_ai_service_routes(app: FastAPI):
         return token
 
     @app.post('/ai/upload_temp_file', response_model=TempUploadTokenResponse)
+    @_public
     async def issue_temp_upload_token(request: Request) -> TempUploadTokenResponse:
         '''颁发一个上传临时 JWT，category/max_size/file_expire 由服务端单边决定。'''
         from core.server.security.jwt import issue_upload_token
@@ -1380,6 +1416,7 @@ def register_ai_service_routes(app: FastAPI):
         )
 
     @app.post('/ai/files/upload', response_model=FileUploadResponse)
+    @_public
     async def upload_file(
         file: UploadFile = File(...),
         authorization: str = Header(..., alias='Authorization'),
@@ -1446,6 +1483,7 @@ def register_ai_service_routes(app: FastAPI):
             raise HTTPException(500, f'File upload failed: {e}')
 
     @app.post('/ai/files/get')
+    @_public
     async def get_file(
         authorization: str = Header(..., alias='Authorization'),
     ) -> Response:
@@ -1476,6 +1514,7 @@ def register_ai_service_routes(app: FastAPI):
             raise HTTPException(500, f'File retrieval failed: {e}')
 
     @app.post('/ai/files/delete', response_model=FileDeleteResponse)
+    @_public
     async def delete_file(
         authorization: str = Header(..., alias='Authorization'),
     ) -> FileDeleteResponse:

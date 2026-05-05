@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en-US">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta http-equiv="x-ua-compatible" content="IE=edge" />
+	<title>miniPaint - image editor</title>
+	<meta name="description" content="miniPaint is free online image editor using HTML5. Edit, adjust your images, add effects online in your browser, without installing anything..." />
+	<meta name="keywords" content="photo, image, picture, transparent, layers, free, edit, html5, canvas, javascript, online, photoshop, gimp, effects, sharpen, blur, magic eraser tool, clone tool, rotate, resize, photoshop online, online tools, tilt shift, sprites, keypoints" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=0" />
+	<link rel="icon" sizes="192x192" href="images/favicon.png">
+	<!-- <link rel="manifest" href="dist/manifest.json"> -->
+	<!-- Google -->
+	<meta itemprop="name" content="miniPaint" />
+	<meta itemprop="description" content="miniPaint is free online image editor using HTML5. Edit, adjust your images, add effects online in your browser, without installing anything..." />
+	<meta itemprop="image" content="https://viliusle.github.io/miniPaint/images/preview.jpg" />
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="miniPaint" />
+	<meta name="twitter:description" content="miniPaint is free online image editor using HTML5. Edit, adjust your images, add effects online in your browser, without installing anything..." />
+	<meta name="twitter:image" content="https://viliusle.github.io/miniPaint/images/preview.jpg" />
+	<meta name="twitter:image:alt" content="miniPaint is free online image editor using HTML5. Edit, adjust your images, add effects online in your browser, without installing anything..." />
+	<!-- Facebook, Pinterest -->
+	<meta property="og:title" content="miniPaint" />
+	<meta property="og:type" content="article" />
+	<meta property="og:url" content="https://viliusle.github.io/miniPaint/" />
+	<meta property="og:image" content="https://viliusle.github.io/miniPaint/images/preview.jpg" />
+	<meta property="og:description" content="miniPaint is free online image editor using HTML5. Edit, adjust your images, add effects online in your browser, without installing anything..." />
+	<meta property="og:site_name" content="miniPaint" />
+	
+	<script src="dist/bundle.js"></script>
+	<style id="builtin-minipaint-modern-ui">
+		:root {
+			color-scheme: light dark;
+		}
+		html,
+		body {
+			height: 100%;
+			margin: 0;
+			overflow: hidden;
+		}
+		body.builtin-modern {
+			--mp-bg: #eef2f7;
+			--mp-panel: #ffffff;
+			--mp-panel-strong: #f8fafc;
+			--mp-line: #d8dee8;
+			--mp-line-soft: #e8edf4;
+			--mp-text: #172033;
+			--mp-muted: #6b7280;
+			--mp-accent: #2563eb;
+			--mp-hover: #edf5ff;
+			--mp-canvas-chrome: #dbe3ee;
+			background: var(--mp-bg);
+			color: var(--mp-text);
+			font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			font-size: 13px;
+		}
+		body.builtin-modern.builtin-dark {
+			--mp-bg: #0f141b;
+			--mp-panel: #171d25;
+			--mp-panel-strong: #202834;
+			--mp-line: #303a48;
+			--mp-line-soft: #26303d;
+			--mp-text: #edf2f8;
+			--mp-muted: #a3adbb;
+			--mp-accent: #60a5fa;
+			--mp-hover: #1d3557;
+			--mp-canvas-chrome: #0b0f15;
+		}
+		body.builtin-modern.builtin-light {
+			color-scheme: light;
+		}
+		body.builtin-modern.builtin-dark {
+			color-scheme: dark;
+		}
+		body.builtin-modern .wrapper {
+			background: var(--mp-bg);
+		}
+		body.builtin-modern .logo {
+			display: none !important;
+		}
+		body.builtin-modern .mobile_menu {
+			display: none !important;
+		}
+		body.builtin-modern .main_menu,
+		body.builtin-modern .submenu,
+		body.builtin-modern .sidebar_left,
+		body.builtin-modern .sidebar_right {
+			background: var(--mp-panel);
+			color: var(--mp-text);
+			border-color: var(--mp-line);
+		}
+		body.builtin-modern .main_menu {
+			border-bottom: 1px solid var(--mp-line);
+			box-shadow: 0 1px 2px rgb(15 23 42 / .08);
+		}
+		body.builtin-modern .menu_bar {
+			display: flex;
+			align-items: center;
+			gap: 3px;
+			min-width: max-content;
+			padding: 4px 8px;
+		}
+		body.builtin-modern .menu_bar a {
+			border-radius: 6px;
+			color: var(--mp-text);
+			font-weight: 650;
+			min-height: 28px;
+			padding: 5px 9px;
+		}
+		body.builtin-modern .menu_bar a:hover,
+		body.builtin-modern .menu_bar a:focus,
+		body.builtin-modern .menu_bar a[aria-expanded="true"] {
+			background: var(--mp-hover);
+			color: var(--mp-accent);
+			outline: none;
+		}
+		body.builtin-modern .submenu {
+			min-height: 42px;
+			padding: 6px 8px;
+			border-bottom: 1px solid var(--mp-line);
+			box-shadow: inset 0 -1px 0 var(--mp-line-soft);
+		}
+		body.builtin-modern .submenu .block,
+		body.builtin-modern #action_attributes {
+			background: transparent;
+			border: 0;
+			box-shadow: none;
+			margin: 0;
+			padding: 0;
+		}
+		body.builtin-modern #action_attributes {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			min-width: 0;
+			overflow-x: auto;
+		}
+		body.builtin-modern #action_attributes .item {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			min-height: 30px;
+			margin: 0;
+			padding: 0 4px;
+			white-space: nowrap;
+		}
+		body.builtin-modern .sidebar_left {
+			width: 52px;
+			padding: 8px 6px;
+			border-right: 1px solid var(--mp-line);
+			box-shadow: 1px 0 2px rgb(15 23 42 / .06);
+		}
+		body.builtin-modern .sidebar_left .item {
+			width: 36px;
+			height: 36px;
+			margin: 0 0 6px;
+			border: 1px solid transparent;
+			border-radius: 8px;
+			background-color: transparent;
+			transition: background-color .12s ease, border-color .12s ease, transform .12s ease;
+		}
+		body.builtin-modern .sidebar_left .item:hover {
+			background-color: var(--mp-hover);
+			border-color: var(--mp-line);
+		}
+		body.builtin-modern .sidebar_left .item.active {
+			background-color: color-mix(in srgb, var(--mp-accent) 16%, transparent);
+			border-color: color-mix(in srgb, var(--mp-accent) 48%, var(--mp-line));
+		}
+		body.builtin-modern .middle_area,
+		body.builtin-modern .main_wrapper {
+			background: var(--mp-canvas-chrome);
+		}
+		body.builtin-modern #canvas_wrapper,
+		body.builtin-modern #canvas_minipaint,
+		body.builtin-modern #canvas_minipaint_background {
+			filter: none !important;
+			color-scheme: normal;
+		}
+		body.builtin-modern .ruler_left,
+		body.builtin-modern .ruler_top {
+			opacity: .7;
+		}
+		body.builtin-modern .sidebar_right {
+			width: 284px;
+			padding: 8px;
+			border-left: 1px solid var(--mp-line);
+			box-shadow: -1px 0 2px rgb(15 23 42 / .06);
+		}
+		body.builtin-modern .sidebar_right .block {
+			margin: 0 0 8px;
+			padding: 9px;
+			border: 1px solid var(--mp-line);
+			border-radius: 8px;
+			background: var(--mp-panel-strong);
+			box-shadow: 0 1px 1px rgb(15 23 42 / .04);
+		}
+		body.builtin-modern .sidebar_right h2,
+		body.builtin-modern .block h2 {
+			margin: 0 0 8px;
+			color: var(--mp-text);
+			font-size: 12px;
+			font-weight: 750;
+			letter-spacing: 0;
+			text-transform: none;
+		}
+		body.builtin-modern button,
+		body.builtin-modern input,
+		body.builtin-modern select,
+		body.builtin-modern textarea,
+		body.builtin-modern .ui_toggle_button {
+			border: 1px solid var(--mp-line);
+			border-radius: 6px;
+			background: var(--mp-panel);
+			color: var(--mp-text);
+			font: inherit;
+		}
+		body.builtin-modern button,
+		body.builtin-modern .ui_toggle_button {
+			min-height: 30px;
+			padding: 0 9px;
+			font-weight: 650;
+		}
+		body.builtin-modern button:hover,
+		body.builtin-modern .ui_toggle_button:hover {
+			background: var(--mp-hover);
+			border-color: color-mix(in srgb, var(--mp-accent) 42%, var(--mp-line));
+		}
+		body.builtin-modern input,
+		body.builtin-modern select,
+		body.builtin-modern textarea {
+			min-height: 30px;
+			padding: 0 8px;
+		}
+		body.builtin-modern .undo_button {
+			margin-left: auto;
+		}
+		body.builtin-modern .alertify .ajs-dialog {
+			border-radius: 8px;
+			background: var(--mp-panel);
+			color: var(--mp-text);
+			box-shadow: 0 20px 60px rgb(0 0 0 / .24);
+		}
+		body.builtin-modern .alertify .ajs-header,
+		body.builtin-modern .alertify .ajs-footer {
+			background: var(--mp-panel-strong);
+			color: var(--mp-text);
+			border-color: var(--mp-line);
+		}
+		body.builtin-modern .builtin-minipaint-credit {
+			margin-top: 12px;
+			padding-top: 10px;
+			border-top: 1px solid var(--mp-line);
+			color: var(--mp-muted);
+			font-size: 12px;
+			line-height: 1.45;
+		}
+		body.builtin-modern .mobile_menu button {
+			border-radius: 8px;
+			background: var(--mp-panel);
+			border: 1px solid var(--mp-line);
+			box-shadow: 0 6px 18px rgb(15 23 42 / .16);
+		}
+		body.builtin-modern.builtin-compact .mobile_menu {
+			display: block !important;
+			pointer-events: none;
+		}
+		body.builtin-modern.builtin-compact .mobile_menu button {
+			position: fixed;
+			top: 78px;
+			z-index: 30;
+			width: 42px;
+			height: 42px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			color: var(--mp-text);
+			pointer-events: auto;
+		}
+		body.builtin-modern.builtin-compact .mobile_menu button::before {
+			content: "";
+			width: 18px;
+			height: 12px;
+			border-top: 3px solid currentColor;
+			border-bottom: 3px solid currentColor;
+			box-shadow: inset 0 4px 0 0 currentColor;
+		}
+		body.builtin-modern.builtin-compact .left_mobile_menu {
+			left: 8px;
+		}
+		body.builtin-modern.builtin-compact .right_mobile_menu {
+			right: 8px;
+		}
+		body.builtin-modern.builtin-compact .sidebar_left {
+			left: 0 !important;
+			width: 52px;
+			transform: none !important;
+			z-index: 16;
+		}
+		body.builtin-modern.builtin-compact .sidebar_right {
+			left: auto !important;
+			right: 0 !important;
+			width: min(82vw, 300px);
+			transform: translateX(calc(100% - 14px));
+			transition: transform .16s ease;
+			z-index: 18;
+		}
+		body.builtin-modern.builtin-compact .sidebar_right.active {
+			transform: translateX(0);
+		}
+		@media (prefers-color-scheme: dark) {
+			body.builtin-modern:not(.builtin-light) {
+				--mp-bg: #0f141b;
+				--mp-panel: #171d25;
+				--mp-panel-strong: #202834;
+				--mp-line: #303a48;
+				--mp-line-soft: #26303d;
+				--mp-text: #edf2f8;
+				--mp-muted: #a3adbb;
+				--mp-accent: #60a5fa;
+				--mp-hover: #1d3557;
+				--mp-canvas-chrome: #0b0f15;
+			}
+		}
+		body.builtin-modern input[type="number"]::-webkit-inner-spin-button,
+		body.builtin-modern input[type="number"]::-webkit-outer-spin-button {
+			opacity: 1 !important;
+			background: rgba(255, 255, 255, 0.9) !important;
+			border-radius: 2px !important;
+			-webkit-filter: invert(1) brightness(2) !important;
+			filter: invert(1) brightness(2) !important;
+		}
+		@media (max-width: 760px) {
+			body.builtin-modern .main_menu {
+				overflow-x: auto;
+				-webkit-overflow-scrolling: touch;
+			}
+			body.builtin-modern .submenu {
+				overflow-x: auto;
+				-webkit-overflow-scrolling: touch;
+			}
+			body.builtin-modern .sidebar_left {
+				left: 0 !important;
+				width: 48px;
+				padding: 6px;
+				transform: none !important;
+				transition: transform .16s ease;
+				z-index: 11;
+			}
+			body.builtin-modern .sidebar_left.active {
+				transform: translateX(0);
+			}
+			body.builtin-modern .sidebar_left .item {
+				width: 34px;
+				height: 34px;
+				margin-bottom: 5px;
+			}
+			body.builtin-modern .sidebar_right {
+				left: auto !important;
+				right: 0 !important;
+				width: min(82vw, 300px);
+				padding: 7px;
+				transform: translateX(calc(100% - 14px));
+				transition: transform .16s ease;
+				z-index: 12;
+			}
+			body.builtin-modern .sidebar_right.active {
+				transform: translateX(0);
+			}
+			body.builtin-modern .sidebar_right .block {
+				margin-bottom: 7px;
+				padding: 8px;
+			}
+			body.builtin-modern button,
+			body.builtin-modern .ui_toggle_button,
+			body.builtin-modern input,
+			body.builtin-modern select {
+				min-height: 34px;
+			}
+		}
+	</style>
+	<script id="builtin-minipaint-modern-runtime">
+		(function () {
+			var CREDIT_TEXT = "This embedded editor is modified from miniPaint (MIT).";
+			function inferTheme() {
+				var params = new URLSearchParams(window.location.search);
+				var requested = params.get("theme") || params.get("builtin_theme");
+				if (requested === "light" || requested === "dark") return requested;
+				try {
+					var parentDoc = window.parent && window.parent !== window ? window.parent.document : null;
+					var explicit = parentDoc && (parentDoc.documentElement.dataset.theme || parentDoc.body.dataset.theme);
+					if (explicit === "light" || explicit === "dark") return explicit;
+					if (parentDoc && (parentDoc.documentElement.classList.contains("dark") || parentDoc.body.classList.contains("dark"))) {
+						return "dark";
+					}
+				} catch (_err) {}
+				return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+			}
+			function applyTheme(theme) {
+				document.body.classList.add("builtin-modern");
+				document.body.classList.toggle("builtin-dark", theme === "dark");
+				document.body.classList.toggle("builtin-light", theme !== "dark");
+			}
+			function applyCompact() {
+				var width = window.innerWidth || document.documentElement.clientWidth || 0;
+				document.body.classList.toggle("builtin-compact", width < 980);
+			}
+			function applyThemeFromContext() {
+				applyTheme(inferTheme());
+			}
+			function addAboutCredit() {
+				var contents = document.querySelectorAll(".ajs-content, .popup_content, .dialog_content");
+				for (var i = 0; i < contents.length; i += 1) {
+					var content = contents[i];
+					if (content.querySelector(".builtin-minipaint-credit")) continue;
+					if (!/miniPaint|ViliusL|Vilius/i.test(content.textContent || "")) continue;
+					var credit = document.createElement("div");
+					credit.className = "builtin-minipaint-credit";
+					credit.textContent = CREDIT_TEXT;
+					content.appendChild(credit);
+				}
+			}
+			function init() {
+				applyThemeFromContext();
+				applyCompact();
+				window.__builtinMiniPaintCredit = CREDIT_TEXT;
+				var observer = new MutationObserver(addAboutCredit);
+				observer.observe(document.body, { childList: true, subtree: true });
+				addAboutCredit();
+				window.addEventListener("resize", applyCompact);
+			}
+			window.addEventListener("message", function (event) {
+				if (event.origin !== window.location.origin) return;
+				if (!event.data || event.data.type !== "builtin-minipaint-theme") return;
+				applyTheme(event.data.theme === "dark" ? "dark" : "light");
+			});
+			if (document.readyState === "loading") {
+				document.addEventListener("DOMContentLoaded", init);
+			} else {
+				init();
+			}
+		})();
+	</script>
+</head>
+<body>
+	<div class="wrapper">
+
+		<nav aria-label="Main Menu" class="main_menu" id="main_menu"></nav>
+		
+		<div class="submenu">
+			<a class="logo" href="#">miniPaint</a>
+			<div class="block attributes" id="action_attributes"></div>
+			<button class="undo_button" id="undo_button" type="button">
+				<span class="sr_only">Undo</span>
+			</button>
+		</div>
+		
+		<div class="sidebar_left" id="tools_container"></div>
+
+
+		<div class="middle_area" id="middle_area">
+
+			<canvas class="ruler_left" id="ruler_left"></canvas>
+			<canvas class="ruler_top" id="ruler_top"></canvas>
+
+			<div class="main_wrapper" id="main_wrapper">
+				<div class="canvas_wrapper" id="canvas_wrapper">
+					<div id="mouse"></div>
+					<div class="transparent-grid" id="canvas_minipaint_background"></div>
+					<canvas id="canvas_minipaint">
+						<div class="trn error">
+							Your browser does not support canvas or JavaScript is not enabled.
+						</div>
+					</canvas>
+				</div>
+			</div>
+		</div>
+
+		<div class="sidebar_right">
+			<div class="preview block">
+				<h2 class="trn toggle" data-target="toggle_preview">Preview</h2>
+				<div id="toggle_preview"></div>
+			</div>
+			
+			<div class="colors block">
+				<h2 class="trn toggle" data-target="toggle_colors">Colors</h2>
+				<div class="content" id="toggle_colors"></div>
+			</div>
+			
+			<div class="block" id="info_base">
+				<h2 class="trn toggle toggle-full" data-target="toggle_info">Information</h2>
+				<div class="content" id="toggle_info"></div>
+			</div>
+			
+			<div class="details block" id="details_base">
+				<h2 class="trn toggle toggle-full" data-target="toggle_details">Layer details</h2>
+				<div class="content details-content" id="toggle_details"></div>
+			</div>
+			
+			<div class="layers block">
+				<h2 class="trn">Layers</h2>
+				<div class="content" id="layers_base"></div>
+			</div>
+		</div>
+	</div>
+	<div class="mobile_menu">
+		<button class="left_mobile_menu" id="left_mobile_menu_button" type="button">
+			<span class="sr_only">Toggle Menu</span>
+		</button>
+		<button class="right_mobile_menu" id="mobile_menu_button" type="button">
+			<span class="sr_only">Toggle Menu</span>
+		</button>
+	</div>
+	<div class="hidden" id="tmp"></div>
+	<div id="popups"></div>
+</body>
+</html>

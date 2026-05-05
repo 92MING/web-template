@@ -50,6 +50,42 @@ class _FakeHttpResponse:
         return self._payload
 
 
+class TestAITempClientFactory(unittest.TestCase):
+    def test_check_temp_client_env_key_accepts_tts_aliases(self):
+        from core.server.routes.ai_services import api as ai_api
+
+        with patch.dict(os.environ, {"TTS_APIKEY": "tk"}, clear=True):
+            self.assertTrue(ai_api._check_temp_client_env_key("thinkthinksyn"))
+        with patch.dict(os.environ, {"TTS_API_KEY": "tk"}, clear=True):
+            self.assertTrue(ai_api._check_temp_client_env_key("thinkthinksyn"))
+
+    def test_check_temp_client_env_key_accepts_openrouter_aliases(self):
+        from core.server.routes.ai_services import api as ai_api
+
+        with patch.dict(os.environ, {"OPENROUTER_APIKEY": "ork"}, clear=True):
+            self.assertTrue(ai_api._check_temp_client_env_key("openrouter"))
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "ork"}, clear=True):
+            self.assertTrue(ai_api._check_temp_client_env_key("openrouter"))
+
+    def test_make_temp_openrouter_client_imports_public_completion_client(self):
+        from core.server.routes.ai_services import api as ai_api
+
+        temp_client = object()
+        with patch("core.ai.CompletionClient.CreateOpenRouterClient", return_value=temp_client) as create_client:
+            client = ai_api._make_temp_completion_client(
+                "openrouter",
+                base_url="https://example.com/v1",
+                apikey="explicit-key",
+                model="openrouter/mock-model",
+            )
+
+        self.assertIs(client, temp_client)
+        create_client.assert_called_once()
+        self.assertEqual(create_client.call_args.kwargs["base_url"], "https://example.com/v1")
+        self.assertEqual(create_client.call_args.kwargs["apikey"], "explicit-key")
+        self.assertEqual(create_client.call_args.kwargs["model"], "openrouter/mock-model")
+
+
 class TestAIProviderAndModelEndpoints(FullAppTestBase):
     async def test_has_env_key_thinkthinksyn_true(self):
         with patch.dict(os.environ, {"TTS_APIKEY": "tk"}, clear=False):
@@ -58,7 +94,7 @@ class TestAIProviderAndModelEndpoints(FullAppTestBase):
         self.assertEqual(resp.json(), {"has_env_key": True})
 
     async def test_has_env_key_openrouter_missing(self):
-        env = {k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"}
+        env = {k: v for k, v in os.environ.items() if k not in {"OPENROUTER_APIKEY", "OPENROUTER_API_KEY"}}
         with patch.dict(os.environ, env, clear=True):
             resp = await self._client.get("/ai/clients/openrouter/has-env-key")
         self.assertEqual(resp.status_code, 200)
@@ -100,7 +136,7 @@ class TestAIProviderAndModelEndpoints(FullAppTestBase):
         )
 
     async def test_models_thinkthinksyn_missing_apikey_returns_400(self):
-        env = {k: v for k, v in os.environ.items() if k != "TTS_APIKEY"}
+        env = {k: v for k, v in os.environ.items() if k not in {"TTS_APIKEY", "TTS_API_KEY"}}
         with patch.dict(os.environ, env, clear=True):
             resp = await self._client.post("/ai/clients/thinkthinksyn/list-models", json={})
         self.assertEqual(resp.status_code, 400)

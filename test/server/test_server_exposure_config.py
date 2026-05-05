@@ -34,13 +34,33 @@ def test_ai_service_public_alias_when_exposed() -> None:
     register_ai_service_routes(app)
     paths = _route_paths(app)
     assert "/_internal/ai/services" in paths
-    assert "/ai/services" in paths
+    assert "/ai/services" not in paths
+    assert "/_internal/ai/complete" in paths
+    assert "/ai/complete" in paths
 
 
 def test_internal_path_allowed_ip_normalization() -> None:
     cfg = ServerConfig(internal_path_allowed_ip=["localhost", "10.0.*"])
     assert cfg.get_internal_path_allowed_ip_patterns() == ["127.0.0.1", "::1", "localhost", "10.0.*"]
     assert ServerConfig(internal_path_allowed_ip="all").get_internal_path_allowed_ip_patterns() is None
+
+
+def test_internal_path_defaults_to_internal_prefix() -> None:
+    cfg = ServerConfig()
+    assert cfg.internal_path_prefix == "/_internal"
+    assert cfg.get_internal_path("ai/services") == "/_internal/ai/services"
+    assert cfg.get_internal_admin_path("api/rooms") == "/_internal/admin/api/rooms"
+
+
+def test_internal_path_does_not_guess_admin_or_ai() -> None:
+    cfg = ServerConfig(internal_path_prefix="")
+    assert cfg.internal_path_prefix == "/_internal"
+    assert cfg.is_internal_path("/_internal/admin") is True
+    assert cfg.is_internal_path("/_internal/ai/services") is True
+    assert cfg.is_internal_path("/admin") is False
+    assert cfg.is_internal_path("/admin/api/rooms") is False
+    assert cfg.is_internal_path("/ai") is False
+    assert cfg.is_internal_path("/ai/complete") is False
 
 
 def test_current_config_names_work() -> None:

@@ -32,15 +32,15 @@ if _in_main:
 def _load_optional_env_file(path: Path, *, override: bool = False) -> bool:
     if not path.exists() or not path.is_file():
         return False
-    load_dotenv(dotenv_path=path, override=override)
+    load_dotenv(dotenv_path=path, override=override, encoding="utf-8-sig")
     return True
 
 def _load_base_env() -> None:
     env_path = _project_root / ".env"
     if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=False)
+        load_dotenv(dotenv_path=env_path, override=False, encoding="utf-8-sig")
     else:
-        load_dotenv(override=False)
+        load_dotenv(override=False, encoding="utf-8-sig")
 
 def _load_mode_env(mode: str) -> bool:
     normalized = "prod" if str(mode).lower().strip() == "prod" else "dev"

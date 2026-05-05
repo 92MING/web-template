@@ -15,7 +15,7 @@ from core.server.data_types.role import (
     update_permission_role_admin_item,
 )
 
-from ...app import on_before_app_created
+from ...app import internal_admin_path, on_before_app_created
 
 
 _LOCAL_HOSTS = {"", "127.0.0.1", "::1", "localhost", "testclient"}
@@ -75,7 +75,9 @@ async def _serialize_permission_role(item: Any) -> AdminPermissionRoleItemRespon
 
 @on_before_app_created
 def register_admin_permission_role_routes(app: FastAPI) -> None:
-    @app.get("/admin/permission-roles", response_model=AdminPermissionRoleListResponse)
+    admin_path = internal_admin_path
+
+    @app.get(admin_path("permission-roles"), response_model=AdminPermissionRoleListResponse)
     async def admin_permission_role_list(
         request: Request,
         limit: int = Query(default=100, ge=1, le=500),
@@ -90,7 +92,7 @@ def register_admin_permission_role_routes(app: FastAPI) -> None:
             offset=offset,
         )
 
-    @app.post("/admin/permission-roles", response_model=AdminPermissionRoleItemResponse)
+    @app.post(admin_path("permission-roles"), response_model=AdminPermissionRoleItemResponse)
     async def admin_permission_role_create(
         body: AdminPermissionRoleCreateBody,
         request: Request,
@@ -102,7 +104,7 @@ def register_admin_permission_role_routes(app: FastAPI) -> None:
             raise HTTPException(400, str(exc)) from exc
         return await _serialize_permission_role(item)
 
-    @app.get("/admin/permission-roles/{object_id}", response_model=AdminPermissionRoleItemResponse)
+    @app.get(admin_path("permission-roles/{object_id}"), response_model=AdminPermissionRoleItemResponse)
     async def admin_permission_role_get(object_id: str, request: Request) -> AdminPermissionRoleItemResponse:
         _ensure_local_request(request)
         try:
@@ -111,7 +113,7 @@ def register_admin_permission_role_routes(app: FastAPI) -> None:
             raise HTTPException(404, str(exc)) from exc
         return await _serialize_permission_role(item)
 
-    @app.patch("/admin/permission-roles/{object_id}", response_model=AdminPermissionRoleItemResponse)
+    @app.patch(admin_path("permission-roles/{object_id}"), response_model=AdminPermissionRoleItemResponse)
     async def admin_permission_role_patch(
         object_id: str,
         body: AdminPermissionRolePatchBody,
@@ -128,7 +130,7 @@ def register_admin_permission_role_routes(app: FastAPI) -> None:
             raise HTTPException(status_code, str(exc)) from exc
         return await _serialize_permission_role(item)
 
-    @app.delete("/admin/permission-roles/{object_id}")
+    @app.delete(admin_path("permission-roles/{object_id}"))
     async def admin_permission_role_delete(object_id: str, request: Request) -> dict[str, object]:
         _ensure_local_request(request)
         try:

@@ -1,4 +1,4 @@
-import { BuiltinBaseElement, html, css, classMap, styleMap, repeat } from "../../components/lit-base.js";
+import { BuiltinBaseElement, html, css, classMap, styleMap, repeat, nothing } from "../../components/lit-base.js";
 
 const jsonConverter = {
   fromAttribute(value) {

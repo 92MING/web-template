@@ -198,12 +198,12 @@ DEFAULT_BATCH5_CASES: tuple[AuditCase, ...] = (
 
 DEFAULT_BATCH6_CASES: tuple[AuditCase, ...] = (
     AuditCase("logs before future", "DELETE", "/_internal/admin/api/logs/before/2030-01-01T00:00:00", baseline_path="/_internal/admin/api/logs/before/{timestamp:path}", expect_status=(200, 404)),
-    AuditCase("test audio missing", "GET", "/api/test-audio/__missing__.mp3", baseline_path="/api/test-audio/{filename}", expect_status=(404,)),
+    AuditCase("test audio missing", "GET", "/_internal/rtc_room/test-audio/__missing__.mp3", baseline_path="/_internal/rtc_room/test-audio/{filename}", expect_status=(404,)),
     AuditCase("system process invalid pid", "GET", "/_internal/admin/api/system/processes/0", baseline_path="/_internal/admin/api/system/processes/{pid}", expect_status=(400, 403, 404)),
     AuditCase("system process terminate missing", "POST", "/_internal/admin/api/system/processes/999999/terminate", baseline_path="/_internal/admin/api/system/processes/{pid}/terminate", expect_status=(404,)),
     AuditCase("system process kill missing", "POST", "/_internal/admin/api/system/processes/999999/kill", baseline_path="/_internal/admin/api/system/processes/{pid}/kill", expect_status=(404,)),
-    AuditCase("rooms create invalid empty", "POST", "/api/rooms/create", json_body={}, expect_status=(422,)),
-    AuditCase("rooms join invalid empty", "POST", "/api/rooms/join", json_body={}, expect_status=(422,)),
+    AuditCase("rooms create invalid empty", "POST", "/_internal/rtc_room/create", json_body={}, expect_status=(422,)),
+    AuditCase("rooms join invalid empty", "POST", "/_internal/rtc_room/join", json_body={}, expect_status=(422,)),
 )
 
 

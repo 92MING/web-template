@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
-<title>签到管理 - 在线课堂</title>
-<script type="module" src="/shared/components.js?v=20260429-2"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>??????? - ???????</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/data.js"></script>
+  <script type="module" src="/shared/components/form.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   builtin-app-shell { --builtin-shell-max-width: 1100px; --builtin-shell-secondary-width: 320px; }
   .checkin-item { display: grid; gap: 0.4rem; padding: 1rem; border-bottom: 1px solid var(--line); }
@@ -31,56 +33,56 @@
 <body>
 <builtin-app-shell id="app-shell">
   <section class="card">
-    <builtin-schema-form id="checkin-form" submit-label="发起签到" layout="vertical"></builtin-schema-form>
+    <builtin-schema-form id="checkin-form" submit-label="???????" layout="vertical"></builtin-schema-form>
   </section>
   <section class="card list-wrap">
-    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">签到记录</h2>
+    <h2 style="margin:0 0 1rem;font-size:1.5rem;" data-copy="list_title">??????</h2>
     <div id="list-state"></div>
     <div id="checkin-list"></div>
   </section>
   <builtin-card slot="secondary">
-    <div slot="header"><strong id="context-title">签到管理上下文</strong></div>
+    <div slot="header"><strong id="context-title">?????????????</strong></div>
     <builtin-metadata-list id="checkin-context" columns="1" compact></builtin-metadata-list>
   </builtin-card>
 </builtin-app-shell>
 
 <script type="module">
 import { BuiltinToast } from '/shared/components.js?v=20260429-2';
-import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+import { createEClassPageShell } from './page-shell.js?v=20260429-2';
 
 const copy = {
   'zh-cn': {
-    back: '返回老师端',
-    eyebrow: '老师端签到',
-    title: '签到管理',
-    documentTitle: '签到管理 - 在线课堂',
-    lead: '发起签到活动，查看签到统计，管理课堂出勤。',
-    list_title: '签到记录',
-    class_id: '教室 ID',
-    expires: '签到时长（分钟）',
-    submit: '发起签到',
-    ok_create: '签到已发起',
-    fill: '请填写教室 ID',
-    contextTitle: '签到管理上下文',
-    loadingTitle: '正在加载签到记录',
-    loadingDescription: '正在获取当前教室的签到活动列表。',
-    emptyTitle: '还没有签到活动',
-    emptyDescription: '发起第一条签到后，这里会出现签到记录。',
-    errorTitle: '加载失败',
-    errorDescription: '请稍后重试，或返回老师端重新进入。',
-    classLabel: '当前教室',
-    totalLabel: '签到活动数',
-    openLabel: '进行中',
-    viewStats: '查看统计',
-    statusOpen: '进行中',
-    statusClosed: '已结束',
-    statsTitle: '签到统计',
-    totalStudents: '应到',
-    checked: '实到',
-    unchecked: '未到',
-    checkedList: '已签到',
-    uncheckedList: '未签到',
-    close: '关闭',
+    back: '?????????',
+    eyebrow: '????????',
+    title: '???????',
+    documentTitle: '??????? - ???????',
+    lead: '??????????????????????????ó????',
+    list_title: '??????',
+    class_id: '???? ID',
+    expires: '?????????????',
+    submit: '???????',
+    ok_create: '????????',
+    fill: '????д???? ID',
+    contextTitle: '?????????????',
+    loadingTitle: '?????????????',
+    loadingDescription: '????????????????????б??',
+    emptyTitle: '??????????',
+    emptyDescription: '?????????????????????????????',
+    errorTitle: '???????',
+    errorDescription: '??????????????????????????',
+    classLabel: '???????',
+    totalLabel: '???????',
+    openLabel: '??????',
+    viewStats: '?????',
+    statusOpen: '??????',
+    statusClosed: '?????',
+    statsTitle: '??????',
+    totalStudents: '???',
+    checked: '???',
+    unchecked: 'δ??',
+    checkedList: '?????',
+    uncheckedList: 'δ???',
+    close: '???',
   },
   en: {
     back: 'Back to Teacher',
@@ -117,7 +119,7 @@ const copy = {
   }
 };
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: 'eclass.check_in',
   translationPath: '/translate.json?v=20260429-2',
   validateRole: (role) => role === 'teacher',
@@ -150,7 +152,7 @@ function applyShellCopy() {
     { label: labels.back, href: 'teacher.html' },
     { label: labels.title },
   ];
-  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  appShell.userMenuItems = [{ label: lang === 'en' ? 'Sign out' : '???', action: 'logout' }];
   $('context-title').textContent = labels.contextTitle;
 }
 
@@ -209,7 +211,7 @@ function renderList(list) {
       <div class="checkin-meta">
         <span>${formatTime(a.created_at)}</span>
         <span class="badge ${a.status === 'open' ? 'badge-open' : 'badge-closed'}">${a.status === 'open' ? labels.statusOpen : labels.statusClosed}</span>
-        <span>${a.expires_at ? '截止 ' + formatTime(a.expires_at) : ''}</span>
+        <span>${a.expires_at ? '??? ' + formatTime(a.expires_at) : ''}</span>
       </div>
       <div class="checkin-actions">
         <button class="ghost-btn btn-stats" data-id="${a.check_in_id}" type="button"><builtin-icon name="bar-chart" size="14"></builtin-icon> ${labels.viewStats}</button>

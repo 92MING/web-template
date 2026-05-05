@@ -10,7 +10,7 @@ import fnmatch
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from ...app import on_before_app_created
+from ...app import internal_admin_path, on_before_app_created
 
 from ._common import (
     _section_client_names,
@@ -141,17 +141,18 @@ async def _kv_has_key(client: Any, key: str) -> bool:
 
 @on_before_app_created
 def register_storage_kv_routes(app: FastAPI):
+    admin_path = internal_admin_path
 
-    @app.get("/admin/storage/kv")
+    @app.get(admin_path("storage/kv"))
     async def storage_kv_page():
         return storage_html_response("kv")
 
-    @app.get("/admin/api/storage/kv/clients", response_model=StorageClientsResponse)
+    @app.get(admin_path("api/storage/kv/clients"), response_model=StorageClientsResponse)
     async def storage_kv_clients() -> StorageClientsResponse:
         section = get_storage_config().kv
         return StorageClientsResponse.model_validate({"clients": _section_client_names(section)})
 
-    @app.get("/admin/api/storage/kv/config", response_model=KVConfigResponse)
+    @app.get(admin_path("api/storage/kv/config"), response_model=KVConfigResponse)
     async def storage_kv_config(client_name: str | None = Query(default=None, alias="client")) -> KVConfigResponse:
         resolved_name, config, client = _get_exact_kv_client(client_name)
         return KVConfigResponse.model_validate({
@@ -170,7 +171,7 @@ def register_storage_kv_routes(app: FastAPI):
             "supports_rename": True,
         })
 
-    @app.get("/admin/api/storage/kv/keys", response_model=KVKeysResponse)
+    @app.get(admin_path("api/storage/kv/keys"), response_model=KVKeysResponse)
     async def storage_kv_keys(
         prefix: str | None = Query(default=None),
         q: str | None = Query(default=None),
@@ -232,7 +233,7 @@ def register_storage_kv_routes(app: FastAPI):
             "max_ttl": max_ttl,
         })
 
-    @app.get("/admin/api/storage/kv/summary", response_model=KVSummaryResponse)
+    @app.get(admin_path("api/storage/kv/summary"), response_model=KVSummaryResponse)
     async def storage_kv_summary(
         prefix: str | None = Query(default=None),
         q: str | None = Query(default=None),
@@ -396,7 +397,7 @@ def register_storage_kv_routes(app: FastAPI):
             "largest_items": largest_items[:top_n],
         })
 
-    @app.get("/admin/api/storage/kv/item", response_model=KVItemResponse)
+    @app.get(admin_path("api/storage/kv/item"), response_model=KVItemResponse)
     async def storage_kv_item(
         key: str = Query(..., min_length=1),
         client_name: str | None = Query(default=None, alias="client"),
@@ -416,7 +417,7 @@ def register_storage_kv_routes(app: FastAPI):
             "editable": True,
         })
 
-    @app.put("/admin/api/storage/kv/item", response_model=KVWriteResponse)
+    @app.put(admin_path("api/storage/kv/item"), response_model=KVWriteResponse)
     async def storage_kv_put(
         body: KVSetBody,
         key: str = Query(..., min_length=1),
@@ -437,7 +438,7 @@ def register_storage_kv_routes(app: FastAPI):
         ttl = await client.get_expire(key)
         return KVWriteResponse.model_validate({"ok": True, "key": key, **ttl_payload(ttl)})
 
-    @app.patch("/admin/api/storage/kv/item/ttl", response_model=KVWriteResponse)
+    @app.patch(admin_path("api/storage/kv/item/ttl"), response_model=KVWriteResponse)
     async def storage_kv_patch_ttl(
         body: KVTTLBody,
         key: str = Query(..., min_length=1),
@@ -450,7 +451,7 @@ def register_storage_kv_routes(app: FastAPI):
         ttl = await client.get_expire(key)
         return KVWriteResponse.model_validate({"ok": True, "key": key, **ttl_payload(ttl)})
 
-    @app.post("/admin/api/storage/kv/item/copy", response_model=KVTransferResponse)
+    @app.post(admin_path("api/storage/kv/item/copy"), response_model=KVTransferResponse)
     async def storage_kv_copy_item(
         body: KVTransferBody,
         client_name: str | None = Query(default=None, alias="client"),
@@ -476,7 +477,7 @@ def register_storage_kv_routes(app: FastAPI):
             **ttl_payload(ttl),
         })
 
-    @app.post("/admin/api/storage/kv/item/rename", response_model=KVTransferResponse)
+    @app.post(admin_path("api/storage/kv/item/rename"), response_model=KVTransferResponse)
     async def storage_kv_rename_item(
         body: KVTransferBody,
         client_name: str | None = Query(default=None, alias="client"),
@@ -506,7 +507,7 @@ def register_storage_kv_routes(app: FastAPI):
             **ttl_payload(ttl),
         })
 
-    @app.delete("/admin/api/storage/kv/item", response_model=KVDeleteResponse)
+    @app.delete(admin_path("api/storage/kv/item"), response_model=KVDeleteResponse)
     async def storage_kv_delete(
         key: str = Query(..., min_length=1),
         client_name: str | None = Query(default=None, alias="client"),
@@ -515,7 +516,7 @@ def register_storage_kv_routes(app: FastAPI):
         deleted = await client.delete(key)
         return KVDeleteResponse.model_validate({"ok": True, "deleted": deleted, "key": key})
 
-    @app.post("/admin/api/storage/kv/delete-by-prefix", response_model=KVDeleteByPrefixResponse)
+    @app.post(admin_path("api/storage/kv/delete-by-prefix"), response_model=KVDeleteByPrefixResponse)
     async def storage_kv_delete_by_prefix(
         body: KVPrefixDeleteBody,
         client_name: str | None = Query(default=None, alias="client"),
@@ -547,7 +548,7 @@ def register_storage_kv_routes(app: FastAPI):
             "keys": keys[:100],
         })
 
-    @app.post("/admin/api/storage/kv/delete-many", response_model=KVDeleteManyResponse)
+    @app.post(admin_path("api/storage/kv/delete-many"), response_model=KVDeleteManyResponse)
     async def storage_kv_delete_many(
         body: KVDeleteManyBody,
         client_name: str | None = Query(default=None, alias="client"),
@@ -564,7 +565,7 @@ def register_storage_kv_routes(app: FastAPI):
             items.append({"key": key_text, "deleted": bool(deleted)})
         return KVDeleteManyResponse.model_validate({"deleted": removed > 0, "removed": removed, "items": items})
 
-    @app.patch("/admin/api/storage/kv/items/ttl", response_model=KVBulkTTLResponse)
+    @app.patch(admin_path("api/storage/kv/items/ttl"), response_model=KVBulkTTLResponse)
     async def storage_kv_patch_many_ttl(
         body: KVBulkTTLBody,
         client_name: str | None = Query(default=None, alias="client"),
@@ -583,7 +584,7 @@ def register_storage_kv_routes(app: FastAPI):
             items.append({"key": key_text, "updated": bool(ok), **ttl_payload(ttl)})
         return KVBulkTTLResponse.model_validate({"updated": updated, "count": len(items), "items": items})
 
-    @app.post("/admin/api/storage/kv/cleanup", response_model=StorageCleanupResponse)
+    @app.post(admin_path("api/storage/kv/cleanup"), response_model=StorageCleanupResponse)
     async def storage_kv_cleanup(
         force: bool = True,
         client_name: str | None = Query(default=None, alias="client"),

@@ -8,6 +8,48 @@
 		'zh-tw': 'zh-TW',
 		en: 'en-US',
 	};
+	let aiApiBasePromise = null;
+
+	function normalizeApiBase(value) {
+		let text = String(value || '').trim();
+		if (!text) return '';
+		if (!text.startsWith('/')) text = '/' + text;
+		return text.replace(/\/+/g, '/').replace(/\/$/, '') || '/ai';
+	}
+
+	function configuredAiApiBase() {
+		const explicitBase = normalizeApiBase(global.__AI_API_BASE__ || global.__FRONTEND_CONFIG__?.ai_api_base);
+		return explicitBase || '';
+	}
+
+	async function resolveAiApiBase() {
+		const configuredBase = configuredAiApiBase();
+		if (configuredBase) return configuredBase;
+		if (!aiApiBasePromise) {
+			aiApiBasePromise = (async () => {
+				try {
+					const resp = await fetch('/api/server/config', { cache: 'no-store' });
+					if (resp.ok) {
+						const cfg = await resp.json();
+						const internalPrefix = normalizeApiBase(cfg?.internal_path_prefix);
+						if (internalPrefix) return normalizeApiBase(`${internalPrefix}/ai`);
+					}
+				} catch {}
+				return '/ai';
+			})();
+		}
+		return aiApiBasePromise;
+	}
+
+	async function aiApiPath(path) {
+		const base = await resolveAiApiBase();
+		const suffix = String(path || '').trim().replace(/^\/ai(?=\/|$)/, '').replace(/^\/+/, '');
+		return suffix ? `${base}/${suffix}` : base;
+	}
+
+	async function fetchAi(path, options) {
+		return fetch(await aiApiPath(path), options);
+	}
 
 	function escapeHtml(value) {
 		return String(value ?? '')
@@ -244,7 +286,7 @@
 		const selectedValue = String(options.selectedValue ?? select?.value ?? 'default').trim() || 'default';
 		let keys = [];
 		try {
-			const resp = await fetch(`/ai/services/${encodeURIComponent(String(kind || '').trim())}`, { cache: 'no-store' });
+			const resp = await fetchAi(`services/${encodeURIComponent(String(kind || '').trim())}`, { cache: 'no-store' });
 			if (resp.ok) {
 				const data = await resp.json();
 				const instances = data && typeof data.instances === 'object' ? Object.keys(data.instances) : [];
@@ -269,15 +311,18 @@
 
 	global.AITestShared = {
 		STORAGE_PREFIX,
+		aiApiPath,
 		applyI18n,
 		bindFormState,
 		copyText,
 		createHistoryStore,
 		escapeHtml,
 		formatDuration,
+		fetchAi,
 		getCurrentLang,
 		mergeI18n,
 		nowIso,
+		resolveAiApiBase,
 		loadServiceInstances,
 		parseErrorResponse,
 		prettyJson,

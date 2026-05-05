@@ -23,14 +23,14 @@ from core.server.distributed import (
 from core.server.shared import AppSharedData
 from core.server.data_types.config import Config
 from core.server.html_injection import html_response_from_path
-from ...app import get_resources, on_before_app_created
+from ...app import get_resources, internal_admin_path, on_before_app_created
 
 router = APIRouter(tags=["Distributed"])
 
 
 @on_before_app_created
 def register_distributed_routes(app):
-    app.include_router(router)
+    app.include_router(router, prefix=internal_admin_path("api/distributed"))
     register_distributed_html_routes(app)
 
 
@@ -181,7 +181,7 @@ def _ping_payload(req: PingNodeRequest, self_id: str) -> dict[str, Any]:
 
 # ── self info ────────────────────────────────────────────────────────────
 
-@router.get("/admin/api/distributed/self")
+@router.get("/self")
 async def get_self_info() -> dict[str, Any]:
     sd = AppSharedData.Get()
     return {
@@ -195,7 +195,7 @@ async def get_self_info() -> dict[str, Any]:
 
 # ── health endpoint (called by other nodes) ──────────────────────────────
 
-@router.get("/admin/api/distributed/health")
+@router.get("/health")
 async def distributed_health() -> dict[str, Any]:
     sd = AppSharedData.Get()
     return {
@@ -208,7 +208,7 @@ async def distributed_health() -> dict[str, Any]:
 
 # ── node CRUD ────────────────────────────────────────────────────────────
 
-@router.get("/admin/api/distributed/nodes")
+@router.get("/nodes")
 async def list_nodes(
     relation: NodeRelation | None = None,
     healthy_only: bool = False,
@@ -233,7 +233,7 @@ async def list_nodes(
     return result
 
 
-@router.post("/admin/api/distributed/nodes")
+@router.post("/nodes")
 async def register_node(req: RegisterNodeRequest) -> dict[str, Any]:
     registry = NodeRegistry.get_instance()
     node = await registry.register(
@@ -260,7 +260,7 @@ async def register_node(req: RegisterNodeRequest) -> dict[str, Any]:
     return node.to_dict()
 
 
-@router.get("/admin/api/distributed/nodes/{node_id}")
+@router.get("/nodes/{node_id}")
 async def get_node(node_id: str) -> dict[str, Any]:
     registry = NodeRegistry.get_instance()
     node = await registry.get(node_id)
@@ -269,7 +269,7 @@ async def get_node(node_id: str) -> dict[str, Any]:
     return node.to_dict()
 
 
-@router.post("/admin/api/distributed/nodes/{node_id}/ping")
+@router.post("/nodes/{node_id}/ping")
 async def ping_node(node_id: str, req: PingNodeRequest) -> dict[str, Any]:
     registry = NodeRegistry.get_instance()
     self_id = AppSharedData.Get().instance_uuid
@@ -348,7 +348,7 @@ async def ping_node(node_id: str, req: PingNodeRequest) -> dict[str, Any]:
     return direct_result
 
 
-@router.delete("/admin/api/distributed/nodes/{node_id}")
+@router.delete("/nodes/{node_id}")
 async def unregister_node(node_id: str) -> dict[str, Any]:
     registry = NodeRegistry.get_instance()
     node = await registry.unregister(node_id)
@@ -365,7 +365,7 @@ async def unregister_node(node_id: str) -> dict[str, Any]:
 
 # ── auth challenge-response ──────────────────────────────────────────────
 
-@router.post("/admin/api/distributed/nodes/{node_id}/auth/challenge")
+@router.post("/nodes/{node_id}/auth/challenge")
 async def create_node_auth_challenge(node_id: str) -> AuthChallengeResponse:
     registry = NodeRegistry.get_instance()
     node = await registry.get(node_id)
@@ -375,7 +375,7 @@ async def create_node_auth_challenge(node_id: str) -> AuthChallengeResponse:
     return AuthChallengeResponse(nonce=challenge["nonce"], timestamp=challenge["timestamp"])
 
 
-@router.post("/admin/api/distributed/nodes/{node_id}/auth/verify")
+@router.post("/nodes/{node_id}/auth/verify")
 async def verify_node_auth(node_id: str, req: AuthVerifyRequest) -> dict[str, bool]:
     registry = NodeRegistry.get_instance()
     node = await registry.get(node_id)
@@ -391,7 +391,7 @@ async def verify_node_auth(node_id: str, req: AuthVerifyRequest) -> dict[str, bo
 
 # ── broadcast ────────────────────────────────────────────────────────────
 
-@router.post("/admin/api/distributed/broadcast")
+@router.post("/broadcast")
 async def broadcast_message(req: BroadcastRequest) -> dict[str, Any]:
     """Broadcast a message to all nodes matching target_relations.
 
@@ -460,7 +460,7 @@ async def broadcast_message(req: BroadcastRequest) -> dict[str, Any]:
 
 # ── parent management commands (parent -> child only) ────────────────────
 
-@router.post("/admin/api/distributed/nodes/{node_id}/command")
+@router.post("/nodes/{node_id}/command")
 async def send_command_to_node(node_id: str, req: CommandRequest) -> dict[str, Any]:
     """Send a management command to a child or child-edge descendant node."""
     registry = NodeRegistry.get_instance()
@@ -489,7 +489,7 @@ async def send_command_to_node(node_id: str, req: CommandRequest) -> dict[str, A
     return await _post_command(next_hop, path, _command_payload(req, self_id))
 
 
-@router.get("/admin/api/distributed/nodes/{node_id}/management")
+@router.get("/nodes/{node_id}/management")
 async def get_node_management_scope(node_id: str) -> dict[str, Any]:
     registry = NodeRegistry.get_instance()
     self_id = AppSharedData.Get().instance_uuid
@@ -506,7 +506,7 @@ async def get_node_management_scope(node_id: str) -> dict[str, Any]:
 
 # ── receive command (called by parent on this node) ──────────────────────
 
-@router.post("/admin/api/distributed/command")
+@router.post("/command")
 async def receive_command(req: CommandRequest) -> dict[str, Any]:
     """Receive a management command from a parent node."""
     from core.server.runtime_control import request_control_action
@@ -532,7 +532,7 @@ async def receive_command(req: CommandRequest) -> dict[str, Any]:
 
 # ── global shared dict sync ──────────────────────────────────────────────
 
-@router.post("/admin/api/distributed/gsd/sync")
+@router.post("/gsd/sync")
 async def gsd_sync_request() -> dict[str, Any]:
     """Return the full GlobalSharedDict state for sync."""
     from core.server.shared_dict import GlobalSharedDict
@@ -543,7 +543,7 @@ async def gsd_sync_request() -> dict[str, Any]:
 # ── HTML page routes ─────────────────────────────────────────────────────
 
 def register_distributed_html_routes(app):
-    @app.get("/admin/panel/distributed.html", response_class=HTMLResponse)
+    @app.get(internal_admin_path("panel/distributed.html"), response_class=HTMLResponse)
     async def distributed_panel_html():
         path = get_resources("admin-panel", "panel", "distributed.html") or Path("distributed.html")
         return html_response_from_path(path, not_found_message="panel/distributed.html not found")

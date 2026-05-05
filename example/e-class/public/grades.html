@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
-<title>我的成绩 - 在线课堂</title>
-<script type="module" src="/shared/components.js?v=20260429-2"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>????? - ???????</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/data.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   .container { max-width: 100%; margin: 0 auto; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); }
   .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
@@ -26,10 +27,10 @@
 <div class="container">
   <div class="header">
     <builtin-icon name="trophy" size="24"></builtin-icon>
-    <h1 data-i18n="eclass.my_grades">我的成绩</h1>
-    <a id="back-link" href="student.html" class="btn" data-i18n="eclass.back_home">返回首页</a>
+    <h1 data-i18n="eclass.my_grades">?????</h1>
+    <a id="back-link" href="student.html" class="btn" data-i18n="eclass.back_home">???????</a>
     <div class="lang-switch">
-      <builtin-lang-switcher id="lang-switcher" display="buttons" langs='[{"code":"zh-cn","label":"中"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
+      <builtin-lang-switcher id="lang-switcher" display="buttons" langs='[{"code":"zh-cn","label":"??"},{"code":"en","label":"EN"}]' current="zh-cn"></builtin-lang-switcher>
     </div>
     <builtin-theme-toggle></builtin-theme-toggle>
   </div>
@@ -40,13 +41,13 @@
 </div>
 
 <script type="module">
-import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+import { createEClassPageShell } from './page-shell.js?v=20260429-2';
 
 const $ = id => document.getElementById(id);
 let currentRole = localStorage.getItem('eclass_role') || 'student';
 let ready = false;
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: currentRole === 'teacher' ? 'eclass.teacher_grade_summary' : 'eclass.my_grades',
   translationPath: '/translate.json?v=20260429-2',
   onApplyI18n: async () => {
@@ -109,7 +110,7 @@ async function updateTeacherSummary(list) {
   container.innerHTML = `
     <builtin-stat-card value="${totalSubmissions}" label="${submissionCountLabel}"></builtin-stat-card>
     <builtin-stat-card value="${totalGraded}" label="${gradedCountLabel}"></builtin-stat-card>
-    <builtin-stat-card value="${totalGraded ? `${weightedAverage}%` : '—'}" label="${averageGradeLabel}"></builtin-stat-card>
+    <builtin-stat-card value="${totalGraded ? `${weightedAverage}%` : '??'}" label="${averageGradeLabel}"></builtin-stat-card>
   `;
 }
 
@@ -189,7 +190,7 @@ async function loadTeacherGrades() {
       submission_count: analytics.submission_count || 0,
       graded_count: analytics.graded_count || 0,
       average_grade: typeof analytics.average_grade === 'number' ? analytics.average_grade : null,
-      average_grade_text: typeof analytics.average_grade === 'number' ? `${Math.round(analytics.average_grade)}%` : '—',
+      average_grade_text: typeof analytics.average_grade === 'number' ? `${Math.round(analytics.average_grade)}%` : '??',
     };
   }));
   const view = $('grades-view');

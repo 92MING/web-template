@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="/icons/filled/bank.svg" type="image/svg+xml">
-<title>我的教室 - 在线课堂</title>
-<script type="module" src="/shared/components.js?v=20260429-2"></script>
-<script type="module" src="/shared/templates.js"></script>
+<title>?????? - ???????</title>
+  <script type="module" src="/shared/components/basic.js"></script>
+  <script type="module" src="/shared/components/commerce.js"></script>
+  <script type="module" src="/shared/components/data.js"></script>
+  <script type="module" src="/shared/components/layout.js"></script>
 <style>
   builtin-app-shell { --builtin-shell-max-width: 1080px; --builtin-shell-secondary-width: 300px; }
   .section { display: grid; gap: 1rem; }
@@ -24,17 +26,17 @@
 <builtin-app-shell id="app-shell">
   <section class="section">
     <builtin-card variant="elevated">
-      <div slot="header"><strong data-i18n="eclass.create_classroom">创建教室</strong></div>
+      <div slot="header"><strong data-i18n="eclass.create_classroom">????????</strong></div>
       <div class="form-row">
-        <input id="create-name" placeholder="教室名称" data-i18n-placeholder="eclass.classroom_name">
-        <button id="btn-create" class="btn btn-primary" data-i18n="eclass.create">创建</button>
+        <input id="create-name" placeholder="????????" data-i18n-placeholder="eclass.classroom_name">
+        <button id="btn-create" class="btn btn-primary" data-i18n="eclass.create">????</button>
       </div>
     </builtin-card>
 
     <builtin-data-view id="classroom-view" view="cards" page-size="20"></builtin-data-view>
   </section>
   <builtin-card slot="secondary">
-    <div slot="header"><strong id="context-title">教室上下文</strong></div>
+    <div slot="header"><strong id="context-title">??????????</strong></div>
     <builtin-metadata-list id="classroom-context" columns="1" compact></builtin-metadata-list>
   </builtin-card>
 </builtin-app-shell>
@@ -43,18 +45,18 @@
 
 <script type="module">
 import { BuiltinToast } from '/shared/components.js?v=20260429-2';
-import { createPageBootstrap } from '/shared/page-bootstrap.js?v=20260429-2';
+import { createEClassPageShell } from './page-shell.js?v=20260429-2';
 
 const copy = {
   'zh-cn': {
-    eyebrow: '老师端教室',
-    title: '我的教室',
-    lead: '创建教室、查看成员数量，并从同一页进入成员管理抽屉。',
-    back: '返回老师端',
-    contextTitle: '教室上下文',
-    classLabel: '教室数量',
-    schoolLabel: '学校 ID',
-    selectedLabel: '当前管理',
+    eyebrow: '????????',
+    title: '??????',
+    lead: '????????????????????????????????????????',
+    back: '?????????',
+    contextTitle: '??????????',
+    classLabel: '????????',
+    schoolLabel: '?У ID',
+    selectedLabel: '???????',
   },
   en: {
     eyebrow: 'Teacher Classrooms',
@@ -68,7 +70,7 @@ const copy = {
   }
 };
 
-const shell = createPageBootstrap({
+const shell = createEClassPageShell({
   pageTitleKey: 'eclass.my_classrooms',
   translationPath: '/translate.json?v=20260429-2',
   validateRole: (role) => role === 'teacher',
@@ -113,7 +115,7 @@ function applyShellCopy() {
     { label: labels.back, href: 'teacher.html' },
     { label: labels.title },
   ];
-  appShell.userMenuItems = [{ label: currentLang === 'en' ? 'Sign out' : '退出', action: 'logout' }];
+  appShell.userMenuItems = [{ label: currentLang === 'en' ? 'Sign out' : '???', action: 'logout' }];
   $('context-title').textContent = labels.contextTitle;
 }
 
@@ -121,8 +123,8 @@ function updateContext(total) {
   lastClassroomCount = total;
   $('classroom-context').items = [
     { icon: 'bank', label: d().classLabel, value: String(total) },
-    { icon: 'bank', label: d().schoolLabel, value: schoolId || '—' },
-    { icon: 'team', label: d().selectedLabel, value: currentClassId || '—' },
+    { icon: 'bank', label: d().schoolLabel, value: schoolId || '??' },
+    { icon: 'team', label: d().selectedLabel, value: currentClassId || '??' },
   ];
 }
 
@@ -195,7 +197,7 @@ async function loadClassrooms() {
     columns: [
       { key: 'name', label: nameLabel },
       { key: 'memberCount', label: memberCountLabel },
-      { key: 'action', label: manageLabel, allowHtml: true, formatter: () => `<span style="color:var(--builtin-primary);">${manageLabel} →</span>` }
+      { key: 'action', label: manageLabel, allowHtml: true, formatter: () => `<span style="color:var(--builtin-primary);">${manageLabel} ??</span>` }
     ]
   });
 }

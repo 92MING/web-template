@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Component Library</title>
   <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css">
-  <script type="module" src="/shared/components.js"></script>
-  <script type="module" src="/shared/templates.js?v=20260429-4"></script>
-  <script type="module" src="/gallery-shell.js?v=20260501-1"></script>
+  <script type="module" src="/gallery-components.js?v=20260505-19"></script>
+  <script type="module" src="/gallery-shell.js?v=20260505-13"></script>
   <style>
     :root {
       --gallery-bg: #f3f4f6;
@@ -29,7 +28,7 @@
       color: var(--gallery-text);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .gallery-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .gallery-container { max-width: 100%; margin: 0 auto; padding: 20px; }
     .gallery-section {
       background: var(--gallery-surface);
       border: 1px solid var(--gallery-border);
@@ -56,7 +55,7 @@
       box-sizing: border-box;
     }
     .gallery-card.gallery-card-wide {
-      grid-column: span 2;
+      grid-column: 1 / -1;
     }
     .gallery-card-title {
       font-size: 13px; font-weight: 650; color: var(--gallery-muted);
@@ -66,10 +65,17 @@
     .gallery-controls {
       display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
     }
-    .gallery-controls button {
+    .gallery-controls button,
+    .gallery-controls select,
+    .gallery-controls .dropdown-trigger {
       padding: 4px 10px; border-radius: 6px; border: 1px solid var(--gallery-border);
       background: transparent; color: var(--gallery-text); font-size: 12px; cursor: pointer;
     }
+    .gallery-controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--gallery-muted); font-size: 12px; }
+    .gallery-controls builtin-dropdown { display: inline-flex; }
+    .gallery-controls .dropdown-trigger::after { content: "▾"; margin-left: 6px; opacity: 0.7; }
+    .gallery-controls .dropdown-menu { display: grid; gap: 4px; min-width: 132px; }
+    .gallery-controls .dropdown-menu button { width: 100%; justify-content: flex-start; }
     .gallery-controls button.active {
       background: var(--builtin-primary, #2563eb); color: #fff; border-color: var(--builtin-primary, #2563eb);
     }
@@ -138,23 +144,26 @@
         width: 100% !important;
         min-width: 0;
       }
-      .gallery-grid { grid-template-columns: 1fr; }
-      .template-grid { grid-template-columns: 1fr 1fr; }
-    }
       .global-bar .right builtin-user-menu {
         grid-column: 1 / -1;
         justify-self: start;
         max-width: 100%;
       }
+      .gallery-grid { grid-template-columns: minmax(0, 1fr); }
+      .gallery-card.gallery-card-wide { grid-column: auto; }
+      .template-grid { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="gallery-container">
     <builtin-tabs type="underline" active="layout" items='[
-      {"label":"Layout","value":"layout"},{"label":"Navigation","value":"navigation"},{"label":"Data Display","value":"data-display"},
-      {"label":"Forms","value":"forms"},{"label":"Feedback","value":"feedback"},{"label":"Media","value":"media"},
-      {"label":"AI","value":"ai"},{"label":"Advanced","value":"advanced"},{"label":"Commerce","value":"commerce"},
-      {"label":"Social","value":"social"},{"label":"Editors","value":"editors"},{"label":"Cloud","value":"cloud"}
+      {"label":"Layout","value":"layout"},{"label":"Navigation","value":"navigation"},{"label":"Display","value":"display"},
+      {"label":"Forms","value":"forms"},{"label":"Feedback","value":"feedback"},{"label":"Galleries","value":"galleries"},
+      {"label":"Players","value":"players"},{"label":"AI","value":"ai"},{"label":"Calendars","value":"calendars"},
+      {"label":"Workflow","value":"workflow"},{"label":"Visualization","value":"visualization"},{"label":"Commerce","value":"commerce"},
+      {"label":"Social","value":"social"},{"label":"Editors","value":"editors"},{"label":"Creative","value":"creative-tools"},
+      {"label":"Utilities","value":"utilities"},{"label":"Cloud","value":"cloud"}
     ]'>
       <!-- ========== LAYOUT ========== -->
       <div data-tab="layout">
@@ -229,6 +238,43 @@
                 <button class="builtin-primary">Create New</button>
               </builtin-empty-state>
             </div>
+
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-app-shell</div>
+              <builtin-app-shell style="min-height:220px;border:1px solid var(--gallery-border);border-radius:10px;overflow:hidden;">
+                <div slot="header" style="padding:10px;font-weight:700;">Workspace</div>
+                <div slot="sidebar" style="padding:10px;color:var(--gallery-muted);">Navigation</div>
+                <div style="padding:14px;">App shell content area</div>
+              </builtin-app-shell>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-page-header</div>
+              <builtin-page-header title="Projects" subtitle="Manage active work" eyebrow="Workspace"></builtin-page-header>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-navbar</div>
+              <builtin-navbar brand="Gallery" items='[{"label":"Docs","href":"#"},{"label":"Components","href":"#"}]'></builtin-navbar>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-footer</div>
+              <builtin-footer brand="Gallery Kit" links='[{"label":"Docs","href":"#"},{"label":"Support","href":"#"}]'></builtin-footer>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-hero-section</div>
+              <builtin-hero-section title="Build faster" subtitle="Reusable components with theme support" cta-label="Start" image="https://picsum.photos/seed/hero/960/360"></builtin-hero-section>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-sticky-header</div>
+              <builtin-sticky-header><div style="padding:10px;font-weight:700;">Sticky header content</div></builtin-sticky-header>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-login-panel</div>
+              <builtin-login-panel title="Sign in" subtitle="Use your workspace account"></builtin-login-panel>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-ad-sidebar</div>
+              <builtin-ad-sidebar title="Sponsored" dismissible="false" ads='[{"title":"Design System","description":"Reusable UI blocks with dark mode","image":"https://picsum.photos/seed/ad-sidebar/480/260","href":"#"}]'></builtin-ad-sidebar>
+            </div>
           </div>
         </div>
       </div>
@@ -283,6 +329,7 @@
             <!-- Sidebar -->
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-sidebar</div>
+              <builtin-sidebar style="display:none" aria-hidden="true" mode="mini" items='[{"label":"Main","children":[{"label":"Dashboard","icon":"dashboard","active":true},{"label":"Files","icon":"folder"}]}]'></builtin-sidebar>
               <div style="font-size:12px;color:var(--gallery-muted);line-height:1.5;">
                 Fixed-position app sidebar. Best previewed inside a real
                 template layout — see
@@ -290,14 +337,42 @@
                 or <a href="/pages/file-manager.html" style="color:var(--builtin-primary,#2563eb);text-decoration:none;font-weight:600;">File Manager</a>.
               </div>
             </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-search-bar</div>
+              <builtin-search-bar placeholder="Search everything"></builtin-search-bar>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-search-command-palette</div>
+              <builtin-search-command-palette commands='[{"label":"Open dashboard","value":"dashboard"},{"label":"Create file","value":"create"}]'></builtin-search-command-palette>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-dropdown</div>
+              <builtin-dropdown>
+                <button slot="trigger">Open menu</button>
+                <button style="display:block;width:100%;padding:8px 12px;text-align:left;">Profile</button>
+                <button style="display:block;width:100%;padding:8px 12px;text-align:left;">Settings</button>
+              </builtin-dropdown>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-user-menu</div>
+              <builtin-user-menu name="Demo User" email="demo@example.com" avatar="https://i.pravatar.cc/120?u=demo"></builtin-user-menu>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-lang-switcher</div>
+              <builtin-lang-switcher></builtin-lang-switcher>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-theme-toggle</div>
+              <builtin-theme-toggle></builtin-theme-toggle>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- ========== DATA DISPLAY ========== -->
-      <div data-tab="data-display">
+      <div data-tab="display">
         <div class="gallery-section">
-          <div class="gallery-section-title"><builtin-icon name="bar-chart" size="20" variant="outlined"></builtin-icon> Data Display</div>
+          <div class="gallery-section-title"><builtin-icon name="bar-chart" size="20" variant="outlined"></builtin-icon> Display</div>
           <div class="gallery-grid">
             <!-- Badge & Chip -->
             <div class="gallery-card">
@@ -314,20 +389,6 @@
                 <builtin-chip text="Angular" closable></builtin-chip>
                 <builtin-chip text="Lit" closable></builtin-chip>
               </div>
-            </div>
-
-            <!-- Tag Cloud -->
-            <div class="gallery-card">
-              <div class="gallery-card-title">builtin-tag-cloud</div>
-              <builtin-tag-cloud selectable multiple selected='["lit","theme"]' tags='[
-                {"text":"components","value":"components","weight":32,"color":"#2563eb"},
-                {"text":"lit","value":"lit","weight":24,"color":"#7c3aed"},
-                {"text":"theme","value":"theme","weight":20,"color":"#16a34a"},
-                {"text":"i18n","value":"i18n","weight":12,"color":"#0891b2"},
-                {"text":"dashboard","value":"dashboard","weight":18,"color":"#d97706"},
-                {"text":"forms","value":"forms","weight":10,"color":"#dc2626"},
-                {"text":"media","value":"media","weight":15,"color":"#be123c"}
-              ]'></builtin-tag-cloud>
             </div>
 
             <!-- Stat Card -->
@@ -386,6 +447,42 @@
                 ]}
               ]'></builtin-tree-view>
             </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-avatar</div>
+              <builtin-avatar name="Ada Lovelace" src="https://i.pravatar.cc/120?u=ada" status="online"></builtin-avatar>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-data-view</div>
+              <builtin-data-view page-size="5" columns='[{"key":"name","label":"Name"},{"key":"status","label":"Status"},{"key":"owner","label":"Owner"}]' data='[
+                {"id":"p1","name":"Design System","status":"Active","owner":"Ada"},
+                {"id":"p2","name":"Gallery Audit","status":"Review","owner":"Lin"},
+                {"id":"p3","name":"Media Tools","status":"Building","owner":"Mira"}
+              ]'></builtin-data-view>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-detail-header</div>
+              <builtin-detail-header title="Invoice #1024" subtitle="Paid · Updated today"></builtin-detail-header>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-diff-viewer</div>
+              <builtin-diff-viewer old-text="function total(items) {
+  return items.length;
+}
+
+console.log(total(cart));" new-text="function total(items) {
+  return items.reduce((sum, item) => sum + item.qty, 0);
+}
+
+console.log(total(cart));"></builtin-diff-viewer>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-spreadsheet</div>
+              <builtin-spreadsheet columns='["A","B","C"]' data='[["Name","Qty","Price"],["Pen",3,2],["Notebook",2,8]]'></builtin-spreadsheet>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-metadata-list</div>
+              <builtin-metadata-list items='[{"label":"Owner","value":"Design Team"},{"label":"Updated","value":"Today"}]'></builtin-metadata-list>
+            </div>
           </div>
         </div>
       </div>
@@ -395,6 +492,18 @@
         <div class="gallery-section">
           <div class="gallery-section-title"><builtin-icon name="form" size="20" variant="outlined"></builtin-icon> Forms</div>
           <div class="gallery-grid">
+            <!-- Date Picker -->
+            <div class="gallery-card" style="grid-column:1 / -1;min-height:390px;">
+              <div class="gallery-card-title">builtin-date-picker</div>
+              <builtin-date-picker value="2024-06-15" style="max-width:360px;"></builtin-date-picker>
+            </div>
+
+            <!-- Time Picker -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-time-picker</div>
+              <builtin-time-picker value="14:30"></builtin-time-picker>
+            </div>
+
             <!-- Rating -->
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-rating</div>
@@ -423,15 +532,6 @@
               <builtin-color-picker value="#2563eb"></builtin-color-picker>
             </div>
 
-            <!-- Date & Time Pickers -->
-            <div class="gallery-card">
-              <div class="gallery-card-title">builtin-date-picker &amp; builtin-time-picker</div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <builtin-date-picker value="2024-06-15" style="flex:1;min-width:140px;"></builtin-date-picker>
-                <builtin-time-picker value="14:30" style="flex:1;min-width:120px;"></builtin-time-picker>
-              </div>
-            </div>
-
             <!-- Input Tags -->
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-input-tags</div>
@@ -442,6 +542,34 @@
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-input-otp</div>
               <builtin-input-otp length="6"></builtin-input-otp>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-command-palette</div>
+              <builtin-command-palette commands='[{"label":"New document","value":"new"},{"label":"Export","value":"export"}]'></builtin-command-palette>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-contact-form</div>
+              <builtin-contact-form></builtin-contact-form>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-input-credit-card</div>
+              <builtin-input-credit-card></builtin-input-credit-card>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-file-uploader</div>
+              <builtin-file-uploader multiple accept="image/*,.pdf"></builtin-file-uploader>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-filter-bar</div>
+              <builtin-filter-bar filters='[{"key":"status","label":"Status","options":["Open","Closed"],"multi":true},{"key":"owner","label":"Owner","options":["Me","Team"]}]' active='{"status":["Open"],"owner":["Team"]}'></builtin-filter-bar>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-drag-tiles</div>
+              <builtin-drag-tiles items='[{"id":"a","label":"Plan"},{"id":"b","label":"Build"},{"id":"c","label":"Ship"}]'></builtin-drag-tiles>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-schema-form</div>
+              <builtin-schema-form schema='{"fields":[{"name":"name","label":"Name","type":"text"},{"name":"role","label":"Role","type":"select","options":["Admin","Editor"]}]}' value='{"name":"Demo","role":"Admin"}'></builtin-schema-form>
             </div>
           </div>
         </div>
@@ -455,6 +583,7 @@
             <!-- Toast triggers -->
             <div class="gallery-card" id="toast-card">
               <div class="gallery-card-title">builtin-toast</div>
+              <builtin-toast message="Saved changes" type="success" position="bottom-right"></builtin-toast>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button data-toast="info" data-message="Info toast message">Info</button>
                 <button data-toast="success" data-message="Success toast message">Success</button>
@@ -486,6 +615,7 @@
             <!-- Confirm trigger -->
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-confirm</div>
+              <builtin-confirm title="Delete item?" message="This preview instance is mounted but opened by the button below." confirm-label="Delete" cancel-label="Keep" dangerous type="danger"></builtin-confirm>
               <button id="confirm-open-btn">Show Confirm</button>
               <div id="confirm-result" style="margin-top:8px;font-size:13px;color:var(--gallery-muted);"></div>
             </div>
@@ -500,16 +630,57 @@
                 <button data-drawer="bottom">Bottom</button>
               </div>
             </div>
+
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-cookie-banner</div>
+              <builtin-cookie-banner message="We use cookies to improve this demo." accept-label="Accept"></builtin-cookie-banner>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-notification-badge</div>
+              <builtin-notification-badge count="8"><button>Inbox</button></builtin-notification-badge>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-notification-center</div>
+              <builtin-notification-center notifications='[{"title":"Build finished","message":"All checks passed","time":"now","type":"success"},{"title":"Review requested","message":"Open pull request","time":"5m ago"}]'></builtin-notification-center>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ========== MEDIA ========== -->
-      <div data-tab="media">
+      <!-- ========== PLAYERS ========== -->
+      <div data-tab="players">
         <div class="gallery-section">
-          <div class="gallery-section-title"><builtin-icon name="picture" size="20" variant="outlined"></builtin-icon> Media</div>
+          <div class="gallery-section-title"><builtin-icon name="play-circle" size="20" variant="outlined"></builtin-icon> Players</div>
           <div class="gallery-grid">
-            <!-- Image Gallery -->
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-audio-player</div>
+              <div class="gallery-controls" id="audio-player-controls">
+                <button data-audio-toggle="showWaveform" class="active">waveform</button>
+                <button data-audio-toggle="showSpeed" class="active">speed</button>
+                <button data-audio-toggle="showLoop" class="active">loop</button>
+                <button data-audio-toggle="showDownload" class="active">download</button>
+              </div>
+              <builtin-audio-player id="gallery-audio-player" show-waveform show-speed show-loop show-download src="/test-media/test.mp3" title="Sample Track" artist="Gallery demo"></builtin-audio-player>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-video-player</div>
+              <builtin-video-player id="gallery-video-player" show-quality show-transform show-captions show-loop src="/test-media/sample-video.mp4" title="Sample Video" sources='[
+                {"src":"/test-media/sample-video.mp4","label":"1080p"},
+                {"src":"/test-media/sample-video.mp4","label":"720p"},
+                {"src":"/test-media/sample-video.mp4","label":"480p"}
+              ]' tracks='[
+                {"kind":"captions","label":"Demo captions","srclang":"en","src":"data:text/vtt,WEBVTT%0A%0A00:00.000%20--%3E%2000:02.000%0AGallery%20video%20player%20captions","default":true}
+              ]'></builtin-video-player>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== GALLERIES ========== -->
+      <div data-tab="galleries">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="picture" size="20" variant="outlined"></builtin-icon> Galleries</div>
+          <div class="gallery-grid">
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-image-gallery</div>
               <builtin-image-gallery images='[
@@ -520,43 +691,62 @@
               ]'></builtin-image-gallery>
             </div>
 
-            <!-- Audio Player -->
-            <div class="gallery-card">
-              <div class="gallery-card-title">builtin-audio-player</div>
-              <builtin-audio-player title="Sample Track"></builtin-audio-player>
-            </div>
-
-            <!-- Scroll Snap Carousel -->
             <div class="gallery-card gallery-card-wide">
-              <div class="gallery-card-title">builtin-scroll-snap-carousel</div>
-              <builtin-scroll-snap-carousel auto-play items='[
-                {"id":"1","image":"https://picsum.photos/seed/s1/600/240","alt":"Slide 1"},
-                {"id":"2","image":"https://picsum.photos/seed/s2/600/240","alt":"Slide 2"},
-                {"id":"3","image":"https://picsum.photos/seed/s3/600/240","alt":"Slide 3"}
-              ]'></builtin-scroll-snap-carousel>
+              <div class="gallery-card-title">builtin-carousel</div>
+              <builtin-carousel auto-play show-dots show-arrows draggable
+                items='[
+                  {"id":"1","image":"https://picsum.photos/seed/s1/600/240","alt":"Slide 1"},
+                  {"id":"2","image":"https://picsum.photos/seed/s2/600/240","alt":"Slide 2"},
+                  {"id":"3","image":"https://picsum.photos/seed/s3/600/240","alt":"Slide 3"}
+                ]'>
+              </builtin-carousel>
             </div>
 
-            <!-- Testimonials Carousel -->
             <div class="gallery-card gallery-card-wide">
-              <div class="gallery-card-title">builtin-testimonials-carousel</div>
-              <builtin-testimonials-carousel auto-play testimonials='[
-                {"quote":"This platform transformed how we build products.","author":"Jane Doe","role":"CTO","rating":5},
-                {"quote":"Incredible developer experience and fast iteration cycles.","author":"John Smith","role":"Lead Dev","rating":4},
-                {"quote":"The component library saved us months of work.","author":"Alice Wang","role":"PM","rating":5}
-              ]'></builtin-testimonials-carousel>
+              <div class="gallery-card-title">builtin-carousel (testimonials)</div>
+              <builtin-carousel id="gallery-testimonials" auto-play show-dots loop draggable
+                items='[
+                  {"id":"1","image":"https://picsum.photos/seed/t1/600/240","alt":"Jane Doe"},
+                  {"id":"2","image":"https://picsum.photos/seed/t2/600/240","alt":"John Smith"},
+                  {"id":"3","image":"https://picsum.photos/seed/t3/600/240","alt":"Alice Wang"}
+                ]'>
+              </builtin-carousel>
             </div>
 
-            <!-- Carousel (multi-slide) -->
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-carousel (multi-slide)</div>
               <div class="gallery-controls" id="carousel-controls">
                 <button data-visible="1" class="active">1 slide</button>
                 <button data-visible="2">2 slides</button>
                 <button data-visible="3">3 slides</button>
-                <button id="carousel-loop">loop: off</button>
+                <button id="carousel-loop" class="active">loop: on</button>
                 <button id="carousel-fade">fade: off</button>
+                <builtin-dropdown placement="bottom">
+                  <button slot="trigger" id="carousel-transition-trigger" class="dropdown-trigger">transition: slide</button>
+                  <div class="dropdown-menu">
+                    <button type="button" data-carousel-menu="transition" data-value="slide">slide</button>
+                    <button type="button" data-carousel-menu="transition" data-value="fade">fade</button>
+                    <button type="button" data-carousel-menu="transition" data-value="none">none</button>
+                  </div>
+                </builtin-dropdown>
+                <builtin-dropdown placement="bottom">
+                  <button slot="trigger" id="carousel-arrows-trigger" class="dropdown-trigger">arrows: floating</button>
+                  <div class="dropdown-menu">
+                    <button type="button" data-carousel-menu="arrows" data-value="floating">floating</button>
+                    <button type="button" data-carousel-menu="arrows" data-value="edge">edge</button>
+                    <button type="button" data-carousel-menu="arrows" data-value="minimal">minimal</button>
+                  </div>
+                </builtin-dropdown>
+                <builtin-dropdown placement="bottom">
+                  <button slot="trigger" id="carousel-dots-trigger" class="dropdown-trigger">dots: pill</button>
+                  <div class="dropdown-menu">
+                    <button type="button" data-carousel-menu="dots" data-value="pill">pill</button>
+                    <button type="button" data-carousel-menu="dots" data-value="line">line</button>
+                    <button type="button" data-carousel-menu="dots" data-value="numbered">numbered</button>
+                  </div>
+                </builtin-dropdown>
               </div>
-              <builtin-carousel id="gallery-carousel" visible="1" gap="12" show-dots show-arrows draggable
+              <builtin-carousel id="gallery-carousel" visible="1" gap="12" auto-play loop show-dots show-arrows draggable
                 items='[
                   {"id":"1","image":"https://picsum.photos/seed/c1/320/180","alt":"1"},
                   {"id":"2","image":"https://picsum.photos/seed/c2/320/180","alt":"2"},
@@ -592,16 +782,31 @@
               <div class="gallery-card-title">builtin-ai-code-block</div>
               <builtin-ai-code-block language="python" code="def greet(name):\n    return f'Hello, {name}!'\n\nprint(greet('World'))"></builtin-ai-code-block>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-ai-response-stream</div>
+              <builtin-ai-response-stream typing content="**Streaming response** preview with `inline code` and markdown support.
+
+```js
+const status = 'ready';
+```"></builtin-ai-response-stream>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-ai-chatbot</div>
+              <builtin-ai-chatbot typing messages='[
+                {"role":"assistant","content":"I can inspect shared components and summarize problems."},
+                {"role":"user","content":"Check the media editors."},
+                {"role":"assistant","content":"Video editor now uses a real multi-track timeline surface with draggable clips."}
+              ]'></builtin-ai-chatbot>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ========== ADVANCED ========== -->
-      <div data-tab="advanced">
+      <!-- ========== CALENDARS ========== -->
+      <div data-tab="calendars">
         <div class="gallery-section">
-          <div class="gallery-section-title"><builtin-icon name="appstore" size="20" variant="outlined"></builtin-icon> Advanced</div>
+          <div class="gallery-section-title"><builtin-icon name="calendar" size="20" variant="outlined"></builtin-icon> Calendars</div>
           <div class="gallery-grid">
-            <!-- Calendar -->
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-calendar</div>
               <builtin-calendar events='[
@@ -609,8 +814,19 @@
                 {"start":"2024-06-20","title":"Review","allDay":true}
               ]'></builtin-calendar>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-booking-calendar</div>
+              <builtin-booking-calendar resources='[{"id":"room-a","name":"Room A"},{"id":"room-b","name":"Room B"}]' bookings='[{"resourceId":"room-a","start":"2026-05-05T09:00:00","end":"2026-05-05T10:00:00","title":"Planning"}]'></builtin-booking-calendar>
+            </div>
+          </div>
+        </div>
+      </div>
 
-            <!-- Kanban -->
+      <!-- ========== WORKFLOW ========== -->
+      <div data-tab="workflow">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="appstore" size="20" variant="outlined"></builtin-icon> Workflow</div>
+          <div class="gallery-grid">
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-kanban-board</div>
               <builtin-kanban-board id="gallery-kanban"
@@ -628,8 +844,62 @@
                 ]'>
               </builtin-kanban-board>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-flow-designer</div>
+              <builtin-flow-designer
+                nodes='[
+                  {"id":"start","type":"start","x":60,"y":80,"label":"Start","inputs":0,"outputs":1},
+                  {"id":"process","type":"process","x":260,"y":80,"label":"Validate","inputs":1,"outputs":1},
+                  {"id":"decision","type":"decision","x":460,"y":80,"label":"Pass?","inputs":1,"outputs":2},
+                  {"id":"end","type":"end","x":680,"y":80,"label":"Done","inputs":1,"outputs":0}
+                ]'
+                edges='[
+                  {"from":"start","to":"process","fromPort":"out-0","toPort":"in-0"},
+                  {"from":"process","to":"decision","fromPort":"out-0","toPort":"in-0"},
+                  {"from":"decision","to":"end","fromPort":"out-0","toPort":"in-0"}
+                ]'>
+              </builtin-flow-designer>
+            </div>
+          </div>
+        </div>
+      </div>
 
-            <!-- Chart Wrapper -->
+      <!-- ========== VISUALIZATION ========== -->
+      <div data-tab="visualization">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="bar-chart" size="20" variant="outlined"></builtin-icon> Visualization</div>
+          <div class="gallery-grid">
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-tag-cloud</div>
+              <builtin-tag-cloud selectable multiple selected='["lit","theme"]' tags='[
+                {"text":"components","value":"components","weight":32,"color":"#2563eb"},
+                {"text":"lit","value":"lit","weight":24,"color":"#7c3aed"},
+                {"text":"theme","value":"theme","weight":20,"color":"#16a34a"},
+                {"text":"i18n","value":"i18n","weight":12,"color":"#0891b2"},
+                {"text":"dashboard","value":"dashboard","weight":18,"color":"#d97706"},
+                {"text":"forms","value":"forms","weight":10,"color":"#dc2626"},
+                {"text":"media","value":"media","weight":15,"color":"#be123c"}
+              ]'></builtin-tag-cloud>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-word-cloud</div>
+              <builtin-word-cloud
+                style="height:260px;"
+                words='[
+                  ["knowledge", 80], ["learning", 65], ["education", 60],
+                  ["wisdom", 55], ["student", 50], ["school", 45],
+                  ["proficiency", 42], ["development", 40], ["value", 38],
+                  ["comprehension", 35], ["scholarship", 33], ["science", 32],
+                  ["theory", 30], ["practice", 28], ["insight", 27],
+                  ["discipline", 26], ["curriculum", 25], ["academics", 24],
+                  ["enlightenment", 23], ["genius", 22], ["aptitude", 21],
+                  ["grasp", 20], ["lore", 19], ["notion", 18],
+                  ["dogma", 17], ["doctrine", 16], ["tuition", 15]
+                ]'
+                shape="circle"
+                clickable
+              ></builtin-word-cloud>
+            </div>
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-chart-wrapper</div>
               <div class="gallery-controls" id="chart-controls">
@@ -639,17 +909,13 @@
                 <button data-type="doughnut">doughnut</button>
               </div>
               <builtin-chart-wrapper id="gallery-chart" type="bar"
-                data='{"labels":["Jan","Feb","Mar","Apr","May","Jun"],"datasets":[{"label":"Sales","data":[12,19,8,15,22,30],"backgroundColor":"rgba(37,99,235,0.6)"}]}'>
+                data='{"labels":["Jan","Feb","Mar","Apr","May","Jun"],"datasets":[{"label":"Sales","data":[12,19,8,15,22,30]}]}'>
               </builtin-chart-wrapper>
             </div>
-
-            <!-- QR Code -->
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-qr-code-display</div>
               <builtin-qr-code-display value="https://github.com/project-template" label="Scan to visit"></builtin-qr-code-display>
             </div>
-
-            <!-- Mermaid Diagram -->
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-mermaid-diagram</div>
               <builtin-mermaid-diagram definition='
@@ -724,6 +990,10 @@ graph TD
                 {"key":"Support","label":"Support"}
               ]'></builtin-comparison-table>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-product-grid</div>
+              <builtin-product-grid products='[{"id":"lamp","title":"Desk Lamp","price":"$48","image":"https://picsum.photos/seed/lamp/320/220","rating":4,"sales":"1.2k"},{"id":"notebook","title":"Notebook Set","price":"$18","image":"https://picsum.photos/seed/book/320/220","rating":5,"sales":"860"}]' recommendations='[{"id":"tray","title":"Cable Tray","price":"$24","image":"https://picsum.photos/seed/tray/160/160"},{"id":"stand","title":"Laptop Stand","price":"$38","image":"https://picsum.photos/seed/stand/160/160"}]'></builtin-product-grid>
+            </div>
           </div>
         </div>
       </div>
@@ -741,25 +1011,6 @@ graph TD
                   {"text":"Dark mode support","color":"#34d399"},{"text":"Lit based","color":"#f472b6"},{"text":"Responsive","color":"#a78bfa"}
                 ]' speed="80" density="normal" style="height:100%;"></builtin-danmaku>
               </div>
-            </div>
-            <div class="gallery-card gallery-card-wide">
-              <div class="gallery-card-title">builtin-word-cloud</div>
-              <builtin-word-cloud
-                style="height:260px;"
-                words='[
-                  ["knowledge", 80], ["learning", 65], ["education", 60],
-                  ["wisdom", 55], ["student", 50], ["school", 45],
-                  ["proficiency", 42], ["development", 40], ["value", 38],
-                  ["comprehension", 35], ["scholarship", 33], ["science", 32],
-                  ["theory", 30], ["practice", 28], ["insight", 27],
-                  ["discipline", 26], ["curriculum", 25], ["academics", 24],
-                  ["enlightenment", 23], ["genius", 22], ["aptitude", 21],
-                  ["grasp", 20], ["lore", 19], ["notion", 18],
-                  ["dogma", 17], ["doctrine", 16], ["tuition", 15]
-                ]'
-                shape="circle"
-                clickable
-              ></builtin-word-cloud>
             </div>
             <div class="gallery-card">
               <div class="gallery-card-title">builtin-social-blog-card</div>
@@ -788,25 +1039,106 @@ graph TD
                 ]'
               ></builtin-comment-section>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-activity-feed</div>
+              <builtin-activity-feed items='[{"actor":"Ada","action":"created","target":"Project brief","time":"2m ago"},{"actor":"Lin","action":"commented","target":"Design review","time":"1h ago"}]'></builtin-activity-feed>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-newsletter</div>
+              <builtin-newsletter title="Join the newsletter" description="Monthly component updates."></builtin-newsletter>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-social-login</div>
+              <builtin-social-login providers='["github","google","microsoft"]'></builtin-social-login>
+            </div>
+            <div class="gallery-card">
+              <div class="gallery-card-title">builtin-testimonial-card</div>
+              <builtin-testimonial-card quote="The component kit saved us days." author="Mira Chen" role="Product Lead" avatar="https://i.pravatar.cc/120?u=mira"></builtin-testimonial-card>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ========== EDITORS & TOOLS ========== -->
+      <!-- ========== EDITORS ========== -->
       <div data-tab="editors">
         <div class="gallery-section">
-          <div class="gallery-section-title"><builtin-icon name="tool" size="20" variant="outlined"></builtin-icon> Editors &amp; Tools</div>
+          <div class="gallery-section-title"><builtin-icon name="edit" size="20" variant="outlined"></builtin-icon> Editors</div>
+          <div class="gallery-grid">
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-code-editor</div>
+              <div class="gallery-controls" id="code-editor-controls">
+                <label>
+                  <span data-code-editor-language-label>语言</span>
+                  <select id="code-editor-language">
+                    <option value="javascript" selected>JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="python">Python</option>
+                    <option value="json">JSON</option>
+                    <option value="yaml">YAML</option>
+                    <option value="markdown">Markdown</option>
+                    <option value="html">HTML</option>
+                    <option value="sql">SQL</option>
+                    <option value="sh">Shell</option>
+                  </select>
+                </label>
+              </div>
+              <builtin-code-editor id="gallery-code-editor" language="javascript" line-numbers height="320px" value="const message = 'hello';\nconsole.log(message);\n\nfunction update(value) {\n  return value.toUpperCase();\n}"></builtin-code-editor>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-json-editor</div>
+              <div class="gallery-controls" id="json-editor-controls"><button data-json-mode="tree" class="active">tree</button><button data-json-mode="text">text</button></div>
+              <builtin-json-editor id="gallery-json-editor" value='{"name":"Gallery","enabled":true,"items":[1,2,3]}'></builtin-json-editor>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-markdown-editor</div>
+              <div class="gallery-controls" id="markdown-editor-controls"><button data-markdown-mode="split" class="active">split</button><button data-markdown-mode="preview">preview</button><button data-markdown-mode="edit">edit</button></div>
+              <builtin-markdown-editor id="gallery-markdown-editor" value="# Hello&#10;&#10;This is **markdown**."></builtin-markdown-editor>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-rich-text-editor</div>
+              <builtin-rich-text-editor value="<p><strong>Hello</strong> rich text editor.</p>"></builtin-rich-text-editor>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== CREATIVE TOOLS ========== -->
+      <div data-tab="creative-tools">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="tool" size="20" variant="outlined"></builtin-icon> Creative Tools</div>
           <div class="gallery-grid">
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-video-editor</div>
-              <builtin-video-editor src="/test-media/gallery-sample-video.mp4" audio-src="/test-media/sample-video-audio.wav" duration="5" cuts='[
-                {"start":0.5,"end":2,"label":"Intro"},{"start":2.5,"end":4.5,"label":"Main"}
-              ]'></builtin-video-editor>
+              <div class="gallery-controls" id="video-editor-controls"><button data-video-editor-toggle="snap" class="active">snap</button><button id="video-editor-export">export</button></div>
+              <builtin-video-editor id="gallery-video-editor" src="/test-media/sample-video.mp4" audio-src="/test-media/test.mp3" duration="5"></builtin-video-editor>
             </div>
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-audio-editor</div>
-              <builtin-audio-editor src="/test-media/gallery-sample-audio.wav" selection='{"start":0.2,"end":1.2}'></builtin-audio-editor>
+              <div class="gallery-controls" id="audio-editor-controls"><button id="audio-editor-trim">trim</button><button id="audio-editor-export">export</button></div>
+              <builtin-audio-editor id="gallery-audio-editor" src="/test-media/test.mp3" selection='{"start":0.2,"end":1.2}'></builtin-audio-editor>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-advanced-painter</div>
+              <div class="gallery-controls" id="advanced-painter-controls"><button id="advanced-painter-export">export png</button><button id="advanced-painter-json">export json</button></div>
+              <builtin-advanced-painter
+                id="gallery-advanced-painter"
+                height="620px"
+              ></builtin-advanced-painter>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-whiteboard</div>
+              <div class="gallery-controls" id="whiteboard-controls"><button data-whiteboard-tools="all" class="active">all</button><button data-whiteboard-tools="pen,pencil,erase,spray">draw</button><button data-whiteboard-tools="fill,magic">paint</button><button data-whiteboard-tools="select,rect,circle,text">shape</button></div>
+              <builtin-whiteboard id="gallery-whiteboard" mode="embedded" style="min-height:320px;"></builtin-whiteboard>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== UTILITIES ========== -->
+      <div data-tab="utilities">
+        <div class="gallery-section">
+          <div class="gallery-section-title"><builtin-icon name="tool" size="20" variant="outlined"></builtin-icon> Utilities</div>
+          <div class="gallery-grid">
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-drag-upload-zone</div>
               <builtin-drag-upload-zone accept="image/*,.pdf" multiple max-size="10485760"></builtin-drag-upload-zone>
@@ -814,6 +1146,10 @@ graph TD
             <div class="gallery-card gallery-card-wide">
               <div class="gallery-card-title">builtin-document-previewer</div>
               <builtin-document-previewer type="txt" filename="readme.txt" content="This is a sample document preview. It supports PDF, TXT, MD, CODE, and DOC formats."></builtin-document-previewer>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-terminal-emulator</div>
+              <builtin-terminal-emulator output="Project gallery\n$ npm run demo\nshared components mounted\nType help for commands"></builtin-terminal-emulator>
             </div>
           </div>
         </div>
@@ -854,6 +1190,14 @@ graph TD
                 <div data-tab="settings">Settings content</div>
               </builtin-draggable-tabs>
             </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-file-browser</div>
+              <builtin-file-browser items='[{"name":"Designs","type":"folder"},{"name":"brief.pdf","type":"file","size":524288}]'></builtin-file-browser>
+            </div>
+            <div class="gallery-card gallery-card-wide">
+              <div class="gallery-card-title">builtin-member-manager-drawer</div>
+              <builtin-member-manager-drawer title="Class Members" show-remove current-title="Current" candidate-title="Candidates" members='[{"id":"ada","name":"Ada","role":"Owner","email":"ada@example.com"},{"id":"lin","name":"Lin","role":"Editor","email":"lin@example.com"}]' candidates='[{"id":"mira","name":"Mira","role":"Reviewer","email":"mira@example.com"},{"id":"kai","name":"Kai","role":"Student","email":"kai@example.com"}]'></builtin-member-manager-drawer>
+            </div>
           </div>
         </div>
       </div>
@@ -879,6 +1223,66 @@ graph TD
   <builtin-back-to-top></builtin-back-to-top>
 
   <script type="module">
+    const CODE_EDITOR_SAMPLES = {
+      javascript: "const message = 'hello';\nconsole.log(message);\n\nfunction update(value) {\n  return value.toUpperCase();\n}",
+      typescript: "type User = {\n  id: number;\n  name: string;\n};\n\nfunction greet(user: User): string {\n  return `Hello, ${user.name}`;\n}\n\nconsole.log(greet({ id: 1, name: 'Ada' }));",
+      python: "def greet(name: str) -> str:\n    return f\"Hello, {name}\"\n\nprint(greet(\"Ada\"))",
+      json: "{\n  \"name\": \"Gallery\",\n  \"enabled\": true,\n  \"items\": [1, 2, 3]\n}",
+      yaml: "name: Gallery\nenabled: true\nitems:\n  - 1\n  - 2\n  - 3",
+      markdown: "# Hello\n\nThis is **markdown** rendered as source.\n\n- alpha\n- beta\n- gamma",
+      html: "<section class=\"card\">\n  <h1>Hello</h1>\n  <p>Gallery code editor demo.</p>\n</section>",
+      sql: "select id, name\nfrom users\nwhere active = true\norder by created_at desc;",
+      sh: "echo \"hello\"\nfor file in src/*.js; do\n  echo \"$file\"\ndone",
+    };
+
+    const CODE_EDITOR_LABELS = {
+      en: {
+        language: 'language',
+      },
+      zh: {
+        language: '语言',
+      },
+    };
+
+    const JSON_EDITOR_MODE_LABELS = {
+      en: {
+        tree: 'tree',
+        text: 'text',
+      },
+      zh: {
+        tree: '树状',
+        text: '文本',
+      },
+    };
+
+    function getGalleryLanguage() {
+      return document.documentElement.lang?.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+    }
+
+    function applyCodeEditorControlLabels(lang = getGalleryLanguage()) {
+      const labels = CODE_EDITOR_LABELS[lang] || CODE_EDITOR_LABELS.en;
+      document.querySelectorAll('[data-code-editor-language-label]').forEach((label) => {
+        label.textContent = labels.language;
+      });
+    }
+
+    function applyCodeEditorLanguage(language) {
+      const editor = document.getElementById('gallery-code-editor');
+      const nextLanguage = CODE_EDITOR_SAMPLES[language] ? language : 'javascript';
+      if (!editor) return;
+      editor.language = nextLanguage;
+      editor.value = CODE_EDITOR_SAMPLES[nextLanguage];
+      const select = document.getElementById('code-editor-language');
+      if (select && select.value !== nextLanguage) select.value = nextLanguage;
+    }
+
+    function applyJsonEditorControlLabels(lang = getGalleryLanguage()) {
+      const labels = JSON_EDITOR_MODE_LABELS[lang] || JSON_EDITOR_MODE_LABELS.en;
+      document.querySelectorAll('#json-editor-controls button[data-json-mode]').forEach((button) => {
+        button.textContent = labels[button.dataset.jsonMode] || button.dataset.jsonMode;
+      });
+    }
+
     // Card variant switching
     document.querySelectorAll('#card-controls button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -991,10 +1395,11 @@ graph TD
         document.getElementById('gallery-carousel').visible = Number(btn.dataset.visible);
       });
     });
-    let carouselLoop = false;
+    let carouselLoop = true;
     document.getElementById('carousel-loop').addEventListener('click', () => {
       carouselLoop = !carouselLoop;
       document.getElementById('carousel-loop').textContent = 'loop: ' + (carouselLoop ? 'on' : 'off');
+      document.getElementById('carousel-loop').classList.toggle('active', carouselLoop);
       document.getElementById('gallery-carousel').loop = carouselLoop;
     });
     let carouselFade = false;
@@ -1002,6 +1407,84 @@ graph TD
       carouselFade = !carouselFade;
       document.getElementById('carousel-fade').textContent = 'fade: ' + (carouselFade ? 'on' : 'off');
       document.getElementById('gallery-carousel').transition = carouselFade ? 'fade' : 'slide';
+      document.getElementById('carousel-transition-trigger').textContent = 'transition: ' + (carouselFade ? 'fade' : 'slide');
+    });
+    document.getElementById('carousel-controls')?.addEventListener('click', (e) => {
+      const option = e.target.closest('button[data-carousel-menu]');
+      if (!option) return;
+      const carousel = document.getElementById('gallery-carousel');
+      const type = option.dataset.carouselMenu;
+      const value = option.dataset.value;
+      if (type === 'transition') {
+        carousel.transition = value;
+        carouselFade = value === 'fade';
+        document.getElementById('carousel-transition-trigger').textContent = 'transition: ' + value;
+      }
+      if (type === 'arrows') {
+        carousel.arrowVariant = value;
+        document.getElementById('carousel-arrows-trigger').textContent = 'arrows: ' + value;
+      }
+      if (type === 'dots') {
+        carousel.dotVariant = value;
+        document.getElementById('carousel-dots-trigger').textContent = 'dots: ' + value;
+      }
+      document.getElementById('carousel-fade').textContent = 'fade: ' + (carouselFade ? 'on' : 'off');
+    });
+
+    // Player controls
+    document.getElementById('audio-player-controls')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-audio-toggle]');
+      if (!btn) return;
+      const player = document.getElementById('gallery-audio-player');
+      const prop = btn.dataset.audioToggle;
+      player[prop] = !player[prop];
+      btn.classList.toggle('active', !!player[prop]);
+    });
+    // Editor controls
+    document.getElementById('code-editor-language')?.addEventListener('change', (e) => {
+      applyCodeEditorLanguage(e.target.value);
+    });
+    applyCodeEditorControlLabels();
+    applyCodeEditorLanguage(document.getElementById('code-editor-language')?.value || 'javascript');
+    document.getElementById('json-editor-controls')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-json-mode]');
+      if (!btn) return;
+      document.querySelectorAll('#json-editor-controls button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('gallery-json-editor').mode = btn.dataset.jsonMode;
+    });
+    applyJsonEditorControlLabels();
+    document.addEventListener('builtin-gallery-lang-change', (event) => {
+      applyCodeEditorControlLabels(event.detail?.lang);
+      applyJsonEditorControlLabels(event.detail?.lang);
+    });
+    document.getElementById('markdown-editor-controls')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-markdown-mode]');
+      if (!btn) return;
+      document.querySelectorAll('#markdown-editor-controls button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('gallery-markdown-editor').mode = btn.dataset.markdownMode;
+    });
+    document.getElementById('video-editor-controls')?.addEventListener('click', (e) => {
+      const editor = document.getElementById('gallery-video-editor');
+      const toggle = e.target.closest('button[data-video-editor-toggle]');
+      if (toggle) {
+        const prop = toggle.dataset.videoEditorToggle;
+        editor[prop] = !editor[prop];
+        toggle.classList.toggle('active', !!editor[prop]);
+      }
+    });
+    document.getElementById('video-editor-export')?.addEventListener('click', () => document.getElementById('gallery-video-editor').exportEdl?.());
+    document.getElementById('audio-editor-trim')?.addEventListener('click', () => document.getElementById('gallery-audio-editor').trim?.());
+    document.getElementById('audio-editor-export')?.addEventListener('click', () => document.getElementById('gallery-audio-editor').exportClips?.());
+    document.getElementById('advanced-painter-export')?.addEventListener('click', () => document.getElementById('gallery-advanced-painter').exportImage?.());
+    document.getElementById('advanced-painter-json')?.addEventListener('click', () => document.getElementById('gallery-advanced-painter').exportProject?.());
+    document.getElementById('whiteboard-controls')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-whiteboard-tools]');
+      if (!btn) return;
+      document.querySelectorAll('#whiteboard-controls button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('gallery-whiteboard').tools = btn.dataset.whiteboardTools;
     });
 
     // Chart type switching
@@ -1014,7 +1497,7 @@ graph TD
     });
 
     // Toast triggers (delegated)
-    import("/shared/components/toast.js").then(({ BuiltinToast }) => {
+    import("/shared/components/basic/toast.js").then(({ BuiltinToast }) => {
       document.getElementById('toast-card')?.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-toast]');
         if (!btn) return;
@@ -1034,7 +1517,7 @@ graph TD
     });
 
     // Confirm trigger
-    import("/shared/components/confirm.js").then(({ BuiltinConfirm }) => {
+    import("/shared/components/basic/confirm.js").then(({ BuiltinConfirm }) => {
       document.getElementById('confirm-open-btn')?.addEventListener('click', async () => {
         const result = document.getElementById('confirm-result');
         const ok = await BuiltinConfirm.show({
