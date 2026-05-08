@@ -12,6 +12,159 @@ if str(_server_dir.parent) not in sys.path:
 
 from _test_helpers import FullAppTestBase
 from core.server.data_types.apikey import create_apikey, delete_apikey
+from core.server.routes.panel.main import _prune_internal_paths_from_openapi
+
+
+def test_backend_role_panel_template_regression_markers():
+    panel_path = Path(__file__).resolve().parents[2] / "resources" / "admin-panel" / "panel" / "backend_role.html"
+    body = panel_path.read_text(encoding="utf-8")
+    assert ".empty-box.hidden" in body
+    assert "const subtitle = String(item.comment || '').trim();" in body
+    assert "els.detailSubtitle.textContent = String(item.comment || '').trim();" in body
+
+
+def test_panel_openapi_export_markers():
+    panel_main_path = Path(__file__).resolve().parents[2] / "core" / "server" / "routes" / "panel" / "main.py"
+    body = panel_main_path.read_text(encoding="utf-8")
+    assert "导出完整API文档HTML" in body
+    assert "导出非内部API文档HTML" in body
+    assert "_prune_internal_paths_from_openapi" in body
+    assert "section.models .model-box" in body
+
+
+def test_distributed_panel_management_and_link_stats_markers():
+    panel_path = Path(__file__).resolve().parents[2] / "resources" / "admin-panel" / "panel" / "distributed.html"
+    body = panel_path.read_text(encoding="utf-8")
+    assert "丢包率" in body
+    assert "转发失败" in body
+    assert "openSetWorkers" in body
+    assert "submitSetWorkers" in body
+    assert "sendCommand(node.node_id, 'stop')" in body
+    assert "GRAPH_LAYOUT_KEY" in body
+    assert "saveGraphLayout" in body
+    assert "canvasTools" in body
+    assert "graphSearchBtn" in body
+    assert "openGraphSearch" in body
+    assert "submitGraphSearch" in body
+    assert "relationFilter" in body
+    assert "filterChip" in body
+    assert "nodeMatchesFilter" in body
+    assert "focusGraphNodes" in body
+    assert "setGraphZoom" in body
+    assert "visibleNodes" in body
+    assert "drawFlowDots" in body
+    assert "renderLinkDetails" in body
+    assert "relationDirection" in body
+    assert "friend-friend" in body
+    assert "parent-child" in body
+    assert "parent-parent" in body
+    assert "last_forward_failed_at" in body
+    assert "Child 上行转发" in body
+    assert "showToast" in body
+    assert "runUiAction" in body
+    assert "autoClusterLayout" in body
+    assert "自动聚类" in body
+    assert "selectRect" in body
+    assert "openBatchMenu" in body
+    assert "batchPingSelected" in body
+    assert "batchCommandSelected" in body
+    assert "selectedNodes" in body
+    assert "selectionBar" in body
+    assert "confirmAction" in body
+    assert "LINK_HISTORY_KEY" in body
+    assert "linkHistorySvg" in body
+    assert "isNodeLinkLost" in body
+    assert "断链 / 失去消息" in body
+    assert "批量操作" in body
+    assert "storage-kv-shell" not in body
+    assert "qFilterInput" not in body
+    assert "GSD 分析" not in body
+    assert "setDataPage" not in body
+
+
+def test_distributed_data_panel_kv_browser_markers():
+    panel_path = Path(__file__).resolve().parents[2] / "resources" / "admin-panel" / "panel" / "distributed_data.html"
+    body = panel_path.read_text(encoding="utf-8")
+    assert "storage-kv-shell" in body
+    assert "Key Explorer" in body
+    assert "GSD 分析" in body
+    assert "qFilterInput" in body
+    assert "kv-filter-chip" in body
+    assert "dataNamespaceCount" in body
+    assert "setDataPage" in body
+    assert "/distributed/gsd/items" in body
+    assert "/distributed/gsd/summary" in body
+    assert "/distributed/gsd/delete-by-prefix" in body
+
+
+def test_prune_internal_paths_from_openapi_removes_all_internal_prefix_routes():
+    source = {
+        "paths": {
+            "/api/health": {
+                "get": {
+                    "tags": ["Public"],
+                    "responses": {
+                        "200": {
+                            "description": "ok",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/PublicResponse"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "/_internal/admin/openapi.json": {
+                "get": {
+                    "tags": ["Admin"],
+                    "responses": {
+                        "200": {
+                            "description": "ok",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/InternalResponse"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "/_internal/rtc_room/create": {
+                "post": {
+                    "tags": ["RTC"],
+                    "responses": {
+                        "200": {
+                            "description": "ok",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/InternalRtcResponse"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "components": {
+            "schemas": {
+                "PublicResponse": {"type": "object"},
+                "InternalResponse": {"type": "object"},
+                "InternalRtcResponse": {"type": "object"},
+            },
+        },
+        "tags": [
+            {"name": "Public"},
+            {"name": "Admin"},
+            {"name": "RTC"},
+        ],
+    }
+
+    pruned = _prune_internal_paths_from_openapi(source, internal_path_prefix="/_internal")
+
+    assert set(pruned["paths"].keys()) == {"/api/health"}
+    assert pruned["components"]["schemas"] == {"PublicResponse": {"type": "object"}}
+    assert pruned["tags"] == [{"name": "Public"}]
 
 
 class TestPanelPageRoutes(FullAppTestBase):
@@ -75,6 +228,12 @@ class TestPanelPageRoutes(FullAppTestBase):
         self.assertIn("/vendor/chart/chart.js", r.text)
         self.assertIn("proj-admin-auth-expired", r.text)
         self.assertIn("clearPanelState()", r.text)
+        self.assertIn("nav-backend-distributed", r.text)
+        self.assertIn("backend-distributed-sub-group", r.text)
+        self.assertIn("nav-backend-distributed-nodes", r.text)
+        self.assertIn("nav-backend-distributed-data", r.text)
+        self.assertIn("nav-backend-permission", r.text)
+        self.assertIn("backend-permission-sub-group", r.text)
         self.assertNotIn("/_internal/admin/test/tools", r.text)
         self.assertNotIn("/_internal/admin/test/question", r.text)
         self.assertNotIn("/_internal/admin/test/render", r.text)
@@ -99,12 +258,24 @@ class TestPanelPageRoutes(FullAppTestBase):
         self.assertIn("text/html", r.headers.get("content-type", ""))
         body = r.text
         self.assertTrue("分布式网络" in body or "distributed" in body.lower())
-        self.assertIn("node-parent-id", body)
+        self.assertIn("mParentId", body)
         self.assertIn("management.can_manage", body)
         self.assertIn("管理路径", body)
         self.assertIn("pingNode", body)
-        self.assertIn("联通性测试", body)
-        self.assertIn("proj-admin-auth-expired", body)
+        self.assertIn("openGraphSearch", body)
+        self.assertIn("friend-friend", body)
+
+    async def test_panel_distributed_data_page(self):
+        headers = self._admin_headers()
+        r = await self._client.get("/_internal/admin/panel/distributed/data", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers.get("content-type", ""))
+        body = r.text
+        self.assertIn("storage-kv-shell", body)
+        self.assertIn("Key Explorer", body)
+        self.assertIn("GSD 分析", body)
+        self.assertIn("qFilterInput", body)
+        self.assertIn("/distributed/gsd/items", body)
 
     async def test_panel_backend_overview_page(self):
         headers = self._admin_headers()

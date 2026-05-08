@@ -12,7 +12,7 @@ import httpx as _httpx
 
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import ClassVar, Self, TYPE_CHECKING, TypedDict, overload
+from typing import Any, ClassVar, Self, TYPE_CHECKING, TypedDict, overload
 from typing_extensions import Unpack
 
 if TYPE_CHECKING:
@@ -268,6 +268,47 @@ class KVClientBase(StorageClientBase, ABC, storage_kind="kv"):
         the key does not exist or has no expiry.
         '''
         ...
+
+    async def mget(self, keys: list[str], default: object = None) -> list[object]:
+        '''Batch retrieve values for *keys*. Returns a list aligned with *keys*.
+        Falls back to asyncio.gather if the backend does not implement true batching.'''
+        if self._parent is not None:
+            parent_keys = [self._child_key(k) for k in keys]
+            return await self._parent.mget(parent_keys, default=default)
+        raw_batch = await self._mget_values(keys, default=default)
+        results: list[object] = []
+        for value in raw_batch:
+            if value is default:
+                results.append(default)
+                continue
+            try:
+                json_str = value if isinstance(value, str) else _json.dumps(value)
+                results.append(deserialize(json_str, type(None)))
+            except Exception:
+                results.append(value)
+        return results
+
+    async def raw_mget(self, keys: list[str], default: object = None) -> list[object]:
+        '''Batch retrieve raw storage-layer values (skip target_type deserialization).'''
+        if self._parent is not None:
+            parent_keys = [self._child_key(k) for k in keys]
+            return await self._parent.raw_mget(parent_keys, default=default)
+        return await self._mget_values(keys, default=default)
+
+    async def mttl(self, keys: list[str]) -> list[float | None]:
+        '''Batch retrieve TTLs for *keys*. Returns a list aligned with *keys*.'''
+        if self._parent is not None:
+            parent_keys = [self._child_key(k) for k in keys]
+            return await self._parent.mttl(parent_keys)
+        return await self._mget_expires(keys)
+
+    async def _mget_values(self, keys: list[str], default: object = None) -> list[object]:
+        '''Fallback: gather single-gets. Subclasses may override for true batch.'''
+        return await asyncio.gather(*[self._get_value(k, default=default) for k in keys])
+
+    async def _mget_expires(self, keys: list[str]) -> list[float | None]:
+        '''Fallback: gather single-expire queries. Subclasses may override.'''
+        return await asyncio.gather(*[self.get_expire(k) for k in keys])
 
     async def delete(self, key: str) -> bool:
         '''Delete *key* and its value.
@@ -548,6 +589,61 @@ class SQLiteKVClient(KVClientBase, type="sqlite"):
                         pass
         return ttl
 
+    async def _mget_values(self, keys: list[str], default: object = None) -> list[object]:
+        if not self._started:
+            self.start()
+        ts = _now_ts()
+        results: list[object] = []
+        with self._process_lock:
+            with self._stash_lock:
+                stash = self._get_stash()
+                for key in keys:
+                    try:
+                        entry = stash[key]
+                    except KeyError:
+                        results.append(default)
+                        continue
+                    expire_at = entry.get("e")
+                    if expire_at is not None and expire_at <= ts:
+                        try:
+                            del stash[key]
+                        except KeyError:
+                            pass
+                        results.append(default)
+                        continue
+                    entry["a"] = ts
+                    stash[key] = entry
+                    try:
+                        val = entry["v"]
+                    except Exception:
+                        val = default
+                    results.append(val)
+        return results
+
+    async def _mget_expires(self, keys: list[str]) -> list[float | None]:
+        if not self._started:
+            self.start()
+        ts = _now_ts()
+        results: list[float | None] = []
+        with self._process_lock:
+            with self._stash_lock:
+                stash = self._get_stash()
+                for key in keys:
+                    try:
+                        entry = stash[key]
+                    except KeyError:
+                        results.append(None)
+                        continue
+                    expire_at = entry.get("e")
+                    ttl = _ttl_from_expire_at(expire_at)
+                    if ttl == 0.0:
+                        try:
+                            del stash[key]
+                        except KeyError:
+                            pass
+                    results.append(ttl)
+        return results
+
     async def _delete_value(self, key: str) -> bool:
         if not self._started:
             self.start()
@@ -798,6 +894,39 @@ class RedisKVClient(KVClientBase, type="redis"):
                 return None
             return 0.0
         return float(ttl)
+
+    async def _mget_values(self, keys: list[str], default: object = None) -> list[object]:
+        client = await self._ensure_ready()
+        value_keys = [self._value_key(k) for k in keys]
+        blobs = await client.mget(value_keys)
+        results: list[object] = []
+        for blob in blobs:
+            if blob is None:
+                results.append(default)
+                continue
+            try:
+                val = _safe_pickle_loads(blob) if isinstance(blob, bytes) else blob
+            except Exception:
+                val = default
+            results.append(val)
+        return results
+
+    async def _mget_expires(self, keys: list[str]) -> list[float | None]:
+        client = await self._ensure_ready()
+        pipe = client.pipeline(transaction=False)
+        for key in keys:
+            pipe.ttl(self._value_key(key))
+        raw_ttls = await pipe.execute()
+        results: list[float | None] = []
+        for ttl in raw_ttls:
+            ttl_value = int(ttl) if isinstance(ttl, (int, float)) else -2
+            if ttl_value in {-2, -1}:
+                results.append(None)
+            elif ttl_value < 0:
+                results.append(0.0)
+            else:
+                results.append(float(ttl_value))
+        return results
 
     async def _delete_value(self, key: str) -> bool:
         client = await self._ensure_ready()

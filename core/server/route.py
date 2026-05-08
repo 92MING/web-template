@@ -90,6 +90,24 @@ class ErrorContext:
 
 _FUNCTION_ROUTE_DEFINITIONS = "__route_definitions__"
 
+@dataclass(frozen=True)
+class _RouteCacheEntry:
+    route: "StarletteRoute"
+    type_hints: dict[str, Any]
+    signature: inspect.Signature
+
+_ENDPOINT_CACHE: dict[int, _RouteCacheEntry] = {}
+_ENDPOINT_TO_ROUTE: dict[int, "StarletteRoute"] = {}
+
+
+def _callable_cache_ids(func: Callable[..., Any]) -> set[int]:
+    ids = {id(func)}
+    raw = getattr(func, "__func__", None)
+    if raw is not None:
+        ids.add(id(raw))
+    return ids
+
+
 _PARAM_DEFAULTS: dict[str, Any] = {
     "path": "",
     "method": "GET",
@@ -440,6 +458,7 @@ class Route:
         target: int | tuple[str, int],
         route: str,
         *args: Any,
+        request: Request | None = None,
         **kwargs: Any,
     ) -> Any: ...
 
@@ -449,6 +468,7 @@ class Route:
         target: int | tuple[str, int],
         func: Callable[..., Any],
         *args: Any,
+        request: Request | None = None,
         **kwargs: Any,
     ) -> Any: ...
 
@@ -457,6 +477,7 @@ class Route:
         target: int | tuple[str, int],
         func_or_route: Callable[..., Any] | str,
         *args: Any,
+        request: Request | None = None,
         **kwargs: Any,
     ) -> Any:
         """Forward execution to another worker or remote node.
@@ -474,15 +495,12 @@ class Route:
         if isinstance(target, int):
             worker_id = target
         elif isinstance(target, tuple) and len(target) == 2:
-            # Distributed forwarding — not yet fully implemented for remote nodes
             server_id, worker_id = target
             if server_id == self.shared_data.instance_uuid:
                 # Same node, treat as local worker redirect
                 target = worker_id  # type: ignore[assignment]
             else:
-                raise NotImplementedError(
-                    f"Distributed redirect to remote node {server_id} is not yet implemented."
-                )
+                return await self._redirect_remote_node(str(server_id), func_or_route, args, kwargs, request=request)
         else:
             raise TypeError(f"Invalid redirect target: {target}")
 
@@ -501,6 +519,10 @@ class Route:
         else:
             raise TypeError(f"Invalid redirect func_or_route: {func_or_route}")
 
+        redirect_headers: list[tuple[str, str]] = []
+        if request is not None:
+            redirect_headers = [(k.decode("latin-1"), v.decode("latin-1")) for k, v in request.headers.raw]
+
         if worker_id == os.getpid():
             # Local — direct handle
             msg = WorkerRedirectMessage(
@@ -508,6 +530,7 @@ class Route:
                 path=path,
                 method=method,
                 request_params=request_params,
+                headers=redirect_headers,
             )
             r = await msg.handle(get_app())
             if r.error is not None:
@@ -516,14 +539,86 @@ class Route:
 
         # Cross-worker redirect
         from starlette.requests import Request as StarletteRequest
+        raw_headers = []
+        if request is not None:
+            raw_headers = request.headers.raw
         scope = {
             "type": "http",
             "path": path,
             "method": method,
-            "headers": [],
+            "headers": raw_headers,
         }
-        request = StarletteRequest(scope)
-        return await redirect_to_worker(worker_id, request, request_params)
+        redirect_request = StarletteRequest(scope)
+        return await redirect_to_worker(worker_id, redirect_request, request_params)
+
+    async def _redirect_remote_node(
+        self,
+        node_id: str,
+        func_or_route: Callable[..., Any] | str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        import aiohttp
+        from fastapi import HTTPException
+        from fastapi.responses import StreamingResponse
+        from core.server.distributed import NodeRegistry
+
+        registry = NodeRegistry.get_instance()
+        self_id = self.shared_data.instance_uuid
+        if not await registry.can_forward_to(self_id, node_id):
+            raise HTTPException(status_code=403, detail=f"Node {node_id} is outside API forwarding scope")
+        node = await registry.get(node_id)
+        if node is None:
+            raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+
+        if isinstance(func_or_route, str):
+            path = func_or_route
+            method = kwargs.pop("method", "GET").upper()
+            request_params: dict[str, object] = dict(kwargs)
+            if args:
+                raise ValueError("Positional args are not supported when redirecting by path string.")
+        elif callable(func_or_route):
+            path, method, request_params = self._resolve_callable_to_route(func_or_route, args, kwargs)
+        else:
+            raise TypeError(f"Invalid redirect func_or_route: {func_or_route}")
+
+        if not path.startswith("/"):
+            path = "/" + path
+        url = f"http://{node.host}:{node.port}{path}"
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10.0, sock_read=None)
+        session = aiohttp.ClientSession(timeout=timeout)
+        try:
+            if method in {"GET", "HEAD", "DELETE"}:
+                response = await session.request(method, url, params=request_params)
+            else:
+                response = await session.request(method, url, json=request_params)
+            content_type = str(response.headers.get("content-type") or "")
+            if response.status >= 400:
+                async with response:
+                    text = await response.text()
+                await session.close()
+                raise HTTPException(status_code=response.status, detail=text)
+            if "text/event-stream" in content_type.lower():
+                async def _stream():
+                    try:
+                        async with response:
+                            async for chunk in response.content.iter_chunked(65536):
+                                if chunk:
+                                    yield chunk
+                    finally:
+                        await session.close()
+
+                return StreamingResponse(_stream(), media_type=content_type)
+            async with response:
+                if "application/json" in content_type:
+                    result = await response.json()
+                else:
+                    result = await response.read()
+            await session.close()
+            return result
+        except Exception:
+            await session.close()
+            raise
 
     def _resolve_callable_to_route(
         self,
@@ -533,15 +628,28 @@ class Route:
     ) -> tuple[str, str, dict[str, object]]:
         """Try to map a callable back to its mounted route path."""
         from starlette.routing import Route as StarletteRoute
+        for func_id in _callable_cache_ids(func):
+            cached_route = _ENDPOINT_TO_ROUTE.get(func_id)
+            if cached_route is not None:
+                path = cached_route.path
+                method = next(iter(cached_route.methods)) if cached_route.methods else "GET"  # type: ignore[union-attr]
+                entry = _ENDPOINT_CACHE.get(func_id)
+                sig = entry.signature if entry is not None else inspect.signature(func)
+                params: dict[str, object] = {}
+                bound = sig.bind(None, *args, **kwargs)
+                bound.apply_defaults()
+                for name, value in bound.arguments.items():
+                    if name == "self":
+                        continue
+                    params[name] = value
+                return path, method, params
+        # Fallback: linear scan (for dynamically mounted routes)
         from .app import get_app
         app = get_app()
-
-        # Try to find the route by matching endpoint
         for route in app.routes:
             if isinstance(route, StarletteRoute) and route.endpoint is func:
                 path = route.path
-                method = route.methods[0] if route.methods else "GET"   # type: ignore[union-attr]
-                # Build params from signature
+                method = next(iter(route.methods)) if route.methods else "GET"  # type: ignore[union-attr]
                 sig = inspect.signature(func)
                 params: dict[str, object] = {}
                 bound = sig.bind(None, *args, **kwargs)
@@ -552,14 +660,11 @@ class Route:
                     params[name] = value
                 return path, method, params
 
-        # Fallback: treat as direct call if same process
-        if os.getpid() == os.getpid():  # always true locally
-            raise RuntimeError(
-                f"Could not resolve {func!r} to a mounted route. "
-                "When redirecting across workers, only path strings or "
-                "mounted Route methods are supported."
-            )
-        return "", "GET", {}  # unreachable
+        raise RuntimeError(
+            f"Could not resolve {func!r} to a mounted route. "
+            "When redirecting across workers, only path strings or "
+            "mounted Route methods are supported."
+        )
 
     # ── HTTP verb stubs ──
     async def get(self, *args: Any, **kwargs: Any) -> Any:
@@ -690,6 +795,28 @@ class RouteLoader:
                     order_rel_path, # type: ignore[arg-type]
                     parent_route_classes,
                 )
+        self._build_endpoint_cache()
+
+    def _build_endpoint_cache(self) -> None:
+        from starlette.routing import Route as StarletteRoute
+        global _ENDPOINT_CACHE, _ENDPOINT_TO_ROUTE
+        for route in self.app.routes:
+            if not isinstance(route, StarletteRoute):
+                continue
+            endpoint = route.endpoint
+            for endpoint_id in _callable_cache_ids(endpoint):
+                if endpoint_id in _ENDPOINT_CACHE:
+                    continue
+                try:
+                    type_hints = get_type_hints(endpoint, globalns=getattr(endpoint, '__globals__', {}))
+                except Exception:
+                    type_hints = {}
+                _ENDPOINT_CACHE[endpoint_id] = _RouteCacheEntry(
+                    route=route,
+                    type_hints=type_hints,
+                    signature=inspect.signature(endpoint),
+                )
+                _ENDPOINT_TO_ROUTE[endpoint_id] = route
 
     def _register_app_root(self) -> None:
         roots = getattr(self.app.state, "route_loader_app_roots", None)

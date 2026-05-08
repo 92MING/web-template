@@ -122,6 +122,8 @@ class _ORMEmbeddingCache:
     All reads/writes go through the project-wide ORM client (cache DB).
     '''
 
+    _ACCESSED_AT_UPDATE_THRESHOLD_SECONDS = 300  # 5 minutes
+
     def __init__(self) -> None:
         self._client: object | None = None
 
@@ -206,12 +208,14 @@ class _ORMEmbeddingCache:
             rec = await client.search_one(EmbeddingCacheRecord, {'text_hash': h})
             if rec is None:
                 return None
-            # fire-and-forget update of accessed_at
-            rec.accessed_at = time.time()
-            try:
-                await client.set(rec)
-            except Exception:
-                pass
+            now = time.time()
+            last_accessed = float(rec.accessed_at or 0.0)
+            if now - last_accessed > self._ACCESSED_AT_UPDATE_THRESHOLD_SECONDS:
+                rec.accessed_at = now
+                try:
+                    await client.set(rec)
+                except Exception:
+                    pass
             vector = rec.vector_json
             if isinstance(vector, str):
                 vector = json.loads(vector)

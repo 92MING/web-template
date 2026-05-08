@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import gzip
+import json
 import os    
 import re
 import socket
@@ -6,17 +8,143 @@ import aiohttp
 import requests
 import netifaces
 import logging
+import urllib.request
 
-from typing import Literal
+from datetime import UTC, datetime, time, timedelta
+from pathlib import Path
+from typing import Literal, TypedDict
+
+from core.constants import RESOURCES_DIR
 
 _logger = logging.getLogger(__name__)
 _local_ip = None
 _global_ip = None
 
+GEOLITE2_CITY_URL = "https://cdn.jsdelivr.net/npm/geolite2-city/GeoLite2-City.mmdb.gz"
+GEOLITE2_CITY_DB_PATH = RESOURCES_DIR / "common" / "GeoLite2-City.mmdb"
+GEOLITE2_CITY_UPDATE_RECORD_PATH = RESOURCES_DIR / "common" / "GeoLite2-City.update.json"
+
 _ipv4_pattern = re.compile(r"(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3})")
 _ipv6_pattern = re.compile(
     r"((([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:))|(([0-9a-fA-F]{1,4}:){1,7}:)|(([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4})|(([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2})|(([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3})|(([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4})|(([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5})|([0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6}))|(:((:[0-9a-fA-F]{1,4}){1,7}|:)))(%.+)?"
 )
+
+
+class IpGeoInfo(TypedDict):
+    ip: str
+    country: str
+    country_code: str
+    subdivision: str
+    city: str
+    latitude: float | None
+    longitude: float | None
+    timezone: str
+    source: str
+
+
+def _latest_geolite2_release_time(now: datetime | None = None) -> datetime:
+    current = now.astimezone(UTC) if now else datetime.now(UTC)
+    release_time = time(hour=6, tzinfo=UTC)
+    release_weekdays = {1, 4}
+    for delta_days in range(8):
+        day = current.date() - timedelta(days=delta_days)
+        candidate = datetime.combine(day, release_time)
+        if candidate.weekday() in release_weekdays and candidate <= current:
+            return candidate
+    return datetime.combine(current.date(), release_time)
+
+
+def _read_geolite2_update_record() -> dict[str, str]:
+    try:
+        with GEOLITE2_CITY_UPDATE_RECORD_PATH.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def geolite2_city_update_due(now: datetime | None = None) -> bool:
+    if not GEOLITE2_CITY_DB_PATH.is_file():
+        return True
+    record = _read_geolite2_update_record()
+    downloaded_at = str(record.get("downloaded_at") or "")
+    if not downloaded_at:
+        return True
+    try:
+        downloaded_dt = datetime.fromisoformat(downloaded_at).astimezone(UTC)
+    except ValueError:
+        return True
+    return downloaded_dt < _latest_geolite2_release_time(now)
+
+
+def ensure_geolite2_city_db(*, force: bool = False, timeout: float = 60.0) -> bool:
+    if not force and not geolite2_city_update_due():
+        return True
+    GEOLITE2_CITY_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_gz = GEOLITE2_CITY_DB_PATH.with_suffix(".mmdb.gz.tmp")
+    tmp_mmdb = GEOLITE2_CITY_DB_PATH.with_suffix(".mmdb.tmp")
+    try:
+        with urllib.request.urlopen(GEOLITE2_CITY_URL, timeout=timeout) as response:
+            with tmp_gz.open("wb") as file:
+                file.write(response.read())
+        with gzip.open(tmp_gz, "rb") as source, tmp_mmdb.open("wb") as target:
+            target.write(source.read())
+        os.replace(tmp_mmdb, GEOLITE2_CITY_DB_PATH)
+        now = datetime.now(UTC)
+        record = {
+            "downloaded_at": now.isoformat(),
+            "latest_release_at": _latest_geolite2_release_time(now).isoformat(),
+            "source_url": GEOLITE2_CITY_URL,
+        }
+        with GEOLITE2_CITY_UPDATE_RECORD_PATH.open("w", encoding="utf-8") as file:
+            json.dump(record, file, ensure_ascii=False, indent=2)
+        return True
+    except Exception as exc:
+        _logger.warning("GeoLite2 city database update failed: %s", exc)
+        return GEOLITE2_CITY_DB_PATH.is_file()
+    finally:
+        for path in (tmp_gz, tmp_mmdb):
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+def get_ip_geo_info(ip: str, db_path: str | Path | None = None) -> IpGeoInfo | None:
+    parsed = extract_ip(ip)
+    if parsed is None:
+        return None
+    normalized_ip, _ = parsed
+    database_path = Path(db_path) if db_path is not None else GEOLITE2_CITY_DB_PATH
+    if not database_path.is_file():
+        return None
+    try:
+        import geoip2.database
+        import geoip2.errors
+    except ImportError:
+        return None
+    try:
+        with geoip2.database.Reader(str(database_path)) as reader:
+            response = reader.city(normalized_ip)
+    except geoip2.errors.AddressNotFoundError:
+        return None
+    except Exception as exc:
+        _logger.debug("GeoLite2 lookup failed for %s: %s", normalized_ip, exc)
+        return None
+    country = response.country.name or ""
+    city = response.city.name or ""
+    subdivision = response.subdivisions.most_specific.name or ""
+    return {
+        "ip": normalized_ip,
+        "country": country,
+        "country_code": response.country.iso_code or "",
+        "subdivision": subdivision,
+        "city": city,
+        "latitude": response.location.latitude,
+        "longitude": response.location.longitude,
+        "timezone": response.location.time_zone or "",
+        "source": ", ".join(part for part in (country, subdivision, city) if part),
+    }
 
 def _get_env(key):
     return os.environ.get(key, None)
@@ -222,6 +350,13 @@ __all__ = [
     'ping',
     'is_own_ip',
     'can_reach',
+    'GEOLITE2_CITY_URL',
+    'GEOLITE2_CITY_DB_PATH',
+    'GEOLITE2_CITY_UPDATE_RECORD_PATH',
+    'IpGeoInfo',
+    'geolite2_city_update_due',
+    'ensure_geolite2_city_db',
+    'get_ip_geo_info',
 ]
 
 if __name__ == "__main__":

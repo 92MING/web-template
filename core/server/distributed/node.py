@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Literal
 
-type NodeRelation = Literal["parent", "child", "friend"]
+type NodeRelation = Literal["ff", "pc", "pp"]
 type NodeHealthStatus = Literal["healthy", "degraded", "unreachable"]
 
 
@@ -24,11 +24,14 @@ class Node:
     port: int
     """HTTP port of the node's FastAPI server."""
 
+    name: str = ""
+    """Human-readable node name. Does not need to be unique."""
+
     gsd_port: int = 0
     """GlobalSharedDict TCP port (0 = unknown / not started)."""
 
-    relation: NodeRelation = "friend"
-    """Relationship to this node: parent, child, or friend."""
+    relation: NodeRelation = "ff"
+    """Relationship to this node: ff, pc, or pp."""
 
     admin_password_hash: str = ""
     """PBKDF2 hash of the admin password (hex). Used for mutual auth."""
@@ -51,6 +54,9 @@ class Node:
     metadata: dict[str, str] = field(default_factory=dict)
     """Optional key/value metadata (e.g. region, version)."""
 
+    allow_child_api_forward: bool = False
+    """Whether this parent allows a child node to forward API calls upward."""
+
     def update_health(self, success: bool, rtt_ms: float | None = None) -> None:
         if success:
             self.failed_probes = 0
@@ -71,21 +77,26 @@ class Node:
         return self.health_status == "healthy"
 
     def is_parent(self) -> bool:
-        return self.relation == "parent"
+        return self.relation in {"pc", "pp"}
 
     def is_child(self) -> bool:
-        return self.relation == "child"
+        return self.relation == "pc"
 
     def is_friend(self) -> bool:
-        return self.relation == "friend"
+        return self.relation == "ff"
+
+    def is_parent_parent(self) -> bool:
+        return self.relation == "pp"
 
     def to_dict(self) -> dict[str, object]:
         return {
             "node_id": self.node_id,
+            "name": self.name or self.node_id,
             "host": self.host,
             "port": self.port,
             "gsd_port": self.gsd_port,
             "relation": self.relation,
+            "allow_child_api_forward": self.allow_child_api_forward,
             "rtt_ms": self.rtt_ms,
             "last_seen": self.last_seen,
             "health_status": self.health_status,

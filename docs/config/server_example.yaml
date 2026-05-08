@@ -11,6 +11,8 @@
 server_config:
   host: 127.0.0.1
   port: 8000
+  # 可选：面板和分布式节点图中显示的自定义名称；null 时使用 server id
+  name: null
   worker: 1
   reload: false
 

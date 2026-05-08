@@ -2,8 +2,9 @@
 import os
 import types
 import logging
-from datetime import datetime, timedelta, timezone
+
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from typing import Literal, TypeGuard, TypedDict, get_args, get_origin
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -11,21 +12,24 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from core.server.translate import _register_internal_translation, TranslationLanguage
+
+from core.server.translate import _register_internal_translation
 from core.utils.type_utils import AdvancedBaseModel
 from core.server.constants import SERVER_DIR
-from core.server.data_types.config import Config, RuntimeConfigPathInfo
+from core.server.data_types.config import Config
+
 from ... import runtime_control
 from ...app import get_resources, internal_admin_path, on_app_created
 from ...html_injection import html_response_from_path
-from ...shared import AppSharedData, RuntimeMeta, WorkerSnapshot
+from ...shared import AppSharedData, RuntimeMeta, WorkerSnapshot, touch_current_worker_runtime, write_current_worker_request
+
 HK_TZ = timezone(timedelta(hours=8), name="Asia/Hong_Kong")
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient", "testserver"}
 logger = logging.getLogger(__name__)
 _shared_runtime_sync_failures: set[str] = set()
 
 class BackendRuntimeState(TypedDict):
-    worker_pid: int
+    shared_manager_pid: int
     started_at: str
     request_count: int
     last_request_at: str | None
@@ -44,12 +48,15 @@ class BackendResponseModel(AdvancedBaseModel):
 
 class BackendWorkerInfo(BackendResponseModel):
     pid: int | None = None
+    generation: int | None = None
+    shm_slot: int | None = None
     msg_port: int | None = None
     status: str | None = None
     started_at: str | None = None
     last_request_at: str | None = None
     request_count: int | None = None
     rooms_running: int | None = None
+    dead: bool | None = None
 
 class BackendServerInfo(BackendResponseModel):
     host: str | None = None
@@ -90,7 +97,7 @@ class BackendRuntimeResponse(AdvancedBaseModel):
     server_start_time: str | None = None
     server_start_time_hk: str | None = None
     uptime_seconds: float | None = None
-    current_worker_pid: int | None = None
+    current_shared_manager_pid: int | None = None
     app_request_count: int | None = None
     app_last_request_at: str | None = None
     worker_count: int | None = None
@@ -236,9 +243,9 @@ def _register_backend_settings_translations() -> None:
     ]
     for alias, en, zh_cn, zh_tw in rows:
         for language, text in (
-            (TranslationLanguage.EN, en),
-            (TranslationLanguage.ZH_CN, zh_cn),
-            (TranslationLanguage.ZH_TW, zh_tw),
+            ('en', en),
+            ('zh-cn', zh_cn),
+            ('zh-tw', zh_tw),
         ):
             if text is not None:
                 _register_internal_translation(alias, language, text, aliases=[alias])
@@ -258,19 +265,14 @@ def _ensure_backend_runtime_state(app: FastAPI) -> BackendRuntimeState:
     runtime = getattr(app.state, "backend_runtime", None)
     if not isinstance(runtime, dict):
         runtime = {
-            "worker_pid": os.getpid(),
+            "shared_manager_pid": os.getpid(),
             "started_at": _now_iso(),
             "request_count": 0,
             "last_request_at": None,
         }
         app.state.backend_runtime = runtime
     try:
-        shared = AppSharedData.Get()
-        shared.touch_worker(
-            runtime["worker_pid"],
-            started_at=runtime.get("started_at"),
-            status="running",
-        )
+        touch_current_worker_runtime("running")
     except Exception as exc:
         _log_shared_runtime_sync_failure("worker-touch", exc)
     return runtime
@@ -289,14 +291,14 @@ class _BackendRuntimeTrackingMiddleware:
         runtime["request_count"] = int(runtime.get("request_count") or 0) + 1
         runtime["last_request_at"] = _now_iso()
         try:
-            AppSharedData.Get().increment_worker_request(runtime["worker_pid"], at=runtime["last_request_at"])
+            write_current_worker_request()
         except Exception as exc:
             _log_shared_runtime_sync_failure("request-increment", exc)
 
         async def _send_with_runtime_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
-                headers.setdefault("X-Worker-PID", str(runtime["worker_pid"]))
+                headers.setdefault("X-Worker-PID", str(runtime["shared_manager_pid"]))
                 headers.setdefault("X-Request-Count", str(runtime["request_count"]))
             await send(message)
         try:
@@ -479,17 +481,17 @@ def _build_ui_field(name: str, field_info: FieldInfo, *, path_prefix: str = "") 
         kind="json",
     )
     for language, text in (
-        (TranslationLanguage.EN, descriptor.label),
-        (TranslationLanguage.ZH_CN, _zh_field_label(name)),
-        (TranslationLanguage.ZH_TW, _zh_field_label(name)),
+        ('en', descriptor.label),
+        ('zh-cn', _zh_field_label(name)),
+        ('zh-tw', _zh_field_label(name)),
     ):
         if text is not None:
             _register_internal_translation(descriptor.label_key, language, text, aliases=[descriptor.label_key, descriptor.path])
     if descriptor.description:
         for language, text in (
-            (TranslationLanguage.EN, descriptor.description),
-            (TranslationLanguage.ZH_CN, _zh_field_description(path, descriptor.description)),
-            (TranslationLanguage.ZH_TW, _zh_field_description(path, descriptor.description)),
+            ('en', descriptor.description),
+            ('zh-cn', _zh_field_description(path, descriptor.description)),
+            ('zh-tw', _zh_field_description(path, descriptor.description)),
         ):
             if text is not None:
                 _register_internal_translation(
@@ -577,20 +579,23 @@ def _load_settings_config(config_path: str | None) -> tuple[Config, str | None]:
 
 def _fallback_runtime_meta(runtime: BackendRuntimeState) -> RuntimeMeta:
     start_time = os.getenv("__SERVER_START_TIME__") or runtime.get("started_at")
-    worker_pid = runtime["worker_pid"]
+    shared_manager_pid = runtime["shared_manager_pid"]
     worker: WorkerSnapshot = {
-        "pid": worker_pid,
+        "pid": shared_manager_pid,
+        "generation": 0,
+        "shm_slot": None,
         "msg_port": None,
         "started_at": runtime.get("started_at"),
         "request_count": runtime.get("request_count") or 0,
         "last_request_at": runtime.get("last_request_at"),
         "status": "running",
         "lifespan_ready": False,
+        "dead": False,
     }
     return {
         "instance_uuid": os.getenv("__SERVER_INSTANCE_ID__") or "",
         "server_start_time": start_time,
-        "worker_pid": worker_pid,
+        "shared_manager_pid": shared_manager_pid,
         "cache_scope": "cross-process",
         "worker_count": 1,
         "request_count_total": worker["request_count"],
@@ -641,19 +646,22 @@ def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
         pid = worker["pid"]
         workers.append(BackendWorkerInfo(
             pid=pid,
+            generation=worker.get("generation"),
+            shm_slot=worker.get("shm_slot"),
             msg_port=worker.get("msg_port"),
             status=worker["status"],
             started_at=worker["started_at"],
             last_request_at=worker["last_request_at"],
             request_count=worker["request_count"],
             rooms_running=_safe_worker_room_count(shared, pid, warnings),
+            dead=worker.get("dead"),
         ))
     return BackendRuntimeResponse(
         instance_id=shared_meta["instance_uuid"] or os.getenv("__SERVER_INSTANCE_ID__"),
         server_start_time=start_time,
         server_start_time_hk=_to_hk_iso(start_time),
         uptime_seconds=uptime_seconds,
-        current_worker_pid=runtime["worker_pid"],
+        current_shared_manager_pid=runtime["shared_manager_pid"],
         app_request_count=runtime["request_count"],
         app_last_request_at=runtime["last_request_at"],
         worker_count=shared_meta["worker_count"],

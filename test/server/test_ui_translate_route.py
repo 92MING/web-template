@@ -15,16 +15,16 @@ for _path in (str(_PROJECT_ROOT), str(_APP_DIR)):
         sys.path.insert(0, _path)
 
 from core.server.data_types.config import Config, ServerConfig
-from core.server.translate import _register_internal_translation, TranslationLanguage
+from core.server.translate import _register_internal_translation
 from core.server.routes.panel.main import register_panel_routes
 
 
 def test_ui_translate_endpoints() -> None:
     Config.SetConfig(Config(server_config=ServerConfig()))
     key = "test.ui.translate.route"
-    _register_internal_translation(key, TranslationLanguage.EN, "Hello")
-    _register_internal_translation(key, TranslationLanguage.ZH_CN, "你好")
-    _register_internal_translation(key, TranslationLanguage.ZH_TW, "你好")
+    _register_internal_translation(key, 'en', "Hello")
+    _register_internal_translation(key, 'zh-cn', "你好")
+    _register_internal_translation(key, 'zh-tw', "你好")
 
     app = FastAPI()
     register_panel_routes(app)

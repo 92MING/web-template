@@ -155,6 +155,8 @@ def _is_auth_exempt_path(path: str) -> bool:
         server_cfg.get_internal_admin_path("login"),
         server_cfg.get_internal_admin_path("session"),
         server_cfg.get_internal_admin_path("openapi.json"),
+        server_cfg.get_internal_admin_path("api/distributed/health"),
+        server_cfg.get_internal_admin_path("api/distributed/connect"),
     }
     auth_exempt_prefixes = (server_cfg.get_internal_admin_path("login"),)
     if path in auth_exempt_paths:

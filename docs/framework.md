@@ -116,6 +116,20 @@ AI 的公开别名 `/ai/*` 默认不会暴露。只有 `server_config.expose_ai_
 
 `.html` 页面如果存在同名 `.m.html` 文件，会在返回时自动合并桌面版和移动版。详见 [frontend.md](frontend.md)。
 
+## 生命周期事件与 Scheduler
+
+业务模块可以在 `app/` 或 `extra_app_paths` 中注册两类运行时逻辑：
+
+- main process 逻辑：`on_main_process_starts_event`、`on_main_process_stops_event`、`register_main_process_context_manager`，以及默认 `run_on="main_process"` 的 scheduler。
+- FastAPI worker 逻辑：`on_app_created`、`on_before_app_created`、`on_app_shutdown`，以及 `run_on="fastapi_process"` 的 scheduler。
+
+两者的导入规则不同：
+
+- main process 在 uvicorn 启动前会遍历 import 一次 `app/` 和 `extra_app_paths` 下的 `.py` 文件，用来触发 schedule/event 的注册。此遍历会包含 `_` 开头的文件和目录；唯一跳过的是 `__main__.py`，避免递归执行启动入口。
+- FastAPI worker 仍按 RouteLoader 的路由发现规则导入业务模块。`_private.py`、`_private/` 这类以 `_` 开头但不是 `_path_param_` 形式的文件/目录会被跳过，因此写在这些位置的 `on_app_created` / `on_before_app_created` / `on_app_shutdown` 不会在 worker 中生效。
+
+如果一个非 `_` 文件同时包含 main process 注册和 FastAPI worker 注册，它通常会被 main process import 一次，并被每个 worker 再 import 一次。顶层代码应只做注册和常量定义，避免把有副作用的启动逻辑直接写在 import 阶段。
+
 ## 示例项目
 
 示例项目不是“内嵌在 app 里”运行，而是各自通过启动脚本把自己的业务目录挂到框架上：

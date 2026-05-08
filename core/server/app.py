@@ -1,5 +1,3 @@
-
-
 import os
 import logging
 import asyncio
@@ -32,7 +30,7 @@ from pydantic import BaseModel
 from starlette.responses import Response as StarletteResponse
 from starlette.routing import compile_path
 
-from core.constants import APP_DIR, PROJECT_DIR, PUBLIC_DIR, RESOURCES_DIR
+from core.constants import APP_DIR, PUBLIC_DIR, RESOURCES_DIR
 from core.utils.concurrent_utils import run_any_func
 from .request import AdvanceRequest
 
@@ -55,10 +53,8 @@ _app_stop_event = asyncio.Event()
 
 logger = logging.getLogger(__name__)
 
-
 def _is_app_shutting_down() -> bool:
     return _app_stop_event.is_set() or os.environ.get("__APP_SHUTTING_DOWN__") == "1"
-
 
 def _is_separate_uvicorn_worker_process() -> bool:
     if os.environ.get("IN_FASTAPI_WORKER") != "1":
@@ -68,7 +64,6 @@ def _is_separate_uvicorn_worker_process() -> bool:
     except ValueError:
         return False
     return supervisor_pid > 0 and supervisor_pid != os.getpid()
-
 
 def _schedule_worker_hard_exit_after_lifespan() -> None:
     if not _is_separate_uvicorn_worker_process():
@@ -326,9 +321,15 @@ def register_i18n_routes(app: FastAPI) -> None:
 
     @app.get("/i18n/{lang}", tags=["I18N"])
     async def i18n_catalog(lang: str) -> dict[str, str]:
-        from .translate import get_all_public_translations
+        from .translate import get_all_public_translations, get_public_categories
 
-        return get_all_public_translations("default", lang)
+        catalog: dict[str, str] = {}
+        categories = sorted(get_public_categories() or {"default"})
+        if "default" not in categories:
+            categories.insert(0, "default")
+        for category in categories:
+            catalog.update(get_all_public_translations(category, lang))
+        return catalog
 
     app.state._i18n_routes_registered = True
 
@@ -383,6 +384,11 @@ def internal_admin_path(path: str = "") -> str:
     from core.server.data_types.config import Config
 
     return Config.GetConfig().server_config.get_internal_admin_path(path)
+
+
+def _install_internal_path_rewriter(app: FastAPI, server_cfg) -> None:
+    """Install internal path metadata for standalone route registration tests."""
+    app.state.internal_path_prefix = getattr(server_cfg, "internal_path_prefix", "/_internal") or "/_internal"
 
 
 def _discover_locale_file_languages() -> set[str]:
@@ -1338,12 +1344,14 @@ def create_app(config=None) -> FastAPI:
         else:
             preload_default_services(background=True, probe_predefined_clients=False)
         await warmup_storage_clients(logger=logger, phase="worker startup")
-        # Start distributed services
+        # Start node-level distributed services. The backing state and port lease
+        # are stored in AppSharedData so replacement workers do not advertise
+        # stale process-local state.
         try:
             from core.server.distributed import NodeRegistry
             from core.server.shared_dict import GlobalSharedDict
-            await NodeRegistry.get_instance().start()
             await GlobalSharedDict.get_instance().start()
+            await NodeRegistry.get_instance().start()
         except Exception as exc:
             logger.debug("Distributed services startup skipped: %s", exc)
         await _invoke_callbacks(_enabled_callbacks(_on_before_app_created_callbacks, expose_internal=expose_internal), app)
@@ -1378,13 +1386,19 @@ def create_app(config=None) -> FastAPI:
         # Publish "this worker is ready" to AppSharedData so the main process
         # rendezvous thread can emit the completion banner.
         try:
-            from .shared import AppSharedData as _AppSharedData
-            _AppSharedData.Get().mark_worker_ready(os.getpid())
+            from .shared import mark_current_worker_lifespan_ready, start_worker_heartbeat
+            start_worker_heartbeat()
+            mark_current_worker_lifespan_ready()
         except Exception as exc:
-            logger.debug("mark_worker_ready failed: %s", exc)
+            logger.debug("worker SharedMemory ready mark failed: %s", exc)
         yield
         logger.info(f"Worker PID {os.getpid()} shutting down...")
         os.environ["__APP_SHUTTING_DOWN__"] = "1"
+        try:
+            from .shared import stop_worker_heartbeat
+            stop_worker_heartbeat()
+        except Exception as exc:
+            logger.debug("worker heartbeat shutdown skipped: %s", exc)
         await _invoke_callbacks(_on_app_shutdown_callbacks, app)
         _app_stop_event.set()
         logger.info(f"Worker PID {os.getpid()} exited.")
@@ -1501,15 +1515,16 @@ def create_app(config=None) -> FastAPI:
     _app = app
 
     # ---- Register worker & start inner communication server ----
-    from .shared import AppSharedData
+    from .shared import AppSharedData, configure_current_worker_runtime
     shared_data = AppSharedData.Get()
     if _inner_comm_server_thread is not None and _inner_comm_server_thread.is_alive():
-        shared_data.register_worker(pid=os.getpid())
+        configure_current_worker_runtime(shared_data.register_worker(pid=os.getpid()))
         comm_port: int | None = None
     else:
         if _app_stop_event.is_set():
             _app_stop_event = asyncio.Event()
         self_info = shared_data.register_worker(pid=os.getpid())
+        configure_current_worker_runtime(self_info)
         comm_port = self_info.msg_port
 
     async def _handle_inner_comm(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
@@ -1571,7 +1586,7 @@ def create_app(config=None) -> FastAPI:
                 if not is_addr_in_use or bind_attempts >= 3:
                     raise
                 bind_attempts += 1
-                from .shared import AppSharedData
+                from .shared import AppSharedData, configure_current_worker_runtime, update_current_worker_msg_port
 
                 logger.warning(
                     "Worker PID %s inner communication port %s is already in use; reallocating (attempt %s).",
@@ -1581,6 +1596,7 @@ def create_app(config=None) -> FastAPI:
                 )
                 try:
                     self_info = AppSharedData.Get().reallocate_worker_msg_port(os.getpid())
+                    configure_current_worker_runtime(self_info)
                 except (BrokenPipeError, ConnectionResetError, EOFError, OSError) as reallocate_exc:
                     logger.debug(
                         "Worker PID %s stopped inner communication port reallocation: %s",
@@ -1589,6 +1605,7 @@ def create_app(config=None) -> FastAPI:
                     )
                     return
                 comm_port = self_info.msg_port
+                update_current_worker_msg_port(comm_port)
 
     def _run_inner_comm_server():
         try:
@@ -1860,10 +1877,11 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
     """
     from .shared import (
         WorkerRedirectMessage,
-        AppSharedData,
         WorkerRedirectStreamStart,
         WorkerRedirectStreamChunk,
         WorkerRedirectStreamEnd,
+        drop_worker_client_cache,
+        get_worker_info,
     )
 
     msg = WorkerRedirectMessage(
@@ -1871,6 +1889,7 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
         path=request.url.path,
         method=request.method,
         request_params=request_params,
+        headers=[(k.decode("latin-1"), v.decode("latin-1")) for k, v in request.headers.raw],
     )
     if worker_id == os.getpid():
         # Same worker, handle locally
@@ -1881,21 +1900,40 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
             return StreamingResponse(_iter_stream_chunks(r.result), media_type="text/event-stream")
         return r.result
 
-    shared_data = AppSharedData.Get()
-    worker_info = shared_data.get_worker(worker_id)
+    worker_info = get_worker_info(worker_id)
+    if worker_info is None:
+        raise RuntimeError(f"Worker {worker_id} is not available for redirect to {msg.path}")
     lock = worker_info.get_client_lock()
     await lock.acquire()
     release_lock = True
 
     try:
-        reader, writer = await worker_info.get_client()
-        writer.write(msg.dump())
-        await writer.drain()
+        for attempt in range(2):
+            try:
+                reader, writer = await worker_info.get_client()
+                writer.write(msg.dump())
+                await writer.drain()
 
-        try:
-            response_data = await _read_worker_response_frame(reader, timeout=30.0)
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Worker {worker_id} did not respond within 30s for redirect to {msg.path}")
+                try:
+                    response_data = await _read_worker_response_frame(reader, timeout=30.0)
+                except asyncio.TimeoutError:
+                    raise TimeoutError(f"Worker {worker_id} did not respond within 30s for redirect to {msg.path}")
+                break
+            except (EOFError, BrokenPipeError, ConnectionResetError, OSError, asyncio.IncompleteReadError) as exc:
+                drop_worker_client_cache(worker_info.pid, worker_info.generation)
+                if attempt >= 1:
+                    raise RuntimeError(f"Worker {worker_id} connection failed for redirect to {msg.path}: {exc}") from exc
+                fresh_info = get_worker_info(worker_id)
+                if fresh_info is None:
+                    raise RuntimeError(f"Worker {worker_id} is no longer available for redirect to {msg.path}") from exc
+                worker_info = fresh_info
+                if release_lock:
+                    lock.release()
+                lock = worker_info.get_client_lock()
+                await lock.acquire()
+                release_lock = True
+        else:
+            raise RuntimeError(f"Worker {worker_id} did not return redirect data")
 
         result: WorkerRedirectMessage.RedirectResult = pickle.loads(response_data)
         if result.error is not None:
@@ -1945,23 +1983,37 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
 
 async def send_message_to_worker(worker_id: int, msg: 'WorkerMessage') -> object:
     """Send a generic worker message and return the remote handler result."""
-    from .shared import AppSharedData
+    from .shared import drop_worker_client_cache, get_worker_info
 
     if worker_id == os.getpid():
         return await msg.handle(get_app())
 
-    shared_data = AppSharedData.Get()
-    worker_info = shared_data.get_worker(worker_id)
+    worker_info = get_worker_info(worker_id)
+    if worker_info is None:
+        raise RuntimeError(f"Worker {worker_id} is not available")
 
-    async with worker_info.get_client_lock():
-        reader, writer = await worker_info.get_client()
-        writer.write(msg.dump())
-        await writer.drain()
+    last_exc: BaseException | None = None
+    for attempt in range(2):
+        try:
+            async with worker_info.get_client_lock():
+                reader, writer = await worker_info.get_client()
+                writer.write(msg.dump())
+                await writer.drain()
 
-        length_data = await asyncio.wait_for(reader.readexactly(4), timeout=30.0)
-        length = struct.unpack('!I', length_data)[0]
-        response_data = await asyncio.wait_for(reader.readexactly(length), timeout=30.0)
-    return pickle.loads(response_data)
+                length_data = await asyncio.wait_for(reader.readexactly(4), timeout=30.0)
+                length = struct.unpack('!I', length_data)[0]
+                response_data = await asyncio.wait_for(reader.readexactly(length), timeout=30.0)
+            return pickle.loads(response_data)
+        except (EOFError, BrokenPipeError, ConnectionResetError, OSError, asyncio.IncompleteReadError, asyncio.TimeoutError) as exc:
+            last_exc = exc
+            drop_worker_client_cache(worker_info.pid, worker_info.generation)
+            if attempt >= 1:
+                break
+            fresh_info = get_worker_info(worker_id)
+            if fresh_info is None:
+                break
+            worker_info = fresh_info
+    raise RuntimeError(f"Worker {worker_id} message failed: {last_exc}") from last_exc
 
 
 __all__ = [
@@ -1974,6 +2026,7 @@ __all__ = [
     "send_message_to_worker",
     "internal_path",
     "internal_admin_path",
+    "_install_internal_path_rewriter",
     "create_app",
     "get_app",
 ]

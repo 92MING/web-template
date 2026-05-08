@@ -3,6 +3,7 @@
 
 import pytest
 import asyncio
+import random
 import time
 
 import sys
@@ -33,6 +34,14 @@ async def _wait_for_gsd_value(
         await asyncio.sleep(0.05)
     actual = await gsd.get(key, namespace=namespace)
     raise AssertionError(f"Expected {key!r} to become {expected!r}, got {actual!r}")
+
+
+def _gsd_entry(gsd: GlobalSharedDict, namespace: str, key: str) -> dict[str, object] | None:
+    return gsd._shared.get_global_shared_dict_entry(namespace, key)
+
+
+def _set_gsd_entry(gsd: GlobalSharedDict, namespace: str, key: str, entry: dict[str, object]) -> None:
+    gsd._shared.set_global_shared_dict_entry(namespace, key, entry)
 
 
 @pytest.fixture
@@ -115,16 +124,16 @@ class TestGlobalSharedDict:
 
     def test_peer_registration(self):
         g = GlobalSharedDict(AppSharedData("gsd-test4"), listen_port=0)
-        p = g.register_peer("node-1", "127.0.0.1", 18000, relation="child")
+        p = g.register_peer("node-1", "127.0.0.1", 18000, relation="pc")
         assert p.node_id == "node-1"
-        assert p.relation == "child"
+        assert p.relation == "pc"
         peers = g.get_peers()
         assert len(peers) == 1
 
     def test_nearest_peers_sorting(self):
         g = GlobalSharedDict(AppSharedData("gsd-test5"), listen_port=0)
-        g.register_peer("near", "127.0.0.1", 18001, relation="friend")
-        g.register_peer("far", "127.0.0.1", 18002, relation="friend")
+        g.register_peer("near", "127.0.0.1", 18001, relation="ff")
+        g.register_peer("far", "127.0.0.1", 18002, relation="ff")
         g._peers["near"].rtt_ms = 10.0
         g._peers["far"].rtt_ms = 100.0
         nearest = g.get_nearest_peers(n=2)
@@ -167,12 +176,12 @@ class TestGlobalSharedDict:
                 _, relay_b_port = await relay_b.start()
                 _, leaf_port = await leaf.start()
 
-                master.register_peer("relay-a", "127.0.0.1", relay_a_port, relation="friend")
-                relay_a.register_peer("master", "127.0.0.1", master_port, relation="friend")
-                relay_a.register_peer("relay-b", "127.0.0.1", relay_b_port, relation="friend")
-                relay_b.register_peer("relay-a", "127.0.0.1", relay_a_port, relation="friend")
-                relay_b.register_peer("leaf", "127.0.0.1", leaf_port, relation="friend")
-                leaf.register_peer("relay-b", "127.0.0.1", relay_b_port, relation="friend")
+                master.register_peer("relay-a", "127.0.0.1", relay_a_port, relation="ff")
+                relay_a.register_peer("master", "127.0.0.1", master_port, relation="ff")
+                relay_a.register_peer("relay-b", "127.0.0.1", relay_b_port, relation="ff")
+                relay_b.register_peer("relay-a", "127.0.0.1", relay_a_port, relation="ff")
+                relay_b.register_peer("leaf", "127.0.0.1", leaf_port, relation="ff")
+                leaf.register_peer("relay-b", "127.0.0.1", relay_b_port, relation="ff")
 
                 await master.set("from-master", "reached-leaf")
                 await _wait_for_gsd_value(leaf, "from-master", "reached-leaf")
@@ -187,6 +196,256 @@ class TestGlobalSharedDict:
 
         asyncio.run(scenario())
 
+    def test_delete_tombstone_does_not_overwrite_newer_set(self):
+        async def scenario() -> None:
+            g = GlobalSharedDict(AppSharedData("gsd-tombstone-test"), listen_port=0)
+            try:
+                await g.set("x", 1)
+                current = _gsd_entry(g, "default", "x")
+                assert current is not None
+                newer = current["ts"]
+                await g._process_inbound(
+                    {
+                        "cmd": "delete",
+                        "ns": "default",
+                        "key": "x",
+                        "entry": {"v": None, "ts": newer - 1.0, "exp": None, "deleted": True},
+                    },
+                    None,  # type: ignore[arg-type]
+                )
+                assert await g.get("x") == 1
+            finally:
+                await g.stop()
+
+        asyncio.run(scenario())
+
+    def test_delayed_delete_from_one_node_does_not_overwrite_newer_set_from_another(self):
+        async def scenario() -> None:
+            node_b = GlobalSharedDict(AppSharedData("gsd-delay-node-b"), listen_port=0, node_id="node-b")
+            try:
+                delete_from_a = {
+                    "cmd": "delete",
+                    "ns": "default",
+                    "key": "x",
+                    "entry": {"v": None, "ts": 1000.000, "exp": None, "deleted": True},
+                    "seen": ["node-a"],
+                }
+                set_from_c = {
+                    "cmd": "set",
+                    "ns": "default",
+                    "key": "x",
+                    "entry": {"v": 1, "ts": 1000.001, "exp": None, "deleted": False},
+                    "seen": ["node-c"],
+                }
+
+                await node_b._process_inbound(set_from_c, None)  # type: ignore[arg-type]
+                await node_b._process_inbound(delete_from_a, None)  # type: ignore[arg-type]
+
+                assert await node_b.get("x") == 1
+                current = _gsd_entry(node_b, "default", "x")
+                assert current is not None
+                assert current["ts"] == 1000.001
+            finally:
+                await node_b.stop()
+
+        asyncio.run(scenario())
+
+    def test_three_node_delayed_delete_does_not_overwrite_newer_forwarded_set(self):
+        async def scenario() -> None:
+            node_a = GlobalSharedDict(AppSharedData("gsd-delay-node-a-live"), listen_port=0, node_id="node-a")
+            node_b = GlobalSharedDict(AppSharedData("gsd-delay-node-b-live"), listen_port=0, node_id="node-b", broadcast_fanout=2)
+            node_c = GlobalSharedDict(AppSharedData("gsd-delay-node-c-live"), listen_port=0, node_id="node-c")
+            try:
+                _, port_a = await node_a.start()
+                _, port_b = await node_b.start()
+                _, port_c = await node_c.start()
+                node_a.register_peer("node-b", "127.0.0.1", port_b, relation="ff")
+                node_b.register_peer("node-a", "127.0.0.1", port_a, relation="ff")
+                node_b.register_peer("node-c", "127.0.0.1", port_c, relation="ff")
+                node_c.register_peer("node-b", "127.0.0.1", port_b, relation="ff")
+
+                set_from_c = {
+                    "cmd": "set",
+                    "ns": "default",
+                    "key": "x",
+                    "entry": {"v": 1, "ts": 1000.002, "exp": None, "deleted": False},
+                    "seen": ["node-c"],
+                }
+                old_delete_from_a = {
+                    "cmd": "delete",
+                    "ns": "default",
+                    "key": "x",
+                    "entry": {"v": None, "ts": 1000.001, "exp": None, "deleted": True},
+                    "seen": ["node-a"],
+                }
+
+                _set_gsd_entry(node_c, "default", "x", dict(set_from_c["entry"]))
+                await node_b._process_inbound(set_from_c, None)  # type: ignore[arg-type]
+                await _wait_for_gsd_value(node_a, "x", 1)
+                await node_b._process_inbound(old_delete_from_a, None)  # type: ignore[arg-type]
+
+                await asyncio.sleep(0.2)
+                assert await node_b.get("x") == 1
+                assert await node_c.get("x") == 1
+                node_b_entry = _gsd_entry(node_b, "default", "x")
+                node_c_entry = _gsd_entry(node_c, "default", "x")
+                assert node_b_entry is not None
+                assert node_c_entry is not None
+                assert node_b_entry["ts"] == 1000.002
+                assert node_c_entry["ts"] == 1000.002
+            finally:
+                await node_c.stop()
+                await node_b.stop()
+                await node_a.stop()
+
+        asyncio.run(scenario())
+
+    def test_three_node_jitter_keeps_newest_entries_across_namespaces(self):
+        async def wait_entry(
+            gsd: GlobalSharedDict,
+            namespace: str,
+            key: str,
+            predicate,
+            timeout: float = 3.0,
+        ) -> None:
+            deadline = asyncio.get_running_loop().time() + timeout
+            while asyncio.get_running_loop().time() < deadline:
+                entry = _gsd_entry(gsd, namespace, key)
+                if predicate(entry):
+                    return
+                await asyncio.sleep(0.05)
+            raise AssertionError(f"Expected {namespace}.{key} to match predicate, got {_gsd_entry(gsd, namespace, key)!r}")
+
+        async def scenario() -> None:
+            node_a = GlobalSharedDict(AppSharedData("gsd-jitter-node-a-live"), listen_port=0, node_id="node-a")
+            node_b = GlobalSharedDict(AppSharedData("gsd-jitter-node-b-live"), listen_port=0, node_id="node-b", broadcast_fanout=2)
+            node_c = GlobalSharedDict(AppSharedData("gsd-jitter-node-c-live"), listen_port=0, node_id="node-c")
+            try:
+                _, port_a = await node_a.start()
+                _, port_b = await node_b.start()
+                _, port_c = await node_c.start()
+                node_a.register_peer("node-b", "127.0.0.1", port_b, relation="ff")
+                node_b.register_peer("node-a", "127.0.0.1", port_a, relation="ff")
+                node_b.register_peer("node-c", "127.0.0.1", port_c, relation="ff")
+                node_c.register_peer("node-b", "127.0.0.1", port_b, relation="ff")
+
+                alpha_new_set = {
+                    "cmd": "set",
+                    "ns": "alpha",
+                    "key": "x",
+                    "entry": {"v": 1, "ts": 1000.004, "exp": None, "deleted": False},
+                    "seen": ["node-c"],
+                }
+                alpha_old_delete = {
+                    "cmd": "delete",
+                    "ns": "alpha",
+                    "key": "x",
+                    "entry": {"v": None, "ts": 1000.001, "exp": None, "deleted": True},
+                    "seen": ["node-a"],
+                }
+                beta_new_delete = {
+                    "cmd": "delete",
+                    "ns": "beta",
+                    "key": "y",
+                    "entry": {"v": None, "ts": 1000.006, "exp": None, "deleted": True},
+                    "seen": ["node-c"],
+                }
+                beta_old_set = {
+                    "cmd": "set",
+                    "ns": "beta",
+                    "key": "y",
+                    "entry": {"v": "stale", "ts": 1000.002, "exp": None, "deleted": False},
+                    "seen": ["node-a"],
+                }
+
+                _set_gsd_entry(node_c, "alpha", "x", dict(alpha_new_set["entry"]))
+                _set_gsd_entry(node_c, "beta", "y", dict(beta_new_delete["entry"]))
+
+                await node_b._process_inbound(alpha_new_set, None)  # type: ignore[arg-type]
+                await node_b._process_inbound(beta_new_delete, None)  # type: ignore[arg-type]
+                await _wait_for_gsd_value(node_a, "x", 1, namespace="alpha")
+                await wait_entry(node_a, "beta", "y", lambda entry: isinstance(entry, dict) and entry.get("deleted") is True)
+
+                await node_b._process_inbound(alpha_old_delete, None)  # type: ignore[arg-type]
+                await node_b._process_inbound(beta_old_set, None)  # type: ignore[arg-type]
+
+                await asyncio.sleep(0.2)
+                for node in (node_a, node_b, node_c):
+                    assert await node.get("x", namespace="alpha") == 1
+                    assert await node.get("y", namespace="beta") is None
+                    alpha_entry = _gsd_entry(node, "alpha", "x")
+                    beta_entry = _gsd_entry(node, "beta", "y")
+                    assert alpha_entry is not None
+                    assert beta_entry is not None
+                    assert alpha_entry["ts"] == 1000.004
+                    assert beta_entry["ts"] == 1000.006
+                    assert beta_entry.get("deleted") is True
+            finally:
+                await node_c.stop()
+                await node_b.stop()
+                await node_a.stop()
+
+        asyncio.run(asyncio.wait_for(scenario(), timeout=6.0))
+
+    def test_three_node_randomized_jitter_converges_by_lww_timestamp(self):
+        async def scenario() -> None:
+            random_source = random.Random(20260508)
+            nodes = [
+                GlobalSharedDict(AppSharedData("gsd-fuzz-node-a"), listen_port=0, node_id="node-a"),
+                GlobalSharedDict(AppSharedData("gsd-fuzz-node-b"), listen_port=0, node_id="node-b"),
+                GlobalSharedDict(AppSharedData("gsd-fuzz-node-c"), listen_port=0, node_id="node-c"),
+            ]
+            namespaces = ["alpha", "beta", "gamma"]
+            keys = [f"key-{index}" for index in range(8)]
+            expected_entries: dict[tuple[str, str], dict[str, object]] = {}
+            deliveries: list[tuple[GlobalSharedDict, dict[str, object]]] = []
+            timestamp = 1000.0
+
+            try:
+                for index in range(80):
+                    timestamp += random_source.choice([0.001, 0.002, 0.005, 0.011])
+                    namespace = random_source.choice(namespaces)
+                    key = random_source.choice(keys)
+                    deleted = random_source.random() < 0.34
+                    entry = {
+                        "v": None if deleted else {"round": index, "source": random_source.choice(["node-a", "node-b", "node-c"])},
+                        "ts": timestamp,
+                        "exp": None,
+                        "deleted": deleted,
+                    }
+                    payload = {
+                        "cmd": "delete" if deleted else "set",
+                        "ns": namespace,
+                        "key": key,
+                        "entry": dict(entry),
+                        "seen": [f"origin-{index % 3}"],
+                    }
+                    current_expected = expected_entries.get((namespace, key))
+                    if current_expected is None or timestamp > float(current_expected["ts"]):
+                        expected_entries[(namespace, key)] = dict(entry)
+                    for node in nodes:
+                        deliveries.append((node, dict(payload)))
+
+                random_source.shuffle(deliveries)
+                for node, payload in deliveries:
+                    await node._process_inbound(payload, None)  # type: ignore[arg-type]
+
+                for node in nodes:
+                    for (namespace, key), expected_entry in expected_entries.items():
+                        local_entry = _gsd_entry(node, namespace, key)
+                        assert local_entry is not None
+                        assert local_entry["ts"] == expected_entry["ts"]
+                        assert bool(local_entry.get("deleted")) is bool(expected_entry.get("deleted"))
+                        if expected_entry.get("deleted"):
+                            assert await node.get(key, namespace=namespace) is None
+                        else:
+                            assert await node.get(key, namespace=namespace) == expected_entry["v"]
+            finally:
+                for node in nodes:
+                    await node.stop()
+
+        asyncio.run(scenario())
+
 
 class TestNodeRegistry:
     def test_registry_state_is_shared_between_instances(self):
@@ -196,7 +455,7 @@ class TestNodeRegistry:
             worker_a = NodeRegistry(shared_data=shared_data, namespace=namespace)
             worker_b = NodeRegistry(shared_data=shared_data, namespace=namespace)
 
-            await worker_a.register("node-a", "127.0.0.1", 18000, relation="child", gsd_port=28000)
+            await worker_a.register("node-a", "127.0.0.1", 18000, relation="pc", gsd_port=28000)
             node_from_b = await worker_b.get("node-a")
             assert node_from_b is not None
             assert node_from_b.host == "127.0.0.1"
@@ -224,7 +483,7 @@ class TestNodeRegistry:
             original_instance = GlobalSharedDict._instance
             GlobalSharedDict._instance = gsd
             try:
-                await registry.register("node-b", "127.0.0.1", 1, relation="friend")
+                await registry.register("node-b", "127.0.0.1", 1, relation="ff")
                 await registry.update_health("node-b", success=False)
                 await gsd.set(
                     "node-b",
@@ -248,5 +507,348 @@ class TestNodeRegistry:
             finally:
                 GlobalSharedDict._instance = original_instance
                 await gsd.stop()
+
+        asyncio.run(scenario())
+
+    def test_registry_probe_merges_distributed_health_metadata(self):
+        async def scenario() -> None:
+            from aiohttp import web
+
+            async def handle_health(request: web.Request) -> web.Response:
+                return web.json_response({
+                    "node_id": "node-metrics",
+                    "status": "ok",
+                    "metadata": {"cpu": "9.5%", "memory": "20.0%"},
+                })
+
+            app = web.Application()
+            app.router.add_get("/_internal/admin/api/distributed/health", handle_health)
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, "127.0.0.1", 0)
+            await site.start()
+            port = site._server.sockets[0].getsockname()[1]
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-probe-metadata-test"),
+                namespace="node-registry-probe-metadata-test",
+            )
+            try:
+                node = await registry.register("node-metrics", "127.0.0.1", port, relation="ff")
+                await registry._probe_node(node)
+                updated = await registry.get("node-metrics")
+                assert updated is not None
+                assert updated.metadata["cpu"] == "9.5%"
+                assert updated.metadata["memory"] == "20.0%"
+            finally:
+                await runner.cleanup()
+
+        asyncio.run(scenario())
+
+    def test_registry_probe_records_packet_loss_metadata(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-probe-loss-test"),
+                namespace="node-registry-probe-loss-test",
+            )
+            await registry.register("node-loss", "127.0.0.1", 18000, relation="ff")
+
+            await registry.record_probe_result("node-loss", success=True, rtt_ms=12.0)
+            await registry.record_probe_result("node-loss", success=False)
+            await registry.record_probe_result("node-loss", success=False)
+
+            updated = await registry.get("node-loss")
+            assert updated is not None
+            assert updated.metadata["probe_total"] == "3"
+            assert updated.metadata["probe_failed"] == "2"
+            assert updated.metadata["packet_loss"] == "66.7%"
+            assert float(updated.metadata["last_probe_at"]) > 0
+
+        asyncio.run(scenario())
+
+    def test_registry_forward_scope_follows_pc_chain_and_child_opt_in(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-forward-scope-test"),
+                namespace="node-registry-forward-scope-test",
+            )
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-a"},
+            )
+            await registry.register(
+                "node-c",
+                "127.0.0.1",
+                18001,
+                relation="pc",
+                metadata={"parent_id": "node-b"},
+            )
+            assert await registry.can_forward_to("node-a", "node-c") is True
+            assert await registry.can_forward_to("node-c", "node-a") is False
+
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-a"},
+                allow_child_api_forward=True,
+            )
+            await registry.register(
+                "node-c",
+                "127.0.0.1",
+                18001,
+                relation="pc",
+                metadata={"parent_id": "node-b"},
+                allow_child_api_forward=True,
+            )
+            assert await registry.can_forward_to("node-c", "node-a") is True
+
+        asyncio.run(scenario())
+
+    def test_registry_forward_scope_understands_local_parent_record(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-local-parent-forward-test"),
+                namespace="node-registry-local-parent-forward-test",
+            )
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-a"},
+            )
+            assert await registry.can_forward_to("node-b", "node-a") is False
+
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-a"},
+                allow_child_api_forward=True,
+            )
+            assert await registry.can_forward_to("node-b", "node-a") is True
+
+        asyncio.run(scenario())
+
+    def test_registry_management_scope_updates_when_pc_chain_changes_to_ff(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-management-relation-change-test"),
+                namespace="node-registry-management-relation-change-test",
+            )
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-a"},
+            )
+            await registry.register(
+                "node-c",
+                "127.0.0.1",
+                18001,
+                relation="pc",
+                metadata={"parent_id": "node-b"},
+            )
+            route = await registry.management_route("node-a", "node-c")
+            assert route is not None
+            assert [node.node_id for node in route] == ["node-b", "node-c"]
+
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="ff",
+                metadata={"parent_id": ""},
+            )
+            assert await registry.management_route("node-a", "node-c") is None
+            assert await registry.management_route("node-a", "node-b") is None
+
+        asyncio.run(scenario())
+
+    def test_registry_management_scope_does_not_cross_friend_branch(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-friend-branch-management-test"),
+                namespace="node-registry-friend-branch-management-test",
+            )
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-c"},
+            )
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18001,
+                relation="ff",
+                metadata={"parent_id": "node-b"},
+            )
+            route_to_b = await registry.management_route("node-c", "node-b")
+            assert route_to_b is not None
+            assert [node.node_id for node in route_to_b] == ["node-b"]
+            assert await registry.management_route("node-c", "node-a") is None
+
+        asyncio.run(scenario())
+
+    def test_registry_management_scope_crosses_anchored_pp_edge(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-anchored-pp-management-test"),
+                namespace="node-registry-anchored-pp-management-test",
+            )
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-c"},
+            )
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18001,
+                relation="pp",
+                metadata={"parent_id": "node-b"},
+            )
+
+            route_to_b = await registry.management_route("node-c", "node-b")
+            assert route_to_b is not None
+            assert [node.node_id for node in route_to_b] == ["node-b"]
+            route_to_a = await registry.management_route("node-c", "node-a")
+            assert route_to_a is not None
+            assert [node.node_id for node in route_to_a] == ["node-b", "node-a"]
+
+            assert await registry.can_forward_to("node-c", "node-a") is True
+            assert await registry.can_forward_to("node-a", "node-c") is False
+
+        asyncio.run(scenario())
+
+    def test_registry_management_scope_loses_pp_descendant_when_pc_parent_becomes_ff(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-anchored-pp-relation-change-test"),
+                namespace="node-registry-anchored-pp-relation-change-test",
+            )
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="pc",
+                metadata={"parent_id": "node-c"},
+            )
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18001,
+                relation="pp",
+                metadata={"parent_id": "node-b"},
+            )
+            assert await registry.management_route("node-c", "node-a") is not None
+
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18000,
+                relation="ff",
+                metadata={"parent_id": ""},
+            )
+
+            assert await registry.management_route("node-c", "node-b") is None
+            assert await registry.management_route("node-c", "node-a") is None
+
+        asyncio.run(scenario())
+
+    def test_registry_original_three_node_topology_transitions_are_closed(self):
+        async def scenario() -> None:
+            registry = NodeRegistry(
+                shared_data=AppSharedData("node-registry-original-topology-test"),
+                namespace="node-registry-original-topology-test",
+            )
+
+            async def route_ids(root_id: str, target_id: str) -> list[str] | None:
+                route = await registry.management_route(root_id, target_id)
+                if route is None:
+                    return None
+                return [node.node_id for node in route]
+
+            async def child_can_forward_to_parent(allowed: bool) -> bool:
+                child_view_registry = NodeRegistry(
+                    shared_data=AppSharedData(f"node-registry-child-forward-{allowed}"),
+                    namespace=f"node-registry-child-forward-{allowed}",
+                )
+                await child_view_registry.register(
+                    "node-a",
+                    "127.0.0.1",
+                    18000,
+                    relation="pc",
+                    metadata={"parent_id": "node-a"},
+                    allow_child_api_forward=allowed,
+                )
+                return await child_view_registry.can_forward_to("node-b", "node-a")
+
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18001,
+                relation="pc",
+                metadata={"parent_id": "node-a"},
+            )
+            await registry.register(
+                "node-c",
+                "127.0.0.1",
+                18002,
+                relation="pc",
+                metadata={"parent_id": "node-b"},
+            )
+
+            assert await route_ids("node-a", "node-c") == ["node-b", "node-c"]
+            assert await registry.can_forward_to("node-a", "node-c") is True
+            assert await registry.can_forward_to("node-c", "node-a") is False
+            assert await child_can_forward_to_parent(False) is False
+            assert await child_can_forward_to_parent(True) is True
+
+            await registry.register(
+                "node-b",
+                "127.0.0.1",
+                18001,
+                relation="pc",
+                metadata={"parent_id": "node-c"},
+            )
+            await registry.unregister("node-c")
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18000,
+                relation="pp",
+                metadata={"parent_id": "node-b"},
+            )
+
+            assert await route_ids("node-a", "node-c") is None
+            assert await route_ids("node-b", "node-a") == ["node-a"]
+            assert await route_ids("node-c", "node-b") == ["node-b"]
+            assert await route_ids("node-c", "node-a") == ["node-b", "node-a"]
+            assert await registry.can_forward_to("node-c", "node-a") is True
+            assert await registry.can_forward_to("node-a", "node-c") is False
+
+            await registry.register(
+                "node-a",
+                "127.0.0.1",
+                18000,
+                relation="ff",
+                metadata={"parent_id": "", "parent_node_id": ""},
+            )
+
+            assert await route_ids("node-a", "node-b") is None
+            assert await route_ids("node-b", "node-a") is None
+            assert await route_ids("node-c", "node-a") is None
+            assert await route_ids("node-c", "node-b") == ["node-b"]
 
         asyncio.run(scenario())

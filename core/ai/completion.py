@@ -6,6 +6,7 @@ import asyncio
 import logging
 import aiohttp
 import inspect
+import unicodedata
 
 from types import UnionType
 from functools import partial, cache
@@ -74,7 +75,76 @@ _NO_TRANSLATION_CACHE_LEN = 8192
 _DEFAULT_COMPLETION_TIMEOUT = 180.0
 '''默认 completion 请求超时（秒）。'''
 
+# Translation-noise ranges mostly cover emoji/pictograph-heavy blocks and invisible
+# formatting controls that should not be translated on their own.
+_TRANSLATION_NOISE_RANGES: tuple[tuple[int, int], ...] = (
+    (0x00AD, 0x00AD),      # Soft Hyphen
+    (0x200B, 0x200F),      # Zero-width / bidi helpers
+    (0x202A, 0x202E),      # Bidi embedding / override
+    (0x2060, 0x206F),      # Word joiner / invisible format controls
+    (0x2190, 0x21FF),      # Arrows
+    (0x2300, 0x23FF),      # Miscellaneous Technical
+    (0x2460, 0x24FF),      # Enclosed Alphanumerics
+    (0x2500, 0x257F),      # Box Drawing
+    (0x2580, 0x259F),      # Block Elements
+    (0x25A0, 0x25FF),      # Geometric Shapes
+    (0x2600, 0x26FF),      # Miscellaneous Symbols
+    (0x2700, 0x27BF),      # Dingbats
+    (0x27F0, 0x27FF),      # Supplemental Arrows-A
+    (0x2900, 0x297F),      # Supplemental Arrows-B
+    (0x2980, 0x29FF),      # Miscellaneous Mathematical Symbols-B
+    (0x2A00, 0x2BFF),      # Supplemental Mathematical Operators + misc arrows/shapes
+    (0xFE00, 0xFE0F),      # Variation Selectors
+    (0x1F000, 0x1FAFF),    # Mahjong / domino / emoji / pictographs blocks
+    (0x1FB00, 0x1FBFF),    # Symbols for Legacy Computing
+    (0xE0000, 0xE007F),    # Tags
+    (0xE0100, 0xE01EF),    # Variation Selectors Supplement
+)
+
 __all__: list[str] = []
+
+
+def _is_codepoint_in_ranges(codepoint: int, ranges: Sequence[tuple[int, int]]) -> bool:
+    for start, end in ranges:
+        if start <= codepoint <= end:
+            return True
+    return False
+
+
+def _is_translation_noise_char(ch: str) -> bool:
+    if not ch:
+        return True
+    if ch.isspace():
+        return True
+    codepoint = ord(ch)
+    if 0xFDD0 <= codepoint <= 0xFDEF or (codepoint & 0xFFFF) in {0xFFFE, 0xFFFF}:
+        return True
+    if _is_codepoint_in_ranges(codepoint, _TRANSLATION_NOISE_RANGES):
+        return True
+    category = unicodedata.category(ch)
+    if category in {'Cc', 'Cf', 'Cs', 'Co', 'Cn'}:
+        return True
+    if category.startswith('Z') or category.startswith('P') or category.startswith('S'):
+        return True
+    return False
+
+
+def _normalize_translation_signal_text(text: str | None) -> str:
+    if not text:
+        return ''
+    normalized = unicodedata.normalize('NFKC', text)
+    kept = ''.join(ch for ch in normalized if not _is_translation_noise_char(ch))
+    return kept.casefold().strip()
+
+
+def _sanitize_translation_reference(text: str, reference: str | None) -> str | None:
+    normalized_text = _normalize_translation_signal_text(text)
+    if not normalized_text or not reference or not reference.strip():
+        return None
+    normalized_reference = _normalize_translation_signal_text(reference)
+    if not normalized_reference or normalized_reference == normalized_text:
+        return None
+    return reference.strip()
 
 class ChatCompletionOutput(TypedDict):
     '''Chat Completion 完整输出结构。'''
@@ -2735,11 +2805,20 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
         text: str,
         target_language: str | Language,
         prompt: str | Prompt | None = None,
+        reference: str | None = None,
         use_cache: bool = True,
         save_cache: bool = True,
         stream: bool = True,
         **kwargs: Unpack[ChatCompleteOptionalParams],
     ) -> str:
+        if not text or not text.strip():
+            return text
+
+        normalized_text = _normalize_translation_signal_text(text)
+        if not normalized_text:
+            return text
+
+        sanitized_reference = _sanitize_translation_reference(text, reference)
         target_lang_key, prompt_target_language = self._resolve_target_language(target_language)
 
         if use_cache:
@@ -2753,9 +2832,24 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
             target_language=prompt_target_language,
         )
         instruction = instruction + ' Return translated text only, keep original structure and line breaks.'
+        if sanitized_reference:
+            instruction = instruction + ' Use the reference context only to disambiguate wording; do not translate, echo, or expand the reference itself.'
         messages: list[ChatMessageInput] = [
             {'role': 'system', 'content': 'You are a professional translator.'},
-            {'role': 'user', 'content': [instruction, '\n\n', text]},
+            {
+                'role': 'user',
+                'content': (
+                    [
+                        instruction,
+                        '\n\nReference context:\n',
+                        sanitized_reference,
+                        '\n\nText:\n',
+                        text,
+                    ]
+                    if sanitized_reference else
+                    [instruction, '\n\n', text]
+                ),
+            },
         ]
         payload = cast(ChatCompleteParams, kwargs.copy())
         payload['messages'] = messages

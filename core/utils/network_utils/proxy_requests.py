@@ -58,9 +58,10 @@ _cache_ts: float = 0.0
 _CACHE_TTL: float = 30.0          # seconds before background re-probe
 _PROBE_TIMEOUT: float = 3.0       # TCP connect timeout for health checks
 _BG_INTERVAL: float = 30.0        # background checker loop interval
+_PRIVATE_SUBNET_TTL: float = 300.0  # seconds before subnet route cache expires
 _bg_thread: threading.Thread | None = None
 _bg_stop = threading.Event()
-_private_subnet_proxy_modes: dict[str, bool] = {}
+_private_subnet_proxy_modes: dict[str, tuple[bool, float]] = {}
 
 # Common Clash / V2Ray / Shadowsocks local ports
 _COMMON_LOCAL_PORTS = list(range(7890, 7900))
@@ -257,13 +258,24 @@ def _private_ipv4_subnet(url: str) -> str | None:
 
 def _get_private_subnet_proxy_mode(subnet: str) -> bool | None:
     with _lock:
-        return _private_subnet_proxy_modes.get(subnet)
+        entry = _private_subnet_proxy_modes.get(subnet)
+        if entry is None:
+            return None
+        mode, ts = entry
+        if time.monotonic() - ts > _PRIVATE_SUBNET_TTL:
+            try:
+                del _private_subnet_proxy_modes[subnet]
+            except KeyError:
+                pass
+            return None
+        return mode
 
 
 def _remember_private_subnet_proxy_mode(subnet: str, use_proxy: bool) -> None:
     with _lock:
-        old_value = _private_subnet_proxy_modes.get(subnet)
-        _private_subnet_proxy_modes[subnet] = use_proxy
+        old_entry = _private_subnet_proxy_modes.get(subnet)
+        old_value = old_entry[0] if old_entry is not None else None
+        _private_subnet_proxy_modes[subnet] = (use_proxy, time.monotonic())
     if old_value != use_proxy:
         route = 'proxy' if use_proxy else 'direct'
         _logger.debug('Private subnet %s route learned as %s', subnet, route)

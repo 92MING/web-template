@@ -178,7 +178,7 @@ class TestPrivateSubnetProxyRouting(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(calls), 2)
         self.assertNotIn('proxy', calls[0])
         self.assertNotIn('proxy', calls[1])
-        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['192.168.50.0/24'])
+        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['192.168.50.0/24'][0])
 
     async def test_aiohttp_private_subnet_learns_proxy_after_direct_failure(self):
         calls: list[dict[str, object]] = []
@@ -199,7 +199,7 @@ class TestPrivateSubnetProxyRouting(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]['proxy'], 'http://127.0.0.1:7890')
-        self.assertTrue(_proxy_mod._private_subnet_proxy_modes['192.168.60.0/24'])
+        self.assertTrue(_proxy_mod._private_subnet_proxy_modes['192.168.60.0/24'][0])
 
     async def test_aiohttp_private_subnet_same_failure_marks_direct(self):
         async def _fake_request(self, method, str_or_url, **kwargs):
@@ -212,7 +212,7 @@ class TestPrivateSubnetProxyRouting(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(OSError):
                     await session._request('GET', 'http://10.20.30.40/ping')
 
-        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['10.20.30.0/24'])
+        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['10.20.30.0/24'][0])
 
     async def test_aiohttp_private_subnet_marks_direct_when_tcp_is_reachable(self):
         calls: list[dict[str, object]] = []
@@ -230,7 +230,7 @@ class TestPrivateSubnetProxyRouting(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(calls), 1)
         self.assertNotIn('proxy', calls[0])
-        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['192.168.80.0/24'])
+        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['192.168.80.0/24'][0])
 
     async def test_aiohttp_auto_injected_proxy_connectivity_failure_falls_back_to_direct(self):
         calls: list[dict[str, object]] = []
@@ -282,7 +282,7 @@ class TestPrivateSubnetProxyRoutingRequests(unittest.TestCase):
         self.assertIs(second, response)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]['proxies'], {'http': 'http://127.0.0.1:7890', 'https': 'http://127.0.0.1:7890'})
-        self.assertTrue(_proxy_mod._private_subnet_proxy_modes['192.168.70.0/24'])
+        self.assertTrue(_proxy_mod._private_subnet_proxy_modes['192.168.70.0/24'][0])
 
     def test_requests_private_subnet_same_failure_marks_direct(self):
         def _fake_request(method, url, **kwargs):
@@ -294,7 +294,7 @@ class TestPrivateSubnetProxyRoutingRequests(unittest.TestCase):
             with self.assertRaises(requests.exceptions.ConnectionError):
                 _proxy_mod.requests_get('http://172.16.8.9/ping')
 
-        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['172.16.8.0/24'])
+        self.assertFalse(_proxy_mod._private_subnet_proxy_modes['172.16.8.0/24'][0])
 
 
 if __name__ == '__main__':

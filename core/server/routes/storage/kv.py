@@ -190,6 +190,17 @@ def register_storage_kv_routes(app: FastAPI):
         pattern_text = str(pattern or "").strip().lower()
         value_kind_text = str(value_kind or "").strip().lower()
         ttl_state_text = str(ttl_state or "").strip().lower()
+
+        # Batch fetch all TTLs first
+        all_ttls = await client.mttl(keys)
+        key_ttl_map = dict(zip(keys, all_ttls))
+
+        # If value_kind filter is needed, batch fetch raw values
+        key_raw_value_map: dict[str, object] = {}
+        if value_kind_text:
+            raw_values = await client.raw_mget(keys, default=None)
+            key_raw_value_map = dict(zip(keys, raw_values))
+
         items = []
         for key in keys:
             key_text = str(key)
@@ -198,7 +209,7 @@ def register_storage_kv_routes(app: FastAPI):
                 continue
             if pattern_text and not fnmatch.fnmatch(lowered, pattern_text):
                 continue
-            ttl = await client.get_expire(key)
+            ttl = key_ttl_map.get(key)
             if ttl_state_text == "persistent" and ttl is not None:
                 continue
             if ttl_state_text == "expiring" and ttl is None:
@@ -208,7 +219,7 @@ def register_storage_kv_routes(app: FastAPI):
             if max_ttl is not None and (ttl is None or ttl > max_ttl):
                 continue
             if value_kind_text:
-                value = await client.get(key_text, default=None)
+                value = key_raw_value_map.get(key)
                 detail = describe_value(value)
                 item_value_kind = str(detail.get("value_kind") or "unknown").lower()
                 if item_value_kind != value_kind_text:
@@ -283,6 +294,10 @@ def register_storage_kv_routes(app: FastAPI):
         sampled_value_bytes = 0
         value_sampled_count = 0
 
+        all_ttls = await client.mttl(keys)
+        key_ttl_map = dict(zip(keys, all_ttls))
+
+        need_value_keys: list[str] = []
         for key in keys:
             key_text = str(key)
             lowered = key_text.lower()
@@ -290,8 +305,30 @@ def register_storage_kv_routes(app: FastAPI):
                 continue
             if pattern_text and not fnmatch.fnmatch(lowered, pattern_text):
                 continue
+            ttl = key_ttl_map.get(key)
+            if ttl_state_text == "persistent" and ttl is not None:
+                continue
+            if ttl_state_text == "expiring" and ttl is None:
+                continue
+            if min_ttl is not None and (ttl is None or ttl < min_ttl):
+                continue
+            if max_ttl is not None and (ttl is None or ttl > max_ttl):
+                continue
+            need_value_keys.append(key)
 
-            ttl = await client.get_expire(key_text)
+        key_raw_value_map: dict[str, object] = {}
+        if value_kind_text:
+            raw_values = await client.raw_mget(need_value_keys, default=None)
+            key_raw_value_map = dict(zip(need_value_keys, raw_values))
+
+        for key in keys:
+            key_text = str(key)
+            lowered = key_text.lower()
+            if q_text and q_text not in lowered:
+                continue
+            if pattern_text and not fnmatch.fnmatch(lowered, pattern_text):
+                continue
+            ttl = key_ttl_map.get(key)
             if ttl_state_text == "persistent" and ttl is not None:
                 continue
             if ttl_state_text == "expiring" and ttl is None:
@@ -304,7 +341,7 @@ def register_storage_kv_routes(app: FastAPI):
             detail: dict[str, Any] | None = None
             value_kind_name = ""
             if value_kind_text:
-                value = await client.get(key_text, default=None)
+                value = key_raw_value_map.get(key)
                 detail = describe_value(value)
                 value_kind_name = str(detail.get("value_kind") or "unknown").lower()
                 if value_kind_name != value_kind_text:

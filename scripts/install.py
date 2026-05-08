@@ -4,7 +4,7 @@ FastAPI Web Backend Template - 安装脚本
 1. 确认当前 Python 环境
 2. pip install -r requirements.txt
 3. 检查 LibreOffice (legacy doc/ppt 低保真转换)
-4. 检查 TeX Live (xelatex / dvisvgm / pdftoppm), 缺失时询问是否安装
+4. 下载 / 更新 GeoLite2 City 数据库
 2-12. 基础依赖与本地测试组件会先集中探测/确认，再按依赖分批并行安装
 
 支持参数:
@@ -14,12 +14,9 @@ FastAPI Web Backend Template - 安装脚本
 import os
 import sys
 import shutil
-import zipfile
 import platform
 import subprocess
 import urllib.request
-import tarfile
-import tempfile
 import threading
 import queue
 import re
@@ -43,6 +40,9 @@ _REDIS_MIN_VERSION = (8, 0, 0)
 _REDIS_DOCKER_IMAGE = "redis:8"
 _ATLAS_CLI_WINGET_ID = "MongoDB.MongoDBAtlasCLI"
 _ATLAS_CLI_CHOCO_PACKAGE = "mongodb-atlas"
+_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_DIR not in sys.path:
+    sys.path.insert(0, _PROJECT_DIR)
 
 # ANSI: 支持 Windows Terminal (WT_SESSION) 和非 Windows
 def _color(text: str, code: str) -> str:
@@ -247,32 +247,6 @@ def _install_redis_linux_repo(label: str) -> bool:
     return True
 
 
-def _which_texlive_tool(name: str) -> str | None:
-    """按 TeX Live 常见目录快速定位工具，避免为任意二进制遍历整个 texlive 目录树。"""
-    found = shutil.which(name)
-    if found:
-        return found
-
-    import glob
-
-    if _IS_WIN:
-        system_drive = os.environ.get("SystemDrive", "C:") + os.sep
-        patterns = [
-            os.path.join(system_drive, "texlive", "*", "bin", "windows", f"{name}.exe"),
-            os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "texlive", "*", "bin", "windows", f"{name}.exe"),
-            os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "texlive", "*", "bin", "windows", f"{name}.exe"),
-        ]
-    else:
-        patterns = [
-            os.path.join("/usr/local/texlive", "*", "bin", "*", name),
-            os.path.join(os.path.expanduser("~/texlive"), "*", "bin", "*", name),
-        ]
-
-    hits: list[str] = []
-    for pattern in patterns:
-        hits.extend(glob.glob(pattern))
-    return sorted(hits)[-1] if hits else None
-
 def _requirements_include_playwright(req_file: str) -> bool:
     with open(req_file, "r", encoding="utf-8") as f:
         for line in f:
@@ -422,260 +396,7 @@ def step_check_libreoffice() -> bool:
     print(yellow("  LibreOffice 未自动安装成功，可后续手动安装。"))
     return True
 
-# ── Step 4: 检查 TeX Live ───────────────────────────────────────
-_TEXLIVE_TOOLS = ["xelatex", "dvisvgm", "pdftoppm"]
-
-def _detect_texlive() -> dict[str, str | None]:
-    """检测 xelatex / dvisvgm / pdftoppm 是否可用。"""
-    result: dict[str, str | None] = {}
-    for name in _TEXLIVE_TOOLS:
-        # 先检查环境变量（与 _tikz_utils 一致）
-        env_key = f"{name.upper()}_PATH"
-        if env_key in os.environ:
-            result[name] = os.environ[env_key]
-            continue
-        result[name] = _which_texlive_tool(name)
-    return result
-
-def _download_texlive_iso(cache_dir: str) -> str:
-    iso_url = "https://mirror-hk.koddos.net/CTAN/systems/texlive/Images/texlive2025-20250308.iso"
-    iso_path = os.path.join(cache_dir, "texlive.iso")
-    if not os.path.exists(iso_path):
-        print(f"  正在下载 TeX Live ISO: {iso_url}")
-        urllib.request.urlretrieve(iso_url, iso_path)
-    return iso_path
-
-def _install_texlive_windows_from_iso(cache_dir: str) -> bool:
-    iso_path = _download_texlive_iso(cache_dir)
-    mounted = False
-    try:
-        print("  网络安装器失败，回退到 ISO 安装...")
-        mount_cmd = [
-            "PowerShell",
-            "-Command",
-            f'Mount-DiskImage -ImagePath "{iso_path}"',
-        ]
-        result = run_cmd(mount_cmd)
-        if result.returncode != 0:
-            print(red("  挂载 TeX Live ISO 失败。"))
-            return False
-        mounted = True
-
-        drive_cmd = [
-            "PowerShell",
-            "-Command",
-            f'(Get-DiskImage -ImagePath "{iso_path}" | Get-Volume).DriveLetter',
-        ]
-        result = run_cmd(drive_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(red("  无法获取 ISO 挂载盘符。"))
-            if result.stderr:
-                print(result.stderr.strip())
-            return False
-
-        drive_letter = (result.stdout or "").strip()
-        if not drive_letter:
-            print(red("  ISO 已挂载，但未能解析盘符。"))
-            return False
-
-        installer = os.path.join(f"{drive_letter}:\\", "install-tl-windows.bat")
-        if not os.path.exists(installer):
-            print(red(f"  挂载介质中未找到安装器: {installer}"))
-            return False
-
-        print(f"  运行安装器: {installer}")
-        print("  (这可能需要较长时间，请耐心等待…)")
-        result = run_cmd([installer, "-no-interaction", "-no-gui"])
-        if result.returncode != 0:
-            print(red("  ISO 安装失败，请尝试手动安装。"))
-            return False
-        return True
-    finally:
-        if mounted:
-            run_cmd([
-                "PowerShell",
-                "-Command",
-                f'Dismount-DiskImage -ImagePath "{iso_path}"',
-            ])
-        if os.path.exists("install-tl.log"):
-            os.remove("install-tl.log")
-        if os.path.exists(iso_path):
-            os.remove(iso_path)
-
-def _install_texlive_linux_from_iso(cache_dir: str) -> bool:
-    iso_path = _download_texlive_iso(cache_dir)
-    has_sudo = shutil.which("sudo") is not None
-    prefix = ["sudo"] if has_sudo else []
-    print("  网络安装器失败，回退到 ISO 安装...")
-    with tempfile.TemporaryDirectory() as mount_dir:
-        mount_cmd = prefix + ["mount", "-o", "loop", iso_path, mount_dir]
-        result = run_cmd(mount_cmd)
-        if result.returncode != 0:
-            print(red("  挂载 TeX Live ISO 失败。"))
-            return False
-        try:
-            installer = os.path.join(mount_dir, "install-tl")
-            if not os.path.exists(installer):
-                print(red(f"  挂载介质中未找到安装器: {installer}"))
-                return False
-
-            print(f"  运行安装器: {installer}")
-            print("  (这可能需要较长时间，请耐心等待…)")
-            profile = os.path.join(os.path.dirname(__file__), "texlive_profile.txt")
-            cmd = prefix + [installer]
-            if os.path.exists(profile):
-                cmd += ["-profile", profile]
-            else:
-                cmd += ["-no-interaction"]
-            result = run_cmd(cmd)
-            if result.returncode != 0:
-                print(red("  ISO 安装失败，请尝试手动安装。"))
-                return False
-            return True
-        finally:
-            run_cmd(prefix + ["umount", mount_dir])
-            if os.path.exists("install-tl.log"):
-                os.remove("install-tl.log")
-            if os.path.exists(iso_path):
-                os.remove(iso_path)
-
-def _install_texlive_windows():
-    """Windows: 下载 install-tl.zip 并运行 install-tl。"""
-    cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "tikzjax_texlive")
-    os.makedirs(cache_dir, exist_ok=True)
-
-    zip_url = "https://mirror.ctan.org/systems/texlive/tlnet/install-tl.zip"
-    zip_path = os.path.join(cache_dir, "install-tl.zip")
-
-    # 下载
-    if not os.path.exists(zip_path):
-        print(f"  正在下载 TeX Live 安装器: {zip_url}")
-        urllib.request.urlretrieve(zip_url, zip_path)
-
-    # 解压
-    extract_dir = os.path.join(cache_dir, "install-tl")
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(extract_dir)
-
-    # 找到 install-tl-* 子目录
-    subdirs = [
-        d for d in os.listdir(extract_dir)
-        if os.path.isdir(os.path.join(extract_dir, d)) and d.startswith("install-tl")
-    ]
-    if not subdirs:
-        raise RuntimeError("解压后找不到 install-tl 目录")
-
-    installer = os.path.join(extract_dir, subdirs[0], "install-tl-windows.bat")
-    if not os.path.exists(installer):
-        installer = os.path.join(extract_dir, subdirs[0], "install-tl-advanced.bat")
-
-    print(f"  运行安装器: {installer}")
-    print("  (这可能需要较长时间，请耐心等待…)")
-    result = run_cmd([installer, "-no-interaction", "-no-gui"])
-    if result.returncode != 0:
-        return _install_texlive_windows_from_iso(cache_dir)
-    return True
-
-def _install_texlive_linux():
-    """Linux: 尝试 apt -> 回退到 install-tl。"""
-    has_apt = shutil.which("apt") is not None
-    has_sudo = shutil.which("sudo") is not None
-
-    if has_apt:
-        print("  检测到 apt，将通过 apt 安装 TeX Live...")
-        prefix = ["sudo"] if has_sudo else []
-        r = run_cmd(prefix + ["apt", "update"])
-        if r.returncode != 0:
-            if not has_sudo:
-                print(red("  sudo 不可用。请以 root 身份运行，或手动执行:"))
-                print("    apt install texlive texlive-xetex texlive-latex-extra texlive-lang-chinese")
-            else:
-                print(red("  apt update 失败，请检查网络连接。"))
-            return False
-
-        r = run_cmd(prefix + ["apt", "install", "-y",
-                               "texlive", "texlive-xetex", "texlive-latex-extra", "texlive-lang-chinese"])
-        if r.returncode != 0:
-            print(red("  apt install 失败，请手动安装:"))
-            print("    apt install texlive texlive-xetex texlive-latex-extra texlive-lang-chinese")
-            return False
-        return True
-
-    # 回退: install-tl
-    print("  未检测到 apt, 将使用 install-tl 安装器...")
-    cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "tikzjax_texlive")
-    os.makedirs(cache_dir, exist_ok=True)
-    tarball_url = "https://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz"
-    tarball_path = os.path.join(cache_dir, "install-tl-unx.tar.gz")
-
-    if not os.path.exists(tarball_path):
-        print(f"  正在下载 TeX Live 安装器: {tarball_url}")
-        urllib.request.urlretrieve(tarball_url, tarball_path)
-
-    extract_dir = os.path.join(cache_dir, "install-tl")
-    with tarfile.open(tarball_path, "r:gz") as tf:
-        tf.extractall(extract_dir)
-
-    subdirs = [
-        d for d in os.listdir(extract_dir)
-        if os.path.isdir(os.path.join(extract_dir, d)) and d.startswith("install-tl")
-    ]
-    if not subdirs:
-        raise RuntimeError("解压后找不到 install-tl 目录")
-
-    installer = os.path.join(extract_dir, subdirs[0], "install-tl")
-    prefix = ["sudo"] if has_sudo else []
-    print(f"  运行安装器: {installer}")
-    print("  (这可能需要较长时间，请耐心等待…)")
-    r = run_cmd(prefix + [installer, "-no-interaction"])
-    if r.returncode != 0:
-        return _install_texlive_linux_from_iso(cache_dir)
-    return True
-
-def step_check_texlive() -> bool:
-    print()
-    print(bold("[Step 4] 检查 TeX Live 环境..."))
-
-    status = _detect_texlive()
-    all_found = True
-    for name, path in status.items():
-        if path:
-            print(f"  {green('✓')} {name:12s} -> {path}")
-        else:
-            print(f"  {red('✗')} {name:12s} -> 未找到")
-            all_found = False
-
-    if all_found:
-        print(green("\n  TeX Live 相关工具已就绪。"))
-        return True
-
-    print()
-    print(yellow("  部分 TeX Live 工具缺失。TikZ 渲染功能需要 xelatex 和 dvisvgm。"))
-    print(yellow("  pdftoppm (poppler) 用于 PDF 转 PNG，缺失时可使用 PyMuPDF 替代。"))
-    print()
-
-    if not ask_yn("是否现在安装 TeX Live?", default_yes=False, require_explicit=True):
-        print("  跳过 TeX Live 安装。如需后续安装，可参考:")
-        print("    https://www.tug.org/texlive/acquire-netinstall.html")
-        return True  # 不视为致命错误
-
-    print()
-    if _IS_WIN:
-        ok = _install_texlive_windows()
-    else:
-        ok = _install_texlive_linux()
-
-    if ok:
-        print(green("\n  TeX Live 安装完成。"))
-        # 重新检测
-        status = _detect_texlive()
-        for name, path in status.items():
-            tag = green("✓") if path else red("✗")
-            loc = path or "未找到"
-            print(f"  {tag} {name:12s} -> {loc}")
-    return ok
-
-# ── Step 5: 检查 / 安装 ffmpeg ──────────────────────────────────
+# ── Step 4: 检查 / 安装 ffmpeg ──────────────────────────────────
 def _ffmpeg_downloader_dir() -> str | None:
     """返回 ffmpeg-downloader 管理的 bin 目录（如已安装该包）。"""
     try:
@@ -711,10 +432,6 @@ def _detect_ffmpeg_tools() -> dict[str, str | None]:
 
 def _ffmpeg_tools_ready(status: dict[str, str | None]) -> bool:
     return all(status.get(name) for name in ("ffmpeg", "ffprobe", "ffplay"))
-
-
-def _texlive_tools_ready(status: dict[str, str | None]) -> bool:
-    return all(status.get(name) for name in _TEXLIVE_TOOLS)
 
 
 def _ffmpeg_downloader_installed() -> bool:
@@ -1076,15 +793,15 @@ def _worker_libreoffice(label: str, result_q: "queue.Queue[tuple[str,bool,str]]"
     result_q.put((label, ok, msg))
 
 
-def _worker_texlive(label: str, result_q: "queue.Queue[tuple[str,bool,str]]") -> None:
-    ok = False
-    msg = ""
+def _worker_geolite2_city(label: str, result_q: "queue.Queue[tuple[str,bool,str]]") -> None:
     try:
-        ok = _install_texlive_windows() if _IS_WIN else _install_texlive_linux()
-        msg = "完成" if ok else "失败，请手动安装 TeX Live"
+        from core.utils.network_utils.helper_funcs import GEOLITE2_CITY_DB_PATH, ensure_geolite2_city_db
+
+        ok = ensure_geolite2_city_db(force=True, timeout=120.0)
+        msg = f"已更新: {GEOLITE2_CITY_DB_PATH}" if ok else "更新失败"
+        result_q.put((label, ok, msg))
     except Exception as e:
-        msg = f"异常: {e}"
-    result_q.put((label, ok, msg))
+        result_q.put((label, False, f"异常: {e}"))
 
 
 def _worker_ffmpeg(label: str, result_q: "queue.Queue[tuple[str,bool,str]]") -> None:
@@ -1322,7 +1039,6 @@ def main():
     print(bold("[检测] 并发检查基础依赖与可选组件..."))
     detected = _parallel_probe({
         "soffice": _detect_soffice,
-        "texlive": _detect_texlive,
         "ffmpeg": _detect_ffmpeg_tools,
         "mongod": _detect_mongod,
         "atlas_cli": _detect_atlas_cli,
@@ -1334,7 +1050,6 @@ def main():
     })
 
     soffice_path = detected.get("soffice")
-    texlive_status = detected.get("texlive") or {name: None for name in _TEXLIVE_TOOLS}
     ffmpeg_status = detected.get("ffmpeg") or {"ffmpeg": None, "ffprobe": None, "ffplay": None}
     mongod_path = detected.get("mongod")
     atlas_cli_path = detected.get("atlas_cli")
@@ -1383,18 +1098,8 @@ def main():
         print("  Windows 若已安装 Office，也可设置 ENABLE_OFFICE_COM=1 启用 COM 转换。")
 
     print()
-    print(bold("[Step 4] 检查 TeX Live 环境..."))
-    for name, path in texlive_status.items():   # type: ignore[assignment]
-        if path:
-            print(f"  {green('✓')} {name:12s} -> {path}")
-        else:
-            print(f"  {red('✗')} {name:12s} -> 未找到")
-    if _texlive_tools_ready(texlive_status):    # type: ignore[assignment]
-        print(green("\n  TeX Live 相关工具已就绪。"))
-    else:
-        print()
-        print(yellow("  部分 TeX Live 工具缺失。TikZ 渲染功能需要 xelatex 和 dvisvgm。"))
-        print(yellow("  pdftoppm (poppler) 用于 PDF 转 PNG，缺失时可使用 PyMuPDF 替代。"))
+    print(bold("[Step 4] GeoLite2 City 数据库"))
+    print("  将下载/更新 resources/common/GeoLite2-City.mmdb，用于 IP 来源地理信息解析。")
 
     print()
     print(bold("[Step 5] 检查 ffmpeg / ffprobe / ffplay..."))
@@ -1410,10 +1115,6 @@ def main():
     install_libreoffice = False
     if not soffice_path:
         install_libreoffice = ask_yn("[Step 3] 是否现在安装 LibreOffice?", default_yes=False, require_explicit=True)
-
-    install_texlive = False
-    if not _texlive_tools_ready(texlive_status):    # type: ignore[assignment]
-        install_texlive = ask_yn("[Step 4] 是否现在安装 TeX Live?", default_yes=False, require_explicit=True)
 
     install_ffmpeg = False
     if not _ffmpeg_tools_ready(ffmpeg_status):  # type: ignore[assignment]
@@ -1460,52 +1161,65 @@ def main():
         tprint(yellow("  ! Docker CLI 已存在，但当前引擎未就绪。"))
     print()
 
-    install_mongo = False if mongod_path else ask_yn("[Step 6]  是否安装 MongoDB?", default_yes=False, require_explicit=True)
-    install_atlas_cli = False if atlas_cli_path else ask_yn("[Step 6A] 是否安装 Atlas CLI?（Mongo vector 本地测试推荐）", default_yes=False, require_explicit=True)
-    install_pg = False if pg_path else ask_yn("[Step 7]  是否安装 PostgreSQL?", default_yes=False, require_explicit=True)
-    install_mysql = False if mysql_path else ask_yn("[Step 8]  是否安装 MySQL?", default_yes=False, require_explicit=True)
-    install_docker = False if docker_path else ask_yn("[Step 9]  是否安装 Docker?", default_yes=False, require_explicit=True)
-    install_redis = False
-    if _IS_WIN:
-        if docker_path or install_docker:
-            if not redis_image_exists:
-                install_redis = ask_yn(
-                    f"[Step 10] 是否拉取 Redis Docker 镜像 ({_REDIS_DOCKER_IMAGE})?",
-                    default_yes=False,
-                    require_explicit=True,
-                )
-        else:
-            print(yellow(f"  [Step 10] Windows 上 Redis 已改为 Docker image({_REDIS_DOCKER_IMAGE})；当前未检测到 Docker，本轮不会安装本地 Redis。"))
+    expand_db_install = ask_yn(
+        "[Step 6-12] 是否展开数据库/存储相关安装询问?",
+        default_yes=False,
+        require_explicit=True,
+    )
+    install_mongo = False
+    install_atlas_cli = False
+    install_pg = False
+    install_mysql = False
+    install_docker = False
+    if expand_db_install:
+        install_mongo = False if mongod_path else ask_yn("[Step 6]  是否安装 MongoDB?", default_yes=False, require_explicit=True)
+        install_atlas_cli = False if atlas_cli_path else ask_yn("[Step 6A] 是否安装 Atlas CLI?（Mongo vector 本地测试推荐）", default_yes=False, require_explicit=True)
+        install_pg = False if pg_path else ask_yn("[Step 7]  是否安装 PostgreSQL?", default_yes=False, require_explicit=True)
+        install_mysql = False if mysql_path else ask_yn("[Step 8]  是否安装 MySQL?", default_yes=False, require_explicit=True)
+        install_docker = False if docker_path else ask_yn("[Step 9]  是否安装 Docker?", default_yes=False, require_explicit=True)
     else:
-        install_redis = False if redis_supported else ask_yn("[Step 10] 是否安装 Redis?", default_yes=False, require_explicit=True)
+        print(yellow("  已跳过数据库/存储相关安装询问。"))
+    install_redis = False
+    if expand_db_install:
+        if _IS_WIN:
+            if docker_path or install_docker:
+                if not redis_image_exists:
+                    install_redis = ask_yn(
+                        f"[Step 10] 是否拉取 Redis Docker 镜像 ({_REDIS_DOCKER_IMAGE})?",
+                        default_yes=False,
+                        require_explicit=True,
+                    )
+            else:
+                print(yellow(f"  [Step 10] Windows 上 Redis 已改为 Docker image({_REDIS_DOCKER_IMAGE})；当前未检测到 Docker，本轮不会安装本地 Redis。"))
+        else:
+            install_redis = False if redis_supported else ask_yn("[Step 10] 是否安装 Redis?", default_yes=False, require_explicit=True)
 
     need_wsl2_check = _IS_WIN and (install_docker or (docker_path is not None))
     install_wsl2 = False
-    if need_wsl2_check and wsl2_state == "missing":
+    if expand_db_install and need_wsl2_check and wsl2_state == "missing":
         install_wsl2 = ask_yn(
             "[Step 11] 检测到需要 WSL2（Docker 依赖）且未安装，是否安装 WSL2?",
             default_yes=True,
             require_explicit=True,
         )
-    elif need_wsl2_check and wsl2_state == "installed_pending":
+    elif expand_db_install and need_wsl2_check and wsl2_state == "installed_pending":
         print(yellow("  [Step 11] WSL2 组件已安装，但当前未完全就绪；请先重启。若重启后仍未就绪，请检查 BIOS/UEFI 虚拟化是否启用。"))
 
     install_milvus = False
-    if docker_path and docker_ready:
+    if expand_db_install and docker_path and docker_ready:
         if not milvus_exists:
             install_milvus = ask_yn(
                 f"[Step 12] 是否拉取 Milvus 镜像 ({_MILVUS_IMAGE})?",
                 default_yes=False,
                 require_explicit=True,
             )
-    elif install_docker:
+    elif expand_db_install and install_docker:
         print(yellow("  [Step 12] Docker 为本轮新安装组件，Milvus 镜像请在 Docker 就绪后再拉取。"))
-    elif docker_path and not docker_ready:
+    elif expand_db_install and docker_path and not docker_ready:
         print(yellow("  [Step 12] Docker 引擎当前未就绪，本轮跳过 Milvus 镜像拉取。"))
 
     needs_sudo = any([
         install_libreoffice,
-        install_texlive,
         install_mongo,
         install_atlas_cli,
         install_pg,
@@ -1551,7 +1265,7 @@ def main():
 
     if run_pip: _add(_worker_requirements, "pip")
     if install_libreoffice: _add(_worker_libreoffice, "LibreOffice")
-    if install_texlive: _add(_worker_texlive, "TeX Live")
+    _add(_worker_geolite2_city, "GeoLite2 City")
     if install_ffmpeg: _add(_worker_ffmpeg, "ffmpeg")
     if install_mongo: _add(_worker_mongodb, "MongoDB")
     if install_atlas_cli: _add(_worker_atlas_cli, "Atlas CLI")

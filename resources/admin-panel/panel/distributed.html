@@ -3,457 +3,1392 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>分布式网络管理</title>
-  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css" />
-  <link rel="stylesheet" href="/html-assets/css/panel-shared.css" />
+  <title>分布式</title>
   <style>
-    html { font-size: 13px; }
-    body.distributed-panel-body {
-      min-height: 100vh;
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f1f5f9;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: rgba(100, 116, 139, .24);
+      --brand: #2563eb;
+      --danger: #dc2626;
+      --shadow: 0 18px 38px rgba(15, 23, 42, .12);
+    }
+    html.dark {
+      --bg: #070b14;
+      --panel: #101827;
+      --panel-soft: #172133;
+      --text: #e5edf7;
+      --muted: #9aa8bb;
+      --border: rgba(148, 163, 184, .22);
+      --brand: #60a5fa;
+      --danger: #fb7185;
+      --shadow: 0 22px 50px rgba(0, 0, 0, .36);
+    }
+    * { box-sizing: border-box; }
+    body {
       margin: 0;
-      overflow: auto;
-      background: #f4f7fb;
-      color: #0f172a;
-    }
-    html.dark body.distributed-panel-body {
-      background: #0b1220;
-      color: #e2e8f0;
-    }
-    .distributed-page {
-      width: min(1220px, calc(100vw - 32px));
-      margin: 0 auto;
-      padding: 18px 0 24px;
-    }
-    .page-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    .page-title {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.15;
-      font-weight: 800;
-    }
-    .top-grid {
-      display: grid;
-      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    .panel-section {
-      border: 1px solid rgba(148, 163, 184, .28);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .96);
-      box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
-      padding: 14px;
-    }
-    html.dark .panel-section {
-      background: rgba(15, 23, 42, .86);
-      border-color: rgba(148, 163, 184, .18);
-    }
-    .section-title {
-      margin: 0 0 10px;
-      font-size: 11px;
-      line-height: 1.2;
-      font-weight: 800;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-    }
-    html.dark .section-title { color: #94a3b8; }
-    .self-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 14px;
-      font-size: 12px;
-    }
-    .self-grid span:last-child,
-    .mono-value {
-      display: block;
-      min-width: 0;
+      height: 100vh;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      background: var(--bg);
+      color: var(--text);
+      font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .add-node-form {
-      display: grid;
-      grid-template-columns: minmax(140px, 1.1fr) minmax(130px, 1fr) 90px minmax(120px, 1fr) 110px 96px;
-      gap: 10px;
-      align-items: center;
+    button, input, select, textarea {
+      font: inherit;
+      color: inherit;
     }
-    .node-input {
+    button { cursor: pointer; }
+    .app {
+      height: 100vh;
       min-width: 0;
-      height: 34px;
-      border: 1px solid rgba(148, 163, 184, .4);
-      border-radius: 6px;
-      background: #fff;
-      padding: 0 10px;
-      font-size: 12px;
     }
-    html.dark .node-input {
-      background: #0f172a;
-      border-color: rgba(148, 163, 184, .24);
-      color: #e2e8f0;
-    }
-    .primary-button {
-      height: 34px;
-      border-radius: 6px;
-      background: #2563eb;
-      color: #fff;
-      font-weight: 700;
-      font-size: 12px;
-    }
-    .primary-button:hover { background: #1d4ed8; }
-    .node-panel-header {
+    .canvas-tools {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      z-index: 10;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-    .node-list {
-      display: grid;
-      gap: 10px;
-    }
-    .node-card {
-      border: 1px solid rgba(148, 163, 184, .32);
-      border-radius: 8px;
-      padding: 12px;
-      background: #fff;
-    }
-    html.dark .node-card { background: rgba(15, 23, 42, .72); }
-    .node-healthy { border-color: rgba(34, 197, 94, .45); background: rgba(240, 253, 244, .82); }
-    .node-degraded { border-color: rgba(245, 158, 11, .45); background: rgba(255, 251, 235, .82); }
-    .node-unreachable { border-color: rgba(239, 68, 68, .45); background: rgba(254, 242, 242, .82); }
-    html.dark .node-healthy { background: rgba(20, 83, 45, .16); }
-    html.dark .node-degraded { background: rgba(120, 53, 15, .16); }
-    html.dark .node-unreachable { background: rgba(127, 29, 29, .16); }
-    .node-card-head {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    .node-id-row,
-    .node-metrics,
-    .node-meta,
-    .node-actions {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
       gap: 8px;
-      min-width: 0;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 88%, transparent);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
     }
-    .node-metrics { justify-content: flex-end; }
-    .node-meta {
-      margin-top: 7px;
-      color: #475569;
+    .zoom-group {
+      display: inline-flex;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+    .zoom-group .icon-btn {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .zoom-group .icon-btn + .icon-btn { border-left: 1px solid var(--border); }
+    .filter-chip {
+      max-width: min(320px, 38vw);
+      min-height: 32px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      padding: 0 10px;
+      color: var(--muted);
       font-size: 12px;
-      line-height: 1.35;
-    }
-    html.dark .node-meta { color: #cbd5e1; }
-    .relation-badge {
-      flex: 0 0 auto;
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-size: 11px;
-      line-height: 1.25;
       font-weight: 800;
-    }
-    .relation-parent { background: #dbeafe; color: #1d4ed8; }
-    .relation-child { background: #ede9fe; color: #6d28d9; }
-    .relation-friend { background: #e2e8f0; color: #475569; }
-    .node-id {
-      min-width: 0;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    .filter-chip.open { display: inline-flex; }
+    .icon-btn, .btn {
+      min-height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel);
+      padding: 0 10px;
       font-weight: 800;
     }
-    .danger-link {
-      color: #dc2626;
-      font-size: 12px;
-      font-weight: 700;
+    .icon-btn {
+      width: 34px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      font-size: 17px;
     }
-    .command-button {
+    .btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .btn.danger { color: var(--danger); }
+    .btn:disabled, .icon-btn:disabled { cursor: not-allowed; opacity: .48; }
+    .main {
+      height: 100vh;
+      min-height: 0;
+      min-width: 0;
+      position: relative;
+    }
+    .view { position: absolute; inset: 0; display: none; }
+    .view.active { display: block; }
+    .view.data-view { display: none; }
+    .view.data-view.active { display: grid; }
+    #graphCanvas { width: 100%; height: 100%; display: block; }
+    .sidebar {
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 12px;
+      width: min(360px, calc(100vw - 24px));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 96%, transparent);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      overflow: auto;
+      transform: translateX(-390px);
+      transition: transform .16s ease;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .node-name { font-size: 18px; font-weight: 900; line-height: 1.15; }
+    .node-id { margin-top: 4px; color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+    .kv {
+      display: grid;
+      grid-template-columns: 116px minmax(0, 1fr);
+      gap: 7px 10px;
+      margin: 12px 0;
+    }
+    .kv .k { color: var(--muted); }
+    .kv .v { min-width: 0; overflow-wrap: anywhere; }
+    .status-strip {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .action-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .history-box {
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      padding: 8px;
+    }
+    .history-box svg { width: 100%; height: 72px; display: block; }
+    .select-rect {
+      position: absolute;
+      z-index: 8;
+      display: none;
+      pointer-events: none;
+      border: 1px solid var(--brand);
+      background: color-mix(in srgb, var(--brand) 12%, transparent);
+    }
+    .selection-bar {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 9;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 96%, transparent);
+      box-shadow: var(--shadow);
+      padding: 8px;
+    }
+    .selection-bar.open { display: flex; }
+    .menu {
+      position: fixed;
+      z-index: 20;
+      display: none;
+      min-width: 190px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .menu.open { display: grid; gap: 2px; }
+    .menu button {
+      border: 0;
       border-radius: 6px;
-      padding: 5px 10px;
-      font-size: 12px;
+      background: transparent;
+      text-align: left;
+      padding: 8px 10px;
+    }
+    .menu button:hover { background: var(--panel-soft); }
+    .menu button:disabled { cursor: not-allowed; color: var(--muted); opacity: .55; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(2, 6, 23, .42);
+    }
+    .modal.open { display: flex; }
+    .modal-box {
+      width: min(560px, 100%);
+      max-height: min(720px, calc(100vh - 36px));
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .toast {
+      position: fixed;
+      right: 14px;
+      top: 14px;
+      z-index: 40;
+      display: none;
+      max-width: min(420px, calc(100vw - 28px));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 10px 12px;
       font-weight: 800;
     }
-    .command-restart { background: #dbeafe; color: #1d4ed8; }
-    .command-stop { background: #fee2e2; color: #b91c1c; }
-    .command-ping { background: #dcfce7; color: #15803d; }
-    .ping-result {
-      min-width: 88px;
-      color: #64748b;
-      font-size: 12px;
-      font-weight: 700;
+    .toast.open { display: block; }
+    .toast.err { color: var(--danger); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 800; }
+    input, select, textarea {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      padding: 0 10px;
+      color: var(--text);
+      min-width: 0;
     }
-    .ping-ok { color: #15803d; }
-    .ping-fail { color: #dc2626; }
-    .ping-checking { color: #2563eb; }
-    @media (max-width: 900px) {
-      .distributed-page { width: min(100vw - 20px, 680px); padding-top: 12px; }
-      .top-grid { grid-template-columns: 1fr; }
-      .add-node-form { grid-template-columns: 1fr 1fr; }
-      .node-card-head { grid-template-columns: 1fr; align-items: start; }
-      .node-metrics { justify-content: flex-start; }
-    }
-    @media (max-width: 520px) {
-      .add-node-form,
-      .self-grid { grid-template-columns: 1fr; }
-      .page-title { font-size: 19px; }
+    textarea { min-height: 76px; padding: 9px 10px; resize: vertical; }
+    .check-row { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 12px; }
+    .check-row input { min-height: auto; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .muted { color: var(--muted); }
+    @media (max-width: 780px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .canvas-tools { left: 12px; right: 12px; flex-wrap: wrap; }
+      .filter-chip { max-width: 100%; }
     }
   </style>
 </head>
-<body class="distributed-panel-body">
-
-<main class="distributed-page">
-<header class="page-header">
-  <h1 class="page-title">分布式网络管理</h1>
-</header>
-
-<div class="top-grid">
-
-<!-- Self Info -->
-<section id="self-info" class="panel-section">
-  <h2 class="section-title">当前节点</h2>
-  <div class="self-grid" id="self-info-content">
-    <div><span class="text-slate-400">ID:</span> <span id="self-id" class="font-mono">—</span></div>
-    <div><span class="text-slate-400">Host:</span> <span id="self-host">—</span></div>
-    <div><span class="text-slate-400">Port:</span> <span id="self-port">—</span></div>
-    <div><span class="text-slate-400">Workers:</span> <span id="self-workers">—</span></div>
-  </div>
-</section>
-
-<!-- Add Node Form -->
-<section class="panel-section">
-  <h2 class="section-title">添加节点</h2>
-  <form id="add-node-form" class="add-node-form">
-    <input id="node-id" type="text" placeholder="节点ID" class="node-input" required/>
-    <input id="node-host" type="text" placeholder="Host" class="node-input" required/>
-    <input id="node-port" type="number" placeholder="Port" class="node-input" required/>
-    <input id="node-parent-id" type="text" placeholder="Parent ID" class="node-input"/>
-    <select id="node-relation" class="node-input">
-      <option value="friend">Friend</option>
-      <option value="parent">Parent</option>
-      <option value="child">Child</option>
-    </select>
-    <button type="submit" class="primary-button">添加</button>
-  </form>
-</section>
-
+<body>
+<div class="app">
+  <main class="main">
+    <section id="nodesView" class="view">
+      <canvas id="graphCanvas"></canvas>
+      <div id="canvasTools" class="canvas-tools">
+        <span id="filterChip" class="filter-chip"></span>
+        <button id="graphSearchBtn" class="icon-btn" type="button" title="搜索 / 过滤">⌕</button>
+        <div class="zoom-group" aria-label="zoom controls">
+          <button id="zoomOutBtn" class="icon-btn" type="button" title="缩小">−</button>
+          <button id="zoomInBtn" class="icon-btn" type="button" title="放大">+</button>
+        </div>
+        <button id="clusterLayoutBtn" class="icon-btn" type="button" title="自动聚类">◎</button>
+        <button id="resetLayoutBtn" class="icon-btn" type="button" title="重排布局">⌂</button>
+        <button id="batchMenuBtn" class="icon-btn" type="button" title="批量操作" disabled>☷</button>
+        <button id="canvasAddBtn" class="icon-btn" type="button" title="添加节点">+</button>
+        <button id="canvasRefreshBtn" class="icon-btn" type="button" title="刷新">↻</button>
+      </div>
+      <aside id="nodeSidebar" class="sidebar"></aside>
+      <div id="selectRect" class="select-rect"></div>
+      <div id="selectionBar" class="selection-bar">
+        <span id="selectionCount" class="muted"></span>
+        <button class="btn" type="button" onclick="openBatchMenu()">批量操作</button>
+        <button class="btn" type="button" onclick="clearSelection()">清空</button>
+      </div>
+    </section>
+  </main>
 </div>
 
-<!-- Node List -->
-<section class="panel-section">
-  <div class="node-panel-header">
-    <h2 class="section-title" style="margin:0">节点列表</h2>
-    <button onclick="loadNodes()" class="text-sm text-blue-600 hover:underline">刷新</button>
-  </div>
-  <div id="node-list" class="node-list">加载中...</div>
-</section>
-</main>
+<div id="contextMenu" class="menu"></div>
+<div id="modal" class="modal"><div id="modalBox" class="modal-box"></div></div>
+<div id="toast" class="toast"></div>
 
 <script>
-const ADMIN_LOGIN_PATH = '/admin/login';
-const ADMIN_APIKEY_LOCALSTORAGE_KEY = 'proj.admin.apikey';
-const ADMIN_APIKEY_COOKIE_NAME = 'proj_admin_apikey';
-let adminAuthRedirectPending = false;
+const state = {
+  view: 'nodes',
+  self: null,
+  nodes: [],
+  positions: new Map(),
+  selectedNode: null,
+  searchQuery: '',
+  focusNodeIds: new Set(),
+  dark: document.documentElement.classList.contains('dark'),
+  drag: null,
+  selectBox: null,
+  selectedNodes: new Set(),
+  ignoreNextClick: false,
+  pan: { x: 0, y: 0 },
+  zoom: 1,
+  relationFilter: 'all',
+};
 
-function clearAdminAuthArtifacts() {
-  try {
-    window.localStorage.removeItem(ADMIN_APIKEY_LOCALSTORAGE_KEY);
-  } catch {}
-  document.cookie = `${ADMIN_APIKEY_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+const $ = (id) => document.getElementById(id);
+const canvas = $('graphCanvas');
+const ctx = canvas.getContext('2d');
+const GRAPH_LAYOUT_KEY = 'distributed.graph.layout.v1';
+const LINK_HISTORY_KEY = 'distributed.link.history.v1';
+const LINK_HISTORY_LIMIT = 48;
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
-function redirectToAdminLogin() {
-  if (adminAuthRedirectPending) return;
-  adminAuthRedirectPending = true;
-  clearAdminAuthArtifacts();
-  const nextPath = window.parent && window.parent !== window
-    ? '/admin/panel'
-    : `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  try {
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
-      return;
-    }
-  } catch {}
-  window.location.assign(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(nextPath)}`);
+function fmtMs(v) { return typeof v === 'number' ? `${v.toFixed(1)}ms` : '—'; }
+function fmtTime(value) {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) && numberValue > 0 ? new Date(numberValue * 1000).toLocaleString() : '—';
 }
-
-async function api(path, opts = {}) {
-  const res = await fetch('/admin/api' + path, {
+function shortId(v) { const s = String(v || ''); return s.length > 12 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s; }
+function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  return fetch('/admin/api' + path, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    ...options,
+    headers,
+    body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
+  }).then(async (response) => {
+    if (!response.ok) throw new Error(await response.text().catch(() => `HTTP ${response.status}`));
+    return response.json();
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    if (res.status === 401) {
-      redirectToAdminLogin();
-      throw new Error('登录状态已失效，正在跳转登录页。');
-    }
-    throw new Error(text || `HTTP ${res.status}`);
-  }
-  return res.json();
 }
 
-async function loadSelf() {
+function showToast(message, kind = 'ok') {
+  const toast = $('toast');
+  toast.textContent = message;
+  toast.classList.toggle('err', kind === 'err');
+  toast.classList.add('open');
+  window.clearTimeout(showToast._timer);
+  showToast._timer = window.setTimeout(() => toast.classList.remove('open'), kind === 'err' ? 5200 : 2600);
+}
+
+async function runUiAction(label, action) {
+  showToast(`${label}中...`);
   try {
-    const data = await api('/distributed/self');
-    document.getElementById('self-id').textContent = data.node_id || '—';
-    document.getElementById('self-host').textContent = data.host || '—';
-    document.getElementById('self-port').textContent = data.port || '—';
-    document.getElementById('self-workers').textContent = data.worker_count || '—';
-  } catch (e) {
-    console.error('loadSelf failed:', e);
+    const result = await action();
+    showToast(`${label}完成`);
+    return result;
+  } catch (error) {
+    console.error(error);
+    showToast(`${label}失败: ${error.message || error}`, 'err');
+    throw error;
   }
 }
 
-function nodeDomId(nodeId) {
-  return 'node-ping-' + String(nodeId).replace(/[^a-zA-Z0-9_-]/g, '_');
+function confirmAction(message, onConfirm) {
+  modal(`
+    <h2 style="margin:0 0 12px;font-size:16px">确认操作</h2>
+    <div class="status-strip">${esc(message)}</div>
+    <div class="action-row" style="justify-content:flex-end">
+      <button class="btn" type="button" onclick="closeModal()">取消</button>
+      <button id="confirmActionBtn" class="btn danger" type="button">确认</button>
+    </div>`);
+  $('confirmActionBtn').onclick = async () => {
+    closeModal();
+    await onConfirm();
+  };
 }
 
-function formatMs(value) {
-  return typeof value === 'number' ? value.toFixed(1) + 'ms' : '—';
+function applyView() {
+  state.view = 'nodes';
+  $('nodesView').classList.add('active');
+  if (location.search) history.replaceState(null, '', location.pathname);
+  requestAnimationFrame(() => {
+    resizeCanvas();
+    refreshNodes();
+  });
 }
 
-async function loadNodes() {
-  const container = document.getElementById('node-list');
-  container.innerHTML = '加载中...';
-  try {
-    const nodes = await api('/distributed/nodes');
-    if (!nodes.length) {
-      container.innerHTML = '<div class="text-slate-400 text-sm">暂无节点</div>';
-      return;
-    }
-    container.innerHTML = nodes.map(n => {
-      const management = n.management || { can_manage: n.relation === 'child', route: [] };
-      const route = management.route && management.route.length ? management.route.join(' → ') : '—';
-      const pingStatusId = `${nodeDomId(n.node_id)}-status`;
-      return `
-      <div class="node-card node-${n.health_status}">
-        <div class="node-card-head">
-          <div class="node-id-row">
-            <span class="relation-badge relation-${n.relation}">${n.relation}</span>
-            <span class="node-id">${n.node_id}</span>
-          </div>
-          <div class="node-metrics">
-            <span class="text-xs text-slate-400">RTT: ${formatMs(n.rtt_ms)}</span>
-            <span class="text-xs text-slate-400">Score: ${n.health_score.toFixed(0)}</span>
-            <button onclick="pingNode('${n.node_id}', this)" class="command-button command-ping">测试</button>
-            <span id="${pingStatusId}" class="ping-result">—</span>
-            <button onclick="removeNode('${n.node_id}')" class="danger-link hover:underline">删除</button>
-          </div>
-        </div>
-        <div class="text-sm text-slate-500">${n.host}:${n.port} <span class="ml-2">GSD: ${n.gsd_port || '—'}</span></div>
-        <div class="node-meta">
-          <span>Parent: ${n.metadata?.parent_id || n.metadata?.parent_node_id || '—'}</span>
-          <span>管理路径: ${route}</span>
-          <span class="${management.can_manage ? 'text-green-600' : 'text-slate-400'}">${management.can_manage ? '可管理' : '不可管理'}</span>
-        </div>
-        ${management.can_manage ? `
-          <div class="node-actions mt-3">
-            <button onclick="sendCommand('${n.node_id}', 'restart')" class="command-button command-restart">重启</button>
-            <button onclick="sendCommand('${n.node_id}', 'stop')" class="command-button command-stop">停止</button>
-          </div>
-        ` : ''}
-      </div>
-    `}).join('');
-  } catch (e) {
-    container.innerHTML = `<div class="text-red-500 text-sm">加载失败: ${e.message}</div>`;
+function palette(i, dark) {
+  const light = ['#bfdbfe', '#bbf7d0', '#fde68a', '#e9d5ff', '#bae6fd', '#fecdd3', '#c7d2fe'];
+  const deep = ['#1d4ed8', '#047857', '#b45309', '#7e22ce', '#0369a1', '#be123c', '#4338ca'];
+  return (dark ? deep : light)[i % light.length];
+}
+function lineColor(ms) {
+  if (typeof ms !== 'number') return state.dark ? '#94a3b8' : '#64748b';
+  const t = Math.max(0, Math.min(1, ms / 600));
+  const g = [22, 163, 74], o = [245, 158, 11];
+  const rgb = g.map((v, i) => Math.round(v + (o[i] - v) * t));
+  return `rgb(${rgb.join(',')})`;
+}
+function relationLabel(r) {
+  if (r === 'pp') return 'parent-parent';
+  if (r === 'pc') return 'parent-child';
+  return 'friend-friend';
+}
+function relationShortLabel(r) {
+  return relationLabel(r);
+}
+function nodeMatchesFilter(node) {
+  const relationOk = state.relationFilter === 'all' || node.relation === state.relationFilter;
+  const query = state.searchQuery.trim().toLowerCase();
+  if (!relationOk) return false;
+  if (!query) return true;
+  return [node.node_id, node.name, node.host].some((value) => String(value || '').toLowerCase().includes(query));
+}
+function hasActiveFilter() {
+  return state.relationFilter !== 'all' || !!state.searchQuery.trim();
+}
+function matchingNodes() {
+  return state.nodes.filter(nodeMatchesFilter);
+}
+function updateFilterChip() {
+  const chip = $('filterChip');
+  if (!chip) return;
+  if (!hasActiveFilter()) {
+    chip.classList.remove('open');
+    chip.textContent = '';
+    return;
   }
+  const parts = [];
+  if (state.searchQuery.trim()) parts.push(`搜索: ${state.searchQuery.trim()}`);
+  if (state.relationFilter !== 'all') parts.push(`关系: ${relationLabel(state.relationFilter)}`);
+  chip.textContent = parts.join(' · ');
+  chip.classList.add('open');
+}
+function isNodeLinkLost(node) {
+  if (!node) return false;
+  if (node.health_status === 'unreachable') return true;
+  const lastProbe = Number(node.metadata?.last_probe_at || 0);
+  if (Number.isFinite(lastProbe) && lastProbe > 0 && Date.now() / 1000 - lastProbe > 90 && Number(node.failed_probes || 0) > 0) return true;
+  return false;
+}
+function linkStatusReason(node) {
+  if (node.health_status === 'unreachable') return '已有连接记录，但健康探测不可达。';
+  const lastProbe = Number(node.metadata?.last_probe_at || 0);
+  if (Number.isFinite(lastProbe) && lastProbe > 0 && Date.now() / 1000 - lastProbe > 90) return '已有连接记录，但最近探测已过期。';
+  return '连接可探测。';
 }
 
-async function pingNode(nodeId, button) {
-  const status = document.getElementById(`${nodeDomId(nodeId)}-status`);
-  if (status) {
-    status.className = 'ping-result ping-checking';
-    status.textContent = '测试中...';
-  }
-  if (button) button.disabled = true;
-  try {
-    const data = await api(`/distributed/nodes/${nodeId}/ping`, {
-      method: 'POST',
-      body: {},
+function loadLinkHistory() {
+  try { return JSON.parse(localStorage.getItem(LINK_HISTORY_KEY) || '{}') || {}; }
+  catch { return {}; }
+}
+function saveLinkHistory(history) {
+  try { localStorage.setItem(LINK_HISTORY_KEY, JSON.stringify(history)); } catch {}
+}
+function recordLinkHistory(nodes) {
+  const history = loadLinkHistory();
+  const now = Math.floor(Date.now() / 1000);
+  nodes.forEach((node) => {
+    const row = history[node.node_id] || [];
+    row.push({
+      t: now,
+      rtt: typeof node.rtt_ms === 'number' ? node.rtt_ms : null,
+      failed: Number(node.metadata?.forward_failed || 0),
+      forwarded: Number(node.metadata?.forwarded_requests || node.metadata?.forwarded || 0),
+      lost: isNodeLinkLost(node),
     });
-    if (status) {
-      if (data.ok) {
-        const via = data.relayed && data.via_node ? ` via ${data.via_node}` : '';
-        status.className = 'ping-result ping-ok';
-        status.textContent = `连通 ${formatMs(data.rtt_ms)}${via}`;
-      } else {
-        status.className = 'ping-result ping-fail';
-        status.textContent = `失败 ${data.error || data.status_code || ''}`.trim();
+    history[node.node_id] = row.slice(-LINK_HISTORY_LIMIT);
+  });
+  saveLinkHistory(history);
+}
+function linkHistorySvg(node) {
+  const points = (loadLinkHistory()[node.node_id] || []).slice(-LINK_HISTORY_LIMIT);
+  if (!points.length) return '<div class="muted">暂无链路历史</div>';
+  const width = 320;
+  const height = 64;
+  const maxRtt = Math.max(10, ...points.map((item) => Number(item.rtt || 0)));
+  const step = points.length <= 1 ? width : width / (points.length - 1);
+  const coords = points.map((item, index) => {
+    const x = index * step;
+    const y = height - Math.max(0, Math.min(height, (Number(item.rtt || 0) / maxRtt) * height));
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const lostMarks = points.map((item, index) => item.lost ? `<circle cx="${(index * step).toFixed(1)}" cy="8" r="3" fill="#ef4444"/>` : '').join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="link history"><polyline fill="none" stroke="${state.dark ? '#93c5fd' : '#2563eb'}" stroke-width="2" points="${coords}"/>${lostMarks}</svg>`;
+}
+
+function loadGraphLayout() {
+  try {
+    const data = JSON.parse(localStorage.getItem(GRAPH_LAYOUT_KEY) || '{}');
+    if (data && typeof data === 'object') {
+      if (data.pan && typeof data.pan.x === 'number' && typeof data.pan.y === 'number') {
+        state.pan = { x: data.pan.x, y: data.pan.y };
+      }
+      if (typeof data.zoom === 'number' && Number.isFinite(data.zoom)) {
+        state.zoom = Math.max(0.5, Math.min(2.2, data.zoom));
+      }
+      if (data.positions && typeof data.positions === 'object') {
+        Object.entries(data.positions).forEach(([nodeId, value]) => {
+          if (value && typeof value.x === 'number' && typeof value.y === 'number') {
+            state.positions.set(nodeId, { x: value.x, y: value.y });
+          }
+        });
       }
     }
-  } catch (e) {
-    if (status) {
-      status.className = 'ping-result ping-fail';
-      status.textContent = '失败';
-    }
-    alert('联通性测试失败: ' + e.message);
-  } finally {
-    if (button) button.disabled = false;
-  }
+  } catch {}
 }
 
-async function removeNode(nodeId) {
-  if (!confirm(`确定要删除节点 ${nodeId} 吗?`)) return;
+function saveGraphLayout() {
   try {
-    await api(`/distributed/nodes/${nodeId}`, { method: 'DELETE' });
-    loadNodes();
-  } catch (e) {
-    alert('删除失败: ' + e.message);
-  }
+    const positions = {};
+    state.positions.forEach((value, key) => { positions[key] = { x: value.x, y: value.y }; });
+    localStorage.setItem(GRAPH_LAYOUT_KEY, JSON.stringify({ pan: state.pan, zoom: state.zoom, positions }));
+  } catch {}
 }
 
-async function sendCommand(nodeId, command) {
-  if (!confirm(`确定要向 ${nodeId} 发送 ${command} 命令吗?`)) return;
-  try {
-    await api(`/distributed/nodes/${nodeId}/command`, {
-      method: 'POST',
-      body: { command, args: {} },
+function resetGraphLayout() {
+  state.positions.clear();
+  state.pan = { x: 0, y: 0 };
+  state.zoom = 1;
+  ensurePositions();
+  saveGraphLayout();
+  drawGraph();
+}
+
+function autoClusterLayout() {
+  const rect = canvas.getBoundingClientRect();
+  const groups = [
+    ['pp', state.nodes.filter((node) => node.relation === 'pp')],
+    ['pc', state.nodes.filter((node) => node.relation === 'pc')],
+    ['ff', state.nodes.filter((node) => node.relation === 'ff')],
+    ['lost', state.nodes.filter((node) => isNodeLinkLost(node))],
+  ];
+  state.positions.clear();
+  if (state.self) state.positions.set(state.self.node_id, { x: rect.width / 2, y: rect.height / 2 });
+  groups.forEach(([name, nodes], groupIndex) => {
+    const uniqueNodes = nodes.filter((node, index, all) => all.findIndex((item) => item.node_id === node.node_id) === index);
+    const angle = (Math.PI * 2 * groupIndex) / Math.max(1, groups.length) - Math.PI / 2;
+    const cx = rect.width / 2 + Math.cos(angle) * Math.max(180, rect.width * .26);
+    const cy = rect.height / 2 + Math.sin(angle) * Math.max(140, rect.height * .24);
+    uniqueNodes.forEach((node, index) => {
+      if (state.positions.has(node.node_id)) return;
+      const localAngle = (Math.PI * 2 * index) / Math.max(1, uniqueNodes.length);
+      const radius = Math.max(46, Math.min(110, 34 + uniqueNodes.length * 7));
+      state.positions.set(node.node_id, {
+        x: cx + Math.cos(localAngle) * radius,
+        y: cy + Math.sin(localAngle) * radius,
+      });
     });
-    alert('命令已发送');
-  } catch (e) {
-    alert('命令发送失败: ' + e.message);
+  });
+  saveGraphLayout();
+  drawGraph();
+  showToast('自动聚类完成');
+}
+
+function visibleNodes() {
+  return state.nodes;
+}
+
+function setGraphZoom(nextZoom) {
+  state.zoom = Math.max(0.5, Math.min(2.2, nextZoom));
+  saveGraphLayout();
+  drawGraph();
+}
+
+function focusGraphNodes(nodes) {
+  if (!nodes.length) return;
+  ensurePositions();
+  const rect = canvas.getBoundingClientRect();
+  const points = nodes.map((node) => state.positions.get(node.node_id)).filter(Boolean);
+  if (!points.length) return;
+  const centerX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const centerY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  state.pan = { x: rect.width / 2 - centerX * state.zoom, y: rect.height / 2 - centerY * state.zoom };
+  saveGraphLayout();
+  if (nodes.length === 1) renderSidebar(nodes[0]);
+  else drawGraph();
+}
+function openGraphSearch() {
+  modal(`
+    <h2 style="margin:0 0 12px;font-size:16px">搜索 / 过滤节点</h2>
+    <div class="form-grid">
+      <label>名称 / ID / Host<input id="sQuery" value="${esc(state.searchQuery)}" placeholder="留空只按关系过滤"/></label>
+      <label>关系<select id="sRelation"><option value="all">全部关系</option><option value="ff">friend-friend</option><option value="pc">parent-child</option><option value="pp">parent-parent</option></select></label>
+    </div>
+    <div id="sNoResult" class="muted" style="display:none;color:#ef4444;margin-top:8px">没有匹配的节点</div>
+    <div class="action-row" style="justify-content:flex-end">
+      <button class="btn" type="button" onclick="clearGraphSearch()">清除</button>
+      <button class="btn" type="button" onclick="closeModal()">取消</button>
+      <button class="btn primary" type="button" onclick="submitGraphSearch()">应用</button>
+    </div>`);
+  $('sRelation').value = state.relationFilter;
+  $('sQuery').focus();
+}
+function clearGraphSearch() {
+  state.searchQuery = '';
+  state.relationFilter = 'all';
+  state.focusNodeIds.clear();
+  updateFilterChip();
+  closeModal();
+  drawGraph();
+}
+function submitGraphSearch() {
+  const nextQuery = $('sQuery').value.trim();
+  const nextRelation = $('sRelation').value;
+  const previous = { query: state.searchQuery, relation: state.relationFilter, focus: new Set(state.focusNodeIds) };
+  state.searchQuery = nextQuery;
+  state.relationFilter = nextRelation;
+  const matches = matchingNodes();
+  if (!matches.length) {
+    state.searchQuery = previous.query;
+    state.relationFilter = previous.relation;
+    state.focusNodeIds = previous.focus;
+    updateFilterChip();
+    $('sNoResult').style.display = 'block';
+    return;
+  }
+  state.focusNodeIds = new Set(matches.map((node) => node.node_id));
+  closeModal();
+  updateFilterChip();
+  focusGraphNodes(matches);
+}
+
+function updateSelectionUi() {
+  const count = state.selectedNodes.size;
+  $('batchMenuBtn').disabled = count === 0;
+  $('selectionBar').classList.toggle('open', count > 0);
+  $('selectionCount').textContent = count ? `已选择 ${count} 个节点` : '';
+  drawGraph();
+}
+function clearSelection() {
+  state.selectedNodes.clear();
+  updateSelectionUi();
+}
+function toggleNodeSelection(nodeId, additive = true) {
+  if (!additive) state.selectedNodes.clear();
+  if (state.selectedNodes.has(nodeId)) state.selectedNodes.delete(nodeId);
+  else state.selectedNodes.add(nodeId);
+  updateSelectionUi();
+}
+function selectNodesInRect(start, end) {
+  const left = Math.min(start.x, end.x);
+  const right = Math.max(start.x, end.x);
+  const top = Math.min(start.y, end.y);
+  const bottom = Math.max(start.y, end.y);
+  state.selectedNodes.clear();
+  visibleNodes().forEach((node) => {
+    if (!nodeMatchesFilter(node)) return;
+    const p = state.positions.get(node.node_id);
+    if (!p) return;
+    const sx = p.x * state.zoom + state.pan.x;
+    const sy = p.y * state.zoom + state.pan.y;
+    if (sx >= left && sx <= right && sy >= top && sy <= bottom) state.selectedNodes.add(node.node_id);
+  });
+  updateSelectionUi();
+}
+function updateSelectRect(start, end) {
+  const rect = $('selectRect');
+  const left = Math.min(start.x, end.x);
+  const right = Math.max(start.x, end.x);
+  const top = Math.min(start.y, end.y);
+  const bottom = Math.max(start.y, end.y);
+  rect.style.left = `${left}px`;
+  rect.style.top = `${top}px`;
+  rect.style.width = `${right - left}px`;
+  rect.style.height = `${bottom - top}px`;
+  rect.style.display = 'block';
+}
+function canvasPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawGraph();
+}
+
+function ensurePositions() {
+  const rect = canvas.getBoundingClientRect();
+  const all = [state.self ? { ...state.self, node_id: state.self.node_id, relation: 'self' } : null, ...state.nodes].filter(Boolean);
+  const radius = Math.max(160, Math.min(rect.width, rect.height) * .32);
+  all.forEach((node, idx) => {
+    if (state.positions.has(node.node_id)) return;
+    const angle = all.length <= 1 ? 0 : (Math.PI * 2 * idx) / all.length - Math.PI / 2;
+    state.positions.set(node.node_id, {
+      x: rect.width / 2 + Math.cos(angle) * radius,
+      y: rect.height / 2 + Math.sin(angle) * radius,
+    });
+  });
+}
+
+function drawArrow(x1, y1, x2, y2, color) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = 9;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - Math.cos(angle - .48) * size, y2 - Math.sin(angle - .48) * size);
+  ctx.lineTo(x2 - Math.cos(angle + .48) * size, y2 - Math.sin(angle + .48) * size);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function flowDirections(node) {
+  if (node.relation === 'ff' || node.relation === 'pp') return [1, -1];
+  const parentId = String(node.metadata?.parent_id || node.metadata?.parent_node_id || '').trim();
+  if (parentId && parentId === node.node_id) return [-1];
+  return [1];
+}
+
+function drawFlowDots(x1, y1, x2, y2, color, directions, disabled) {
+  if (disabled) return;
+  const now = performance.now() / 1000;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = .75;
+  directions.forEach((direction, dirIndex) => {
+    for (let index = 0; index < 3; index += 1) {
+      const base = ((now * .42 + index / 3 + dirIndex * .17) % 1 + 1) % 1;
+      const t = direction > 0 ? base : 1 - base;
+      const x = x1 + (x2 - x1) * t;
+      const y = y1 + (y2 - y1) * t;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+}
+
+function drawGraph() {
+  if (state.view !== 'nodes') return;
+  ensurePositions();
+  const rect = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  ctx.fillStyle = state.dark ? '#070b14' : '#f5f7fb';
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  ctx.save();
+  ctx.translate(state.pan.x, state.pan.y);
+  ctx.scale(state.zoom, state.zoom);
+  const selfId = state.self?.node_id || 'self';
+  const selfPos = state.positions.get(selfId) || { x: rect.width / 2, y: rect.height / 2 };
+
+  visibleNodes().forEach((node) => {
+    const p = state.positions.get(node.node_id);
+    if (!p) return;
+    const offline = isNodeLinkLost(node);
+    const disabled = hasActiveFilter() && !nodeMatchesFilter(node);
+    const color = disabled ? (state.dark ? '#64748b' : '#94a3b8') : offline ? '#ef4444' : lineColor(node.rtt_ms);
+    ctx.beginPath();
+    ctx.moveTo(selfPos.x, selfPos.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = disabled ? .22 : 1;
+    ctx.setLineDash(offline || disabled ? [8, 6] : []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    const dx = p.x - selfPos.x, dy = p.y - selfPos.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ex = p.x - (dx / len) * 34;
+    const ey = p.y - (dy / len) * 34;
+    const sx = selfPos.x + (dx / len) * 34;
+    const sy = selfPos.y + (dy / len) * 34;
+    ctx.globalAlpha = disabled ? .22 : 1;
+    if (node.relation === 'pc') drawArrow(sx, sy, ex, ey, color);
+    if (node.relation === 'pp') {
+      drawArrow(sx, sy, ex, ey, color);
+      drawArrow(ex, ey, sx, sy, color);
+    }
+    ctx.globalAlpha = 1;
+    drawFlowDots(sx, sy, ex, ey, color, flowDirections(node), disabled || offline);
+    ctx.fillStyle = state.dark ? '#dbeafe' : '#334155';
+    ctx.font = '700 11px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = disabled ? .35 : 1;
+    ctx.fillText(fmtMs(node.rtt_ms), (selfPos.x + p.x) / 2, (selfPos.y + p.y) / 2 - 6);
+    ctx.globalAlpha = 1;
+  });
+
+  const drawNode = (node, idx, self) => {
+    const p = state.positions.get(node.node_id);
+    if (!p) return;
+    const offline = !self && isNodeLinkLost(node);
+    const disabled = !self && hasActiveFilter() && !nodeMatchesFilter(node);
+    ctx.save();
+    if (disabled) ctx.globalAlpha = .32;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, self ? 42 : 36, 0, Math.PI * 2);
+    ctx.fillStyle = disabled ? (state.dark ? '#334155' : '#cbd5e1') : offline ? (state.dark ? '#374151' : '#cbd5e1') : palette(idx, state.dark);
+    ctx.fill();
+    ctx.lineWidth = state.selectedNode?.node_id === node.node_id || state.selectedNodes.has(node.node_id) ? 4 : 2;
+    ctx.strokeStyle = self ? (state.dark ? '#e0f2fe' : '#1e40af') : (state.dark ? '#cbd5e1' : '#475569');
+    ctx.stroke();
+    ctx.fillStyle = state.dark ? '#f8fafc' : '#0f172a';
+    ctx.font = '800 12px system-ui';
+    ctx.textAlign = 'center';
+    const label = self ? '本机' : (node.name || node.node_id);
+    ctx.fillText(shortId(label), p.x, p.y - 3);
+    ctx.fillStyle = state.dark ? '#cbd5e1' : '#475569';
+    ctx.font = '700 9px ui-monospace, monospace';
+    ctx.fillText(self ? shortId(node.node_id) : relationLabel(node.relation), p.x, p.y + 13);
+    if (!self && state.selectedNodes.has(node.node_id)) {
+      ctx.beginPath();
+      ctx.arc(p.x + 25, p.y - 24, 8, 0, Math.PI * 2);
+      ctx.fillStyle = state.dark ? '#bfdbfe' : '#1d4ed8';
+      ctx.fill();
+      ctx.fillStyle = state.dark ? '#0f172a' : '#fff';
+      ctx.font = '900 10px system-ui';
+      ctx.fillText('✓', p.x + 25, p.y - 20);
+    }
+    if (disabled) {
+      ctx.strokeStyle = state.dark ? '#94a3b8' : '#64748b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x - 22, p.y + 22);
+      ctx.lineTo(p.x + 22, p.y - 22);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+  if (state.self) drawNode(state.self, 0, true);
+  visibleNodes().forEach((node, idx) => drawNode(node, idx + 1, false));
+  ctx.restore();
+}
+
+function hitNode(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX - rect.left - state.pan.x) / state.zoom;
+  const y = (clientY - rect.top - state.pan.y) / state.zoom;
+  const all = [state.self, ...visibleNodes()].filter(Boolean);
+  for (const node of all) {
+    if (node !== state.self && hasActiveFilter() && !nodeMatchesFilter(node)) continue;
+    const p = state.positions.get(node.node_id);
+    if (!p) continue;
+    if (Math.hypot(x - p.x, y - p.y) <= (node === state.self ? 42 : 36)) return node;
+  }
+  return null;
+}
+function hitLine(clientX, clientY) {
+  if (!state.self) return null;
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX - rect.left - state.pan.x) / state.zoom;
+  const y = (clientY - rect.top - state.pan.y) / state.zoom;
+  const a = state.positions.get(state.self.node_id);
+  if (!a) return null;
+  for (const node of visibleNodes()) {
+    if (hasActiveFilter() && !nodeMatchesFilter(node)) continue;
+    const b = state.positions.get(node.node_id);
+    if (!b) continue;
+    const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / l2));
+    const px = a.x + t * (b.x - a.x), py = a.y + t * (b.y - a.y);
+    if (Math.hypot(x - px, y - py) < 8) return node;
+  }
+  return null;
+}
+
+function renderSidebar(node) {
+  state.selectedNode = node;
+  const panel = $('nodeSidebar');
+  if (!node) { panel.classList.remove('open'); drawGraph(); return; }
+  const online = node.health_status !== 'unreachable';
+  const management = node.management || {};
+  const adminUrl = `http://${node.host}:${node.port}/admin/panel`;
+  if (isNodeLinkLost(node)) {
+    panel.innerHTML = `
+      <div class="sidebar-head">
+        <div>
+          <div class="node-name">${esc(node.name || node.node_id)}</div>
+          <div class="node-id">${esc(node.node_id)}</div>
+        </div>
+        <button class="icon-btn" type="button" onclick="renderSidebar(null)">×</button>
+      </div>
+      <div class="status-strip">${esc(linkStatusReason(node))}</div>
+      <div class="kv">
+        <div class="k">状态</div><div class="v">断链 / 失去消息</div>
+        <div class="k">地址</div><div class="v mono">${esc(node.host)}:${esc(node.port)}</div>
+        <div class="k">关系</div><div class="v">${esc(relationLabel(node.relation))}</div>
+        <div class="k">方向</div><div class="v">${esc(relationDirection(node))}</div>
+        <div class="k">最后 seen</div><div class="v">${node.last_seen ? new Date(node.last_seen * 1000).toLocaleString() : '—'}</div>
+        <div class="k">上次探测</div><div class="v">${fmtTime(node.metadata?.last_probe_at)}</div>
+        <div class="k">失败探测</div><div class="v">${esc(node.failed_probes ?? '—')}</div>
+        <div class="k">丢包率</div><div class="v">${esc(node.metadata?.packet_loss || '—')}</div>
+      </div>
+      <div class="action-row">
+        <button class="btn" type="button" onclick="pingNode('${esc(node.node_id)}')">Ping</button>
+        <button class="btn" type="button" onclick="openEditNode('${esc(node.node_id)}')">管理关系</button>
+        <button class="btn danger" type="button" ${node.relation === 'ff' ? 'disabled' : ''} onclick="removeNode('${esc(node.node_id)}')">删除</button>
+      </div>`;
+    panel.classList.add('open');
+    drawGraph();
+    return;
+  }
+  panel.innerHTML = `
+    <div class="sidebar-head">
+      <div>
+        <div class="node-name">${esc(node.name || node.node_id)}</div>
+        <div class="node-id">${esc(node.node_id)}</div>
+      </div>
+      <button class="icon-btn" type="button" onclick="renderSidebar(null)">×</button>
+    </div>
+    <div class="kv">
+      <div class="k">状态</div><div class="v">${online ? '在线/可探测' : '断链'}</div>
+      <div class="k">地址</div><div class="v mono">${esc(node.host)}:${esc(node.port)}</div>
+      <div class="k">关系</div><div class="v">${esc(relationLabel(node.relation))}</div>
+      <div class="k">延迟</div><div class="v">${fmtMs(node.rtt_ms)}</div>
+      <div class="k">丢包率</div><div class="v">${esc(node.metadata?.packet_loss || '—')}</div>
+      <div class="k">IP 所在地</div><div class="v">${esc(node.metadata?.ip_location || '未知')}</div>
+      <div class="k">在线时间</div><div class="v">${esc(node.metadata?.started_at || (node.last_seen ? new Date(node.last_seen * 1000).toLocaleString() : '—'))}</div>
+      <div class="k">管理路径</div><div class="v mono">${management.route?.length ? management.route.join(' → ') : '—'}</div>
+      <div class="k">已处理请求</div><div class="v">${esc(node.metadata?.handled_requests || '—')}</div>
+      <div class="k">已转发</div><div class="v">${esc(node.metadata?.forwarded_requests || node.metadata?.forwarded || '—')}</div>
+      <div class="k">转发失败</div><div class="v">${esc(node.metadata?.forward_failed || '—')}</div>
+      <div class="k">载荷</div><div class="v">${esc(node.metadata?.load || '—')}</div>
+      <div class="k">CPU</div><div class="v">${esc(node.metadata?.cpu || '—')}</div>
+      <div class="k">内存</div><div class="v">${esc(node.metadata?.memory || '—')}</div>
+      <div class="k">网络</div><div class="v">${esc(node.metadata?.network || '—')}</div>
+      <div class="k">GPU</div><div class="v">${esc(node.metadata?.gpu || '—')}</div>
+      <div class="k">硬盘</div><div class="v">${esc(node.metadata?.disk || '—')}</div>
+      <div class="k">允许 child 转发</div><div class="v">${node.allow_child_api_forward ? '是' : '否'}</div>
+    </div>
+    <div class="action-row">
+      <button class="btn" type="button" ${node.relation === 'ff' ? 'disabled' : ''} onclick="openRemoteAdmin('${esc(adminUrl)}','${esc(node.name || node.node_id)}')">进入 Admin</button>
+      <button class="btn" type="button" onclick="openEditNode('${esc(node.node_id)}')">改名/关系</button>
+      <button class="btn" type="button" onclick="pingNode('${esc(node.node_id)}')">Ping</button>
+      <button class="btn danger" type="button" ${management.can_manage ? '' : 'disabled'} onclick="sendCommand('${esc(node.node_id)}','restart')">重启</button>
+      <button class="btn danger" type="button" ${management.can_manage ? '' : 'disabled'} onclick="sendCommand('${esc(node.node_id)}','stop')">停止</button>
+      <button class="btn" type="button" ${management.can_manage ? '' : 'disabled'} onclick="openSetWorkers('${esc(node.node_id)}')">Workers</button>
+    </div>`;
+  panel.classList.add('open');
+  drawGraph();
+}
+
+function relationDirection(node) {
+  const parentId = String(node.metadata?.parent_id || node.metadata?.parent_node_id || '').trim();
+  if (node.relation === 'ff') return '双向 API 转发 / 无管理权';
+  if (node.relation === 'pp') return '双向管理与 API 转发';
+  if (parentId && state.self?.node_id && parentId === state.self.node_id) return '本机 → 远端';
+  if (parentId && parentId === node.node_id) return '远端 → 本机';
+  return parentId ? `${shortId(parentId)} → ${shortId(node.node_id)}` : 'parent → child';
+}
+
+function renderLinkDetails(node) {
+  state.selectedNode = node;
+  const panel = $('nodeSidebar');
+  if (!node) { panel.classList.remove('open'); drawGraph(); return; }
+  const management = node.management || {};
+  panel.innerHTML = `
+    <div class="sidebar-head">
+      <div>
+        <div class="node-name">连线详情</div>
+        <div class="node-id">${esc(state.self?.name || '本机')} ↔ ${esc(node.name || node.node_id)}</div>
+      </div>
+      <button class="icon-btn" type="button" onclick="renderSidebar(null)">×</button>
+    </div>
+    <div class="kv">
+      <div class="k">远端节点</div><div class="v">${esc(node.name || node.node_id)}</div>
+      <div class="k">远端 ID</div><div class="v mono">${esc(node.node_id)}</div>
+      <div class="k">地址</div><div class="v mono">${esc(node.host)}:${esc(node.port)}</div>
+      <div class="k">GSD 端口</div><div class="v mono">${esc(node.gsd_port || '—')}</div>
+      <div class="k">关系</div><div class="v">${esc(relationLabel(node.relation))}</div>
+      <div class="k">方向</div><div class="v">${esc(relationDirection(node))}</div>
+      <div class="k">管理路径</div><div class="v mono">${management.route?.length ? management.route.join(' → ') : '—'}</div>
+      <div class="k">可管理</div><div class="v">${management.can_manage ? '是' : '否'}</div>
+      <div class="k">可转发</div><div class="v">${isNodeLinkLost(node) ? '否，当前断链' : '是'}</div>
+      <div class="k">延迟</div><div class="v">${fmtMs(node.rtt_ms)}</div>
+      <div class="k">健康分</div><div class="v">${typeof node.health_score === 'number' ? node.health_score.toFixed(0) : '—'}</div>
+      <div class="k">失败探测</div><div class="v">${esc(node.failed_probes ?? '—')}</div>
+      <div class="k">探测次数</div><div class="v">${esc(node.metadata?.probe_total || '—')}</div>
+      <div class="k">探测失败</div><div class="v">${esc(node.metadata?.probe_failed || '—')}</div>
+      <div class="k">丢包率</div><div class="v">${esc(node.metadata?.packet_loss || '—')}</div>
+      <div class="k">上次探测</div><div class="v">${fmtTime(node.metadata?.last_probe_at)}</div>
+      <div class="k">已转发</div><div class="v">${esc(node.metadata?.forwarded_requests || node.metadata?.forwarded || '—')}</div>
+      <div class="k">上次转发</div><div class="v">${fmtTime(node.metadata?.last_forwarded_at)}</div>
+      <div class="k">转发失败</div><div class="v">${esc(node.metadata?.forward_failed || '—')}</div>
+      <div class="k">上次失败</div><div class="v">${fmtTime(node.metadata?.last_forward_failed_at)}</div>
+      <div class="k">Child 上行转发</div><div class="v">${node.allow_child_api_forward ? '允许' : '关闭'}</div>
+    </div>
+    <div class="history-box">
+      <div class="muted" style="font-weight:800;margin-bottom:4px">链路历史</div>
+      ${linkHistorySvg(node)}
+    </div>
+    <div class="action-row">
+      <button class="btn" type="button" onclick="renderSidebar(state.nodes.find((item) => item.node_id === '${esc(node.node_id)}'))">节点详情</button>
+      <button class="btn" type="button" onclick="pingNode('${esc(node.node_id)}')">Ping</button>
+      <button class="btn" type="button" onclick="openEditNode('${esc(node.node_id)}')">管理关系</button>
+    </div>`;
+  panel.classList.add('open');
+  drawGraph();
+}
+
+function openRemoteAdmin(url, name) {
+  const w = window.open('', '_blank');
+  if (!w) return;
+  const safeTitle = esc(name || url);
+  const safeUrl = esc(url);
+  try {
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title><style>html,body{margin:0;height:100%;font:13px system-ui;background:#0f172a;color:#e5e7eb}.bar{height:42px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#111827;border-bottom:1px solid #334155}.bar strong{margin-right:auto}.bar a{color:#bfdbfe;text-decoration:none;font-weight:800}iframe{border:0;width:100%;height:calc(100% - 43px);background:white}</style></head><body><div class="bar"><strong>${safeTitle}</strong><a href="${safeUrl}" target="_self">打开当前页</a><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">新窗口</a></div><iframe src="${safeUrl}"></iframe></body></html>`);
+    w.document.close();
+  } catch {
+    w.location.href = url;
   }
 }
 
-document.getElementById('add-node-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const body = {
-    node_id: document.getElementById('node-id').value,
-    host: document.getElementById('node-host').value,
-    port: parseInt(document.getElementById('node-port').value),
-    relation: document.getElementById('node-relation').value,
-    metadata: {},
-  };
-  const parentId = document.getElementById('node-parent-id').value.trim();
-  if (parentId) body.metadata.parent_id = parentId;
+function showMenu(x, y, items) {
+  const menu = $('contextMenu');
+  menu.innerHTML = items.map((item, idx) => `<button type="button" data-idx="${idx}" ${item.disabled ? 'disabled' : ''}>${esc(item.label)}</button>`).join('');
+  menu.querySelectorAll('button').forEach((button) => {
+    button.onclick = () => {
+      const item = items[Number(button.dataset.idx)];
+      menu.classList.remove('open');
+      if (item && !item.disabled) item.action();
+    };
+  });
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  menu.classList.add('open');
+}
+
+async function refreshNodes() {
+  if (state.view !== 'nodes') return;
   try {
-    await api('/distributed/nodes', { method: 'POST', body });
-    document.getElementById('add-node-form').reset();
-    loadNodes();
-  } catch (err) {
-    alert('添加失败: ' + err.message);
+    const [self, nodes] = await Promise.all([api('/distributed/self'), api('/distributed/nodes')]);
+    state.self = self;
+    state.nodes = nodes;
+    recordLinkHistory(nodes);
+    for (const nodeId of Array.from(state.selectedNodes)) {
+      if (!nodes.some((node) => node.node_id === nodeId)) state.selectedNodes.delete(nodeId);
+    }
+    ensurePositions();
+    drawGraph();
+    updateSelectionUi();
+    if (state.selectedNode) {
+      const next = nodes.find((n) => n.node_id === state.selectedNode.node_id);
+      if (next) renderSidebar(next);
+    }
+  } catch (error) {
+    console.error(error);
+    showToast(`刷新节点失败: ${error.message || error}`, 'err');
+  }
+}
+async function pingNode(nodeId) {
+  await runUiAction('Ping', async () => {
+    await api(`/distributed/nodes/${encodeURIComponent(nodeId)}/ping`, { method: 'POST', body: {} });
+    await refreshNodes();
+  });
+}
+async function removeNode(nodeId) {
+  confirmAction(`删除节点 ${nodeId}？`, async () => {
+    await runUiAction('删除节点', async () => {
+      await api(`/distributed/nodes/${encodeURIComponent(nodeId)}`, { method: 'DELETE' });
+      state.selectedNodes.delete(nodeId);
+      renderSidebar(null);
+      await refreshNodes();
+    });
+  });
+}
+async function sendCommand(nodeId, command) {
+  confirmAction(`向 ${nodeId} 发送 ${command}？`, async () => {
+    await runUiAction(command, async () => {
+      await api(`/distributed/nodes/${encodeURIComponent(nodeId)}/command`, { method: 'POST', body: { command, args: {} } });
+      await refreshNodes();
+    });
+  });
+}
+
+async function sendCommandArgs(nodeId, command, args) {
+  await runUiAction(command, async () => {
+    await api(`/distributed/nodes/${encodeURIComponent(nodeId)}/command`, { method: 'POST', body: { command, args } });
+  });
+}
+
+function selectedNodeRows() {
+  return state.nodes.filter((node) => state.selectedNodes.has(node.node_id));
+}
+function manageableSelectedNodes() {
+  return selectedNodeRows().filter((node) => node.relation !== 'ff' || node.management?.can_manage);
+}
+function openBatchMenu() {
+  const rows = selectedNodeRows();
+  if (!rows.length) return;
+  const manageable = manageableSelectedNodes();
+  modal(`
+    <h2 style="margin:0 0 12px;font-size:16px">批量操作</h2>
+    <div class="status-strip">已选择 ${rows.length} 个节点，其中 ${manageable.length} 个可执行管理命令。</div>
+    <div class="kv">${rows.map((node) => `<div class="k">${esc(relationLabel(node.relation))}</div><div class="v mono">${esc(node.name || node.node_id)} · ${esc(node.host)}:${esc(node.port)}</div>`).join('')}</div>
+    <div class="action-row">
+      <button class="btn" type="button" onclick="batchPingSelected()">批量 Ping</button>
+      <button class="btn danger" type="button" ${manageable.length ? '' : 'disabled'} onclick="batchCommandSelected('restart')">批量重启</button>
+      <button class="btn danger" type="button" ${manageable.length ? '' : 'disabled'} onclick="batchCommandSelected('stop')">批量停止</button>
+      <button class="btn danger" type="button" ${manageable.length ? '' : 'disabled'} onclick="batchDeleteSelected()">批量删除</button>
+    </div>`);
+}
+async function batchPingSelected() {
+  const rows = selectedNodeRows();
+  closeModal();
+  await runUiAction('批量 Ping', async () => {
+    for (const node of rows) await api(`/distributed/nodes/${encodeURIComponent(node.node_id)}/ping`, { method: 'POST', body: {} });
+    await refreshNodes();
+  });
+}
+async function batchCommandSelected(command) {
+  const rows = manageableSelectedNodes();
+  confirmAction(`向 ${rows.length} 个节点批量发送 ${command}？`, async () => {
+    await runUiAction(`批量 ${command}`, async () => {
+      for (const node of rows) await api(`/distributed/nodes/${encodeURIComponent(node.node_id)}/command`, { method: 'POST', body: { command, args: {} } });
+      await refreshNodes();
+    });
+  });
+}
+async function batchDeleteSelected() {
+  const rows = manageableSelectedNodes();
+  confirmAction(`删除 ${rows.length} 个可管理节点？`, async () => {
+    await runUiAction('批量删除', async () => {
+      for (const node of rows) await api(`/distributed/nodes/${encodeURIComponent(node.node_id)}`, { method: 'DELETE' });
+      clearSelection();
+      renderSidebar(null);
+      await refreshNodes();
+    });
+  });
+}
+
+function modal(html) {
+  $('modalBox').innerHTML = html;
+  $('modal').classList.add('open');
+}
+function closeModal() { $('modal').classList.remove('open'); }
+function openAddNode() {
+  modal(`
+    <h2 style="margin:0 0 12px;font-size:16px">添加节点</h2>
+    <div class="form-grid">
+      <label>节点 ID<input id="mNodeId" class="mono"/></label>
+      <label>Name<input id="mName"/></label>
+      <label>Host<input id="mHost" value="127.0.0.1"/></label>
+      <label>Port<input id="mPort" type="number"/></label>
+      <label>关系<select id="mRelation"><option value="ff">friend-friend</option><option value="pc">parent-child</option><option value="pp">parent-parent</option></select></label>
+      <label>GSD Port<input id="mGsdPort" type="number" value="0"/></label>
+      <label>Parent ID<input id="mParentId" class="mono" placeholder="parent-child 图的 parent id"/></label>
+      <label>由 child 发起<input id="mInitiator" class="mono" placeholder="可选 child node_id"/></label>
+    </div>
+    <label style="margin-top:10px">连接密码<input id="mPassword" type="password" placeholder="仅远端 connect 时需要"/></label>
+    <label class="check-row" style="margin-top:10px"><input id="mAllowForward" type="checkbox"/>允许 child 向 parent 转发 API</label>
+    <div class="action-row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitAddNode()">建立</button></div>`);
+}
+async function submitAddNode() {
+  const metadata = {};
+  if ($('mParentId').value.trim()) metadata.parent_id = $('mParentId').value.trim();
+  const password = $('mPassword').value;
+  const body = {
+    node_id: $('mNodeId').value.trim(),
+    name: $('mName').value.trim(),
+    host: $('mHost').value.trim(),
+    port: Number($('mPort').value || 0),
+    relation: $('mRelation').value,
+    gsd_port: Number($('mGsdPort').value || 0),
+    metadata,
+    allow_child_api_forward: $('mAllowForward').checked,
+  };
+  const initiator = $('mInitiator').value.trim();
+  await runUiAction('建立连接', async () => {
+    if (initiator) {
+      if (!password) throw new Error('由 child 发起连接时必须填写连接密码');
+      await api(`/distributed/nodes/${encodeURIComponent(initiator)}/command`, {
+        method: 'POST',
+        body: {
+          command: 'connect_to_node',
+          args: {
+            target_host: body.host,
+            target_port: body.port,
+            target_node_id: body.node_id,
+            target_name: body.name,
+            target_gsd_port: body.gsd_port,
+            relation: body.relation,
+            password,
+            metadata,
+            allow_child_api_forward: body.allow_child_api_forward,
+          },
+        },
+      });
+    } else if (password) {
+      await api('/distributed/connect-to', {
+        method: 'POST',
+        body: {
+          target_host: body.host,
+          target_port: body.port,
+          target_node_id: body.node_id,
+          target_name: body.name,
+          target_gsd_port: body.gsd_port,
+          relation: body.relation,
+          password,
+          metadata,
+          allow_child_api_forward: body.allow_child_api_forward,
+        },
+      });
+    } else {
+      await api('/distributed/nodes', { method: 'POST', body });
+    }
+    closeModal();
+    await refreshNodes();
+  });
+}
+function openEditNode(nodeId) {
+  const node = state.nodes.find((n) => n.node_id === nodeId);
+  if (!node) return;
+  modal(`
+    <h2 style="margin:0 0 12px;font-size:16px">管理节点</h2>
+    <div class="form-grid">
+      <label>Name<input id="eName" value="${esc(node.name || '')}"/></label>
+      <label>关系<select id="eRelation"><option value="ff">friend-friend</option><option value="pc">parent-child</option><option value="pp">parent-parent</option></select></label>
+      <label>Parent ID<input id="eParentId" class="mono" value="${esc(node.metadata?.parent_id || '')}"/></label>
+      <label class="check-row" style="align-self:end"><input id="eAllowForward" type="checkbox" ${node.allow_child_api_forward ? 'checked' : ''}/>允许 child 转发</label>
+    </div>
+    <div class="action-row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitEditNode('${esc(nodeId)}')">保存</button></div>`);
+  $('eRelation').value = node.relation;
+}
+async function submitEditNode(nodeId) {
+  const node = state.nodes.find((n) => n.node_id === nodeId);
+  const nextName = $('eName').value.trim();
+  await runUiAction('保存节点关系', async () => {
+    if (node && nextName && nextName !== (node.name || '')) {
+      await api(`/distributed/nodes/${encodeURIComponent(nodeId)}`, {
+        method: 'PATCH',
+        body: { name: nextName },
+      });
+    }
+    await api(`/distributed/nodes/${encodeURIComponent(nodeId)}/relation`, {
+      method: 'POST',
+      body: {
+        relation: $('eRelation').value,
+        parent_id: $('eParentId').value.trim() || null,
+        allow_child_api_forward: $('eAllowForward').checked,
+      },
+    });
+    closeModal();
+    await refreshNodes();
+  });
+}
+
+function openSetWorkers(nodeId) {
+  const node = state.nodes.find((n) => n.node_id === nodeId);
+  if (!node) return;
+  modal(`
+    <h2 style="margin:0 0 12px;font-size:16px">调整 Workers</h2>
+    <div class="form-grid">
+      <label>节点<input class="mono" value="${esc(node.name || node.node_id)}" disabled/></label>
+      <label>Workers<input id="wCount" type="number" min="1" value="1"/></label>
+      <label class="check-row" style="align-self:end"><input id="wPersist" type="checkbox"/>写入配置</label>
+      <label class="check-row" style="align-self:end"><input id="wRestart" type="checkbox"/>请求重启</label>
+    </div>
+    <div class="action-row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitSetWorkers('${esc(nodeId)}')">执行</button></div>`);
+}
+
+async function submitSetWorkers(nodeId) {
+  await sendCommandArgs(nodeId, 'set_workers', {
+    workers: Math.max(1, Number($('wCount').value || 1)),
+    persist: $('wPersist').checked,
+    restart: $('wRestart').checked,
+  });
+  closeModal();
+  await refreshNodes();
+}
+
+canvas.addEventListener('click', (event) => {
+  if (state.ignoreNextClick) { state.ignoreNextClick = false; return; }
+  $('contextMenu').classList.remove('open');
+  const node = hitNode(event.clientX, event.clientY);
+  if (node && node !== state.self && (event.ctrlKey || event.metaKey)) {
+    toggleNodeSelection(node.node_id, true);
+    return;
+  }
+  if (node && node !== state.self) renderSidebar(node);
+});
+canvas.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  const node = hitNode(event.clientX, event.clientY);
+  const lineNode = node ? null : hitLine(event.clientX, event.clientY);
+  if (node && node !== state.self) {
+    const canManage = !!node.management?.can_manage || node.relation !== 'ff';
+    showMenu(event.clientX, event.clientY, [
+      { label: state.selectedNodes.has(node.node_id) ? '取消选择' : '加入选择', action: () => toggleNodeSelection(node.node_id, true) },
+      { label: '删除', disabled: !canManage, action: () => removeNode(node.node_id) },
+      { label: 'Ping', action: () => pingNode(node.node_id) },
+      { label: '编辑关系', action: () => openEditNode(node.node_id) },
+      { label: '调整 Workers', disabled: !canManage, action: () => openSetWorkers(node.node_id) },
+      { label: '停止节点', disabled: !canManage, action: () => sendCommand(node.node_id, 'stop') },
+      { label: '打开 Admin', disabled: node.relation === 'ff', action: () => openRemoteAdmin(`http://${node.host}:${node.port}/admin/panel`, node.name || node.node_id) },
+    ]);
+  } else if (lineNode) {
+    showMenu(event.clientX, event.clientY, [
+      { label: '连线详情', action: () => renderLinkDetails(lineNode) },
+      { label: `延迟 ${fmtMs(lineNode.rtt_ms)}` , action: () => renderLinkDetails(lineNode) },
+      { label: '丢包率 ' + (lineNode.metadata?.packet_loss || '—'), action: () => renderLinkDetails(lineNode) },
+      { label: '已转发 ' + (lineNode.metadata?.forwarded_requests || lineNode.metadata?.forwarded || '—'), action: () => renderLinkDetails(lineNode) },
+      { label: '失败 ' + (lineNode.metadata?.forward_failed || '—'), action: () => renderLinkDetails(lineNode) },
+      { label: '管理关系', action: () => openEditNode(lineNode.node_id) },
+    ]);
   }
 });
+canvas.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  const point = canvasPoint(event);
+  const node = hitNode(event.clientX, event.clientY);
+  if (event.shiftKey || !node) {
+    state.selectBox = { start: point, end: point };
+    updateSelectRect(point, point);
+    canvas.setPointerCapture(event.pointerId);
+    return;
+  }
+  if (node) {
+    state.drag = { nodeId: node.node_id, x: event.clientX, y: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+  }
+});
+canvas.addEventListener('pointermove', (event) => {
+  if (state.selectBox) {
+    state.selectBox.end = canvasPoint(event);
+    updateSelectRect(state.selectBox.start, state.selectBox.end);
+    return;
+  }
+  if (!state.drag) return;
+  const p = state.positions.get(state.drag.nodeId);
+  if (!p) return;
+  p.x += (event.clientX - state.drag.x) / state.zoom;
+  p.y += (event.clientY - state.drag.y) / state.zoom;
+  state.drag.x = event.clientX;
+  state.drag.y = event.clientY;
+  drawGraph();
+});
+canvas.addEventListener('pointerup', () => {
+  if (state.selectBox) {
+    const { start, end } = state.selectBox;
+    $('selectRect').style.display = 'none';
+    state.selectBox = null;
+    state.ignoreNextClick = Math.abs(start.x - end.x) > 4 || Math.abs(start.y - end.y) > 4;
+    selectNodesInRect(start, end);
+    return;
+  }
+  state.drag = null;
+  saveGraphLayout();
+});
 
-loadSelf();
-loadNodes();
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.type === 'proj-sync') {
+    document.documentElement.classList.toggle('dark', !!data.dark);
+    state.dark = !!data.dark;
+    drawGraph();
+  }
+});
+document.addEventListener('click', (event) => {
+  if (!$('contextMenu').contains(event.target)) $('contextMenu').classList.remove('open');
+});
+$('modal').addEventListener('click', (event) => { if (event.target === $('modal')) closeModal(); });
+$('graphSearchBtn').onclick = openGraphSearch;
+$('canvasAddBtn').onclick = openAddNode;
+$('canvasRefreshBtn').onclick = refreshNodes;
+$('resetLayoutBtn').onclick = resetGraphLayout;
+$('clusterLayoutBtn').onclick = autoClusterLayout;
+$('batchMenuBtn').onclick = openBatchMenu;
+$('zoomOutBtn').onclick = () => setGraphZoom(state.zoom - 0.15);
+$('zoomInBtn').onclick = () => setGraphZoom(state.zoom + 0.15);
+
+loadGraphLayout();
+updateFilterChip();
+applyView('nodes');
+function animateGraph() {
+  if (state.view === 'nodes') drawGraph();
+  requestAnimationFrame(animateGraph);
+}
+requestAnimationFrame(animateGraph);
+window.setInterval(() => { if (document.visibilityState === 'visible' && state.view === 'nodes') refreshNodes(); }, 8000);
 </script>
-
 </body>
 </html>

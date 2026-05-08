@@ -61,7 +61,12 @@ class ShopAiChatRoute(Route):
             logger.warning("AI chat failed: %s", exc)
             return {"reply": _fallback_reply(message)}
 
-    async def post_stream(self, payload: AiChatRequest) -> StreamingResponse:
+
+class ShopAiChatStreamRoute(Route):
+    Tags = "Shop"
+    RoutePath = "/api/shop/ai-chat/stream"
+
+    async def post(self, payload: AiChatRequest) -> StreamingResponse:
         message = payload.message
 
         async def _sse():

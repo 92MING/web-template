@@ -71,6 +71,7 @@ netifaces
 paramiko
 sshtunnel
 httpx
+geoip2
 annoy
 aiosqlite
 cython

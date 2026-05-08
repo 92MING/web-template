@@ -279,7 +279,7 @@ class UserRoute(Route):
 
 ## 私有文件
 
-以下文件/目录会被跳过：
+以下文件/目录会被 FastAPI worker 的路由发现跳过：
 
 - `__pycache__`
 - 以 `_` 开头但不以 `_` 结尾的文件（如 `_private.py`）
@@ -296,6 +296,8 @@ class UserRoute(Route):
 - 以 `_` 开头且以 `_` 结尾的名字，会被当作路径参数。
 - 普通 `__init__.py` 会被当作包路由入口。
 - 只有“私有名”才会被跳过，也就是以 `_` 开头、但不是路径参数占位的名字。
+
+注意：这个规则只描述 FastAPI worker 的路由发现。main process 为了挂载 `on_main_process_*` 事件和 scheduler，会在启动前 import 一次 `app/` / `extra_app_paths` 下的 `.py` 文件，并且会包含 `_` 开头的文件和目录。因此 `_private.py` 里可以注册 main process scheduler/event，但如果把 `on_app_created`、`on_before_app_created`、`on_app_shutdown` 这类 FastAPI worker 事件写在 `_private.py` 或 `_private/` 里，worker 不会加载它们。
 
 ## 生命周期
 

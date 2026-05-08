@@ -405,6 +405,12 @@
       background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
     }
 
+    .empty-box.hidden,
+    .role-row-subtitle:empty,
+    .detail-subtitle:empty {
+      display: none;
+    }
+
     .detail-scroll {
       min-height: 0;
       overflow: auto;
@@ -1278,7 +1284,7 @@
         ? state.filteredItems.map((item) => {
             const activeClass = item.id === state.selectedId ? ' active' : '';
             const statusClass = item.banned ? 'err' : 'ok';
-            const subtitle = item.comment || '—';
+            const subtitle = String(item.comment || '').trim();
             return '<button type="button" class="role-row' + activeClass + '" data-id="' + escapeHtml(item.id) + '">'
               + '<div class="role-row-head"><div class="role-row-title">' + escapeHtml(roleLabel(item)) + '</div><span class="status-pill ' + statusClass + '">' + (item.banned ? '已封禁' : '可用') + '</span></div>'
               + '<div class="role-row-subtitle">' + escapeHtml(subtitle) + '</div>'
@@ -1346,7 +1352,7 @@
         return;
       }
       els.detailTitle.textContent = roleLabel(item);
-      els.detailSubtitle.textContent = item.comment || '—';
+      els.detailSubtitle.textContent = String(item.comment || '').trim();
       els.snapshotStatus.className = 'status-pill ' + (item.banned ? 'err' : 'ok');
       els.snapshotStatus.textContent = item.banned ? '已封禁' : '可用';
       els.snapshotId.textContent = item.id || '—';

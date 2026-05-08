@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Node registry — manages parent/child/friend relationships."""
+"""Node registry — manages ff/pc/pp relationships."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ _NODE_PARENT_METADATA_KEYS = ("parent_id", "parent_node_id")
 
 class _NodeRecord(TypedDict):
     node_id: str
+    name: str
     host: str
     port: int
     gsd_port: int
@@ -35,6 +36,7 @@ class _NodeRecord(TypedDict):
     health_score: float
     failed_probes: int
     metadata: dict[str, str]
+    allow_child_api_forward: bool
 
 
 class NodeRegistry:
@@ -72,6 +74,7 @@ class NodeRegistry:
     def _to_record(self, node: Node) -> _NodeRecord:
         return {
             "node_id": node.node_id,
+            "name": node.name or node.node_id,
             "host": node.host,
             "port": node.port,
             "gsd_port": node.gsd_port,
@@ -83,15 +86,16 @@ class NodeRegistry:
             "health_score": node.health_score,
             "failed_probes": node.failed_probes,
             "metadata": dict(node.metadata),
+            "allow_child_api_forward": node.allow_child_api_forward,
         }
 
     def _from_record(self, record: object) -> Node | None:
         if not isinstance(record, Mapping):
             return None
         data = cast(Mapping[str, object], record)
-        relation = data.get("relation", "friend")
-        if relation not in ("parent", "child", "friend"):
-            relation = "friend"
+        relation = data.get("relation", "ff")
+        if relation not in ("ff", "pc", "pp"):
+            relation = "ff"
         health_status = data.get("health_status", "healthy")
         if health_status not in ("healthy", "degraded", "unreachable"):
             health_status = "healthy"
@@ -104,6 +108,7 @@ class NodeRegistry:
             node_id=str(data["node_id"]),
             host=str(data["host"]),
             port=int(data["port"]),
+            name=str(data.get("name", "") or data["node_id"]),
             gsd_port=int(data.get("gsd_port", 0)),
             relation=cast(NodeRelation, relation),
             admin_password_hash=str(data.get("admin_password_hash", "")),
@@ -113,6 +118,7 @@ class NodeRegistry:
             health_score=float(data.get("health_score", 100.0)),
             failed_probes=int(data.get("failed_probes", 0)),
             metadata=metadata,
+            allow_child_api_forward=bool(data.get("allow_child_api_forward", False)),
         )
 
     def _save(self, node: Node) -> None:
@@ -171,10 +177,12 @@ class NodeRegistry:
         node_id: str,
         host: str,
         port: int,
-        relation: NodeRelation = "friend",
+        relation: NodeRelation = "ff",
         admin_password_hash: str = "",
         gsd_port: int = 0,
         metadata: dict[str, str] | None = None,
+        name: str = "",
+        allow_child_api_forward: bool = False,
     ) -> Node:
         async with self._lock:
             node = self._from_record(self._shared().get_shared_dict_value(self._namespace, node_id))
@@ -183,17 +191,21 @@ class NodeRegistry:
                     node_id=node_id,
                     host=host,
                     port=port,
+                    name=name or node_id,
                     relation=relation,
                     admin_password_hash=admin_password_hash,
                     gsd_port=gsd_port,
                     metadata=metadata or {},
+                    allow_child_api_forward=allow_child_api_forward,
                 )
                 _logger.info("Registered node %s (%s) at %s:%s", node_id, relation, host, port)
             else:
                 node.host = host
                 node.port = port
+                node.name = name or node.name or node.node_id
                 node.gsd_port = gsd_port
                 node.relation = relation
+                node.allow_child_api_forward = allow_child_api_forward
                 if admin_password_hash:
                     node.admin_password_hash = admin_password_hash
                 if metadata:
@@ -224,13 +236,13 @@ class NodeRegistry:
         return [node for node in await self.all() if node.relation == relation]
 
     async def parents(self) -> list[Node]:
-        return await self.by_relation("parent")
+        return [node for node in await self.all() if node.relation in {"pc", "pp"}]
 
     async def children(self) -> list[Node]:
-        return await self.by_relation("child")
+        return [node for node in await self.all() if node.relation == "pc"]
 
     async def friends(self) -> list[Node]:
-        return await self.by_relation("friend")
+        return await self.by_relation("ff")
 
     async def healthy(self) -> list[Node]:
         return [node for node in await self.all() if node.is_healthy()]
@@ -242,23 +254,99 @@ class NodeRegistry:
                 node.update_health(success, rtt_ms)
                 self._save(node)
 
+    async def record_probe_result(self, node_id: str, success: bool, rtt_ms: float | None = None) -> None:
+        async with self._lock:
+            node = self._from_record(self._shared().get_shared_dict_value(self._namespace, node_id))
+            if node is None:
+                return
+            node.update_health(success, rtt_ms)
+            metadata = dict(node.metadata)
+            try:
+                probe_total = int(metadata.get("probe_total") or "0")
+            except ValueError:
+                probe_total = 0
+            try:
+                probe_failed = int(metadata.get("probe_failed") or "0")
+            except ValueError:
+                probe_failed = 0
+            probe_total += 1
+            if not success:
+                probe_failed += 1
+            metadata["probe_total"] = str(probe_total)
+            metadata["probe_failed"] = str(probe_failed)
+            metadata["packet_loss"] = f"{(probe_failed / max(1, probe_total)) * 100:.1f}%"
+            metadata["last_probe_at"] = str(time.time())
+            node.metadata = metadata
+            self._save(node)
+
     # ── management scope lookup ────────────────────────────────────────────
 
     def _parent_id_for_management(self, node: Node, root_id: str) -> str | None:
-        if node.relation != "child":
+        if node.relation not in {"pc", "pp"}:
             return None
         for key in _NODE_PARENT_METADATA_KEYS:
             parent_id = node.metadata.get(key, "").strip()
             if parent_id:
                 return parent_id
+        if node.relation == "pp":
+            return root_id
         return root_id
 
+    def _parent_id_for_pc(self, node: Node, self_id: str) -> str:
+        for key in _NODE_PARENT_METADATA_KEYS:
+            parent_id = node.metadata.get(key, "").strip()
+            if parent_id:
+                return parent_id
+        return self_id
+
+    async def can_forward_to(self, self_id: str, target_id: str) -> bool:
+        if self_id == target_id:
+            return True
+        nodes = await self.all()
+        graph: dict[str, set[str]] = {}
+
+        def add_edge(src: str, dst: str) -> None:
+            graph.setdefault(src, set()).add(dst)
+
+        for node in nodes:
+            if node.relation == "ff":
+                add_edge(self_id, node.node_id)
+                add_edge(node.node_id, self_id)
+                continue
+            if node.relation == "pp":
+                peer_id = self._parent_id_for_pc(node, self_id)
+                add_edge(peer_id, node.node_id)
+                add_edge(node.node_id, peer_id)
+                continue
+            parent_id = self._parent_id_for_pc(node, self_id)
+            if parent_id == node.node_id:
+                add_edge(node.node_id, self_id)
+                if node.allow_child_api_forward:
+                    add_edge(self_id, node.node_id)
+                continue
+            add_edge(parent_id, node.node_id)
+            if node.allow_child_api_forward:
+                add_edge(node.node_id, parent_id)
+
+        queue: list[str] = [self_id]
+        visited: set[str] = set()
+        while queue:
+            current_id = queue.pop(0)
+            if current_id == target_id:
+                return True
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+            queue.extend(next_id for next_id in graph.get(current_id, set()) if next_id not in visited)
+        return False
+
     async def management_route(self, root_id: str, target_id: str) -> list[Node] | None:
-        """Return child-edge route from *root_id* to *target_id*.
+        """Return pc/pp management route from *root_id* to *target_id*.
 
         The returned list excludes *root_id* and includes *target_id*.
-        Only nodes with relation="child" participate in the management graph;
-        friend and parent edges deliberately do not grant management authority.
+        ``pc`` edges grant parent-to-child management according to
+        ``metadata.parent_id``. ``pp`` grants direct mutual management.
+        ``ff`` edges deliberately do not grant management authority.
         """
         if root_id == target_id:
             return []
@@ -360,6 +448,23 @@ class NodeRegistry:
             async with session.get(url) as response:
                 rtt = (time.time() - t0) * 1000
                 if response.status == 200:
-                    await self.update_health(node.node_id, success=True, rtt_ms=rtt)
+                    await self.record_probe_result(node.node_id, success=True, rtt_ms=rtt)
+                    try:
+                        payload = await response.json()
+                    except Exception:
+                        payload = None
+                    metadata = payload.get("metadata") if isinstance(payload, dict) else None
+                    if isinstance(metadata, dict):
+                        await self.register(
+                            node_id=node.node_id,
+                            name=node.name,
+                            host=node.host,
+                            port=node.port,
+                            relation=node.relation,
+                            admin_password_hash=node.admin_password_hash,
+                            gsd_port=node.gsd_port,
+                            metadata={str(key): str(value) for key, value in metadata.items()},
+                            allow_child_api_forward=node.allow_child_api_forward,
+                        )
                 else:
-                    await self.update_health(node.node_id, success=False)
+                    await self.record_probe_result(node.node_id, success=False)

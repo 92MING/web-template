@@ -295,6 +295,9 @@ def _project_orm_api_document(payload: Any, *, object_id: str | None = None, sel
     return projected
 
 
+_MAX_FALLBACK_SORT_ROWS = 10000
+
+
 def _orm_query_response_item(payload: Any, selection: list[str] | None = None) -> dict[str, Any]:
     object_id = _orm_api_object_id(payload if isinstance(payload, dict) else None)
     return {
@@ -313,9 +316,23 @@ async def _fallback_sorted_orm_query(
     offset: int,
 ) -> tuple[list[dict[str, Any]], int, bool]:
     matched: list[dict[str, Any]] = []
+    count = 0
     try:
         async for row in client.raw_query(collection, query, limit=None, offset=0):
             matched.append(_orm_query_response_item(row))
+            count += 1
+            if count > _MAX_FALLBACK_SORT_ROWS:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "ORM fallback sort exceeded %s rows for collection=%s query=%s. "
+                    "Consider adding an index or narrowing the query.",
+                    _MAX_FALLBACK_SORT_ROWS, collection, query,
+                )
+                raise HTTPException(
+                    400,
+                    f"排序查询结果超过 {_MAX_FALLBACK_SORT_ROWS} 行，无法执行内存排序。"
+                    "请缩小查询范围或为该字段添加索引。",
+                )
     except ValueError as exc:
         raise HTTPException(400, f"排序查询失败: {exc}") from exc
 

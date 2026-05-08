@@ -249,7 +249,7 @@ async function ensureServerMeta() {
   serverMeta = {
     instance_uuid: cfg.instance_uuid,
     server_start_time: cfg.server_start_time,
-    worker_pid: cfg.worker_pid,
+    shared_manager_pid: cfg.shared_manager_pid,
     cache_scope: cfg.cache_scope,
   };
   cleanupOldCache(serverMeta.instance_uuid);

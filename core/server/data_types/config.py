@@ -299,6 +299,8 @@ class ServerConfig(_AutoDocstringModel):
     """Host address. ``None`` — auto-select based on mode."""
     port: int = Field(default_factory=lambda: _get_int_env("PORT", _get_int_env("__PORT__", -1)))
     """Port number (``-1`` — find a free port)."""
+    name: str | None = Field(default_factory=lambda: os.getenv("SERVER_NAME", None))
+    """Human-readable server name. ``None`` uses the runtime server id."""
     frontend_baseurl: str | None = Field(default_factory=lambda: os.getenv("FRONTEND_BASEURL", None))
     """Optional request base URL injected into frontend HTML pages."""
     worker: int = Field(default_factory=lambda: (
@@ -348,6 +350,10 @@ class ServerConfig(_AutoDocstringModel):
     """Additional resource directories (not directly exposed via HTTP) (str or list of str)."""
     valid_locales: str | Language | Sequence[str | Language] | None = Field(default=None)
     """Optional locale prefixes accepted in URLs before route matching."""
+    scheduler_per_process_max_instances: int | None = Field(default_factory=lambda: (
+        int(v) if (v := os.getenv("SCHEDULER_PER_PROCESS_MAX_INSTANCES")) is not None else 64
+    ))
+    """Per-process concurrent scheduled task instance limit. ``None`` means unlimited."""
 
     def model_post_init(self, __context: Any) -> None:
         text = str(self.internal_path_prefix or "/_internal").strip()
@@ -902,8 +908,10 @@ class Config(_AutoDocstringModel):
         # server_config
         p.add_argument("--server-host", type=str, default=default.server_config.host, help="[server] Bind host")
         p.add_argument("--server-port", type=int, default=default.server_config.port, help="[server] Bind port (-1 = auto)")
+        p.add_argument("--server-name", type=str, default=default.server_config.name, help="[server] Human-readable server name")
         p.add_argument("--frontend-baseurl", type=str, default=default.server_config.frontend_baseurl, help="[server] Optional frontend request base URL injected into HTML pages")
         p.add_argument("--server-worker", type=int, default=default.server_config.worker, help="[server] Number of workers")
+        p.add_argument("--scheduler-per-process-max-instances", type=int, default=default.server_config.scheduler_per_process_max_instances, help="[scheduler] Per-process max concurrent scheduled task instances (None = unlimited)")
         p.add_argument("--server-reload", action="store_true", help="[server] Enable auto-reload (dev)")
         p.add_argument("--system-allowed-roots", type=str, default=",".join(default.server_config.system_allowed_roots), help="[server] Comma-separated allowed filesystem roots for terminal/file manager")
         p.add_argument("--system-default-root", type=str, default=default.server_config.system_default_root, help="[server] Preferred default root for terminal/file manager")
@@ -960,8 +968,12 @@ class Config(_AutoDocstringModel):
         # server_config
         config.server_config.host = getattr(args, "server_host", config.server_config.host)
         config.server_config.port = getattr(args, "server_port", config.server_config.port)
+        config.server_config.name = getattr(args, "server_name", config.server_config.name)
         config.server_config.frontend_baseurl = getattr(args, "frontend_baseurl", config.server_config.frontend_baseurl)
         config.server_config.worker = getattr(args, "server_worker", config.server_config.worker)
+        raw_scheduler_max = getattr(args, "scheduler_per_process_max_instances", None)
+        if raw_scheduler_max is not None:
+            config.server_config.scheduler_per_process_max_instances = int(raw_scheduler_max) if int(raw_scheduler_max) >= 0 else None
         raw_system_allowed_roots = getattr(args, "system_allowed_roots", None)
         if raw_system_allowed_roots is not None:
             config.server_config.system_allowed_roots = [

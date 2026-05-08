@@ -19,6 +19,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--server-port", type=int, default=19003)
     parser.add_argument("--server-worker", type=int, default=2)
+    parser.add_argument("--server-name", type=str, default=None)
     args = parser.parse_args()
 
     extra_app = ",".join([str(HERE / "public"), str(HERE)])
@@ -32,6 +33,8 @@ def main() -> None:
         "--extra-app-paths", extra_app,
         "--extra-public-paths", extra_public,
     ]
+    if args.server_name:
+        cmd.extend(["--server-name", args.server_name])
     os.chdir(str(PROJECT_DIR))
     sys.argv = cmd[1:]
     runpy.run_path(str(MAIN_PY), run_name="__main__")

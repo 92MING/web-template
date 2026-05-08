@@ -128,12 +128,30 @@
     <button class="nav-item text-xs" id="nav-backend-settings" onclick="showBackendSub('settings')">
       <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.settings">设置</span>
     </button>
-    <button class="nav-item text-xs" id="nav-backend-apikey" onclick="showBackendSub('apikey')">
-      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.apikey">APIKey</span>
+    <button class="nav-item text-xs" id="nav-backend-distributed" onclick="toggleBackendDistributedGroup()">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.distributed">分布式</span>
+      <svg id="backend-distributed-arrow" class="ml-auto w-3 h-3 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
     </button>
-    <button class="nav-item text-xs" id="nav-backend-role" onclick="showBackendSub('role')">
-      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.role">Role</span>
+    <div id="backend-distributed-sub-group" class="hidden pl-4 space-y-px">
+      <button class="nav-item text-xs" id="nav-backend-distributed-nodes" onclick="showBackendSub('distributed-nodes')">
+        <span class="icon" style="width:4px;height:4px;"></span><span data-i18n="nav.backend.distributed.nodes">节点</span>
+      </button>
+      <button class="nav-item text-xs" id="nav-backend-distributed-data" onclick="showBackendSub('distributed-data')">
+        <span class="icon" style="width:4px;height:4px;"></span><span data-i18n="nav.backend.distributed.data">数据</span>
+      </button>
+    </div>
+    <button class="nav-item text-xs" id="nav-backend-permission" onclick="toggleBackendPermissionGroup()">
+      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.backend.permission">权限</span>
+      <svg id="backend-permission-arrow" class="ml-auto w-3 h-3 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
     </button>
+    <div id="backend-permission-sub-group" class="hidden pl-4 space-y-px">
+      <button class="nav-item text-xs" id="nav-backend-permission-apikey" onclick="showBackendSub('permission-apikey')">
+        <span class="icon" style="width:4px;height:4px;"></span><span data-i18n="nav.permission.apikey">API 密钥</span>
+      </button>
+      <button class="nav-item text-xs" id="nav-backend-permission-role" onclick="showBackendSub('permission-role')">
+        <span class="icon" style="width:4px;height:4px;"></span><span data-i18n="nav.permission.role">角色</span>
+      </button>
+    </div>
   </div>
 
   <div class="flex-1"></div>
@@ -362,6 +380,22 @@
     </div>
   </div>
 
+  <!-- ── PERMISSION TAB ──────────────────────────────────────── -->
+  <div id="page-permissionlab" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="permissionlab-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="permissionlab-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">权限页面载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接权限管理页面…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   </div>
 
   <!-- ── Room Detail Modal ────────────────────────────────── -->
@@ -492,8 +526,12 @@ const PANEL_I18N = {
   'nav.backend':     { 'zh-cn':'后端','zh-tw':'後端',en:'Backend' },
   'nav.backend.overview': { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
   'nav.backend.settings': { 'zh-cn':'设置','zh-tw':'設置',en:'Settings' },
-  'nav.backend.apikey': { 'zh-cn':'APIKey','zh-tw':'APIKey',en:'APIKey' },
-  'nav.backend.role': { 'zh-cn':'Role','zh-tw':'Role',en:'Role' },
+  'nav.backend.distributed': { 'zh-cn':'分布式','zh-tw':'分散式',en:'Distributed' },
+  'nav.backend.distributed.nodes': { 'zh-cn':'节点','zh-tw':'節點',en:'Nodes' },
+  'nav.backend.distributed.data': { 'zh-cn':'数据','zh-tw':'數據',en:'Data' },
+  'nav.backend.permission':  { 'zh-cn':'权限','zh-tw':'權限',en:'Permissions' },
+  'nav.permission.apikey': { 'zh-cn':'API 密钥','zh-tw':'API 密鑰',en:'API Keys' },
+  'nav.permission.role': { 'zh-cn':'角色','zh-tw':'角色',en:'Roles' },
   'nav.logout':      { 'zh-cn':'退出登录','zh-tw':'退出登入',en:'Sign Out' },
   'dark-on':         { 'zh-cn':'浅色','zh-tw':'淺色',en:'Light' },
   'dark-off':        { 'zh-cn':'深色','zh-tw':'深色',en:'Dark' },
@@ -524,8 +562,10 @@ const PANEL_I18N = {
   'title.storage.vector':{ 'zh-cn':'Vector 数据','zh-tw':'Vector 數據',en:'Vector Data' },
   'title.backend.overview': { 'zh-cn':'后端 · 概览','zh-tw':'後端 · 概覽',en:'Backend · Overview' },
   'title.backend.settings': { 'zh-cn':'后端 · 设置','zh-tw':'後端 · 設置',en:'Backend · Settings' },
-  'title.backend.apikey': { 'zh-cn':'后端 · APIKey','zh-tw':'後端 · APIKey',en:'Backend · APIKey' },
-  'title.backend.role': { 'zh-cn':'后端 · Role','zh-tw':'後端 · Role',en:'Backend · Role' },
+  'title.backend.distributed-nodes': { 'zh-cn':'后端 · 分布式 · 节点','zh-tw':'後端 · 分散式 · 節點',en:'Backend · Distributed · Nodes' },
+  'title.backend.distributed-data': { 'zh-cn':'后端 · 分布式 · 数据','zh-tw':'後端 · 分散式 · 數據',en:'Backend · Distributed · Data' },
+  'title.backend.permission-apikey': { 'zh-cn':'后端 · 权限 · API 密钥','zh-tw':'後端 · 權限 · API 密鑰',en:'Backend · Permissions · API Keys' },
+  'title.backend.permission-role': { 'zh-cn':'后端 · 权限 · 角色','zh-tw':'後端 · 權限 · 角色',en:'Backend · Permissions · Roles' },
   'nav.ai':          { 'zh-cn':'AI服务','zh-tw':'AI服務',en:'AI Services' },
   'nav.ai.overview': { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
   'nav.ai.logs':     { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
@@ -604,7 +644,7 @@ const LOG_SUB_KEYS = ['overview','analysis','detail'];
 const AI_SUB_KEYS = ['overview','settings','test'];
 const AI_SUB_URLS = { overview:'/admin/panel/ai-services/overview', settings:'/admin/panel/ai-services/settings', test:'/admin/test/ai' };
 const STORAGE_SUB_KEYS = ['kv','object','orm','vector'];
-const BACKEND_SUB_KEYS = ['overview','settings','apikey','role'];
+const BACKEND_SUB_KEYS = ['overview','settings','distributed-nodes','distributed-data','permission-apikey','permission-role'];
 let activeTab = 'system';
 let activeSystemSub = 'overview';
 let systemGroupOpen = true;
@@ -618,6 +658,8 @@ let activeStorageSub = null;
 let storageGroupOpen = false;
 let activeBackendSub = null;
 let backendGroupOpen = false;
+let backendDistributedGroupOpen = false;
+let backendPermissionGroupOpen = false;
 const TERMINAL_IFRAME_ID = 'system-terminal-iframe';
 const PANEL_RELEASABLE_IFRAME_IDS = [
   'system-overview-iframe',
@@ -657,6 +699,8 @@ function savePanelState() {
     storageGroupOpen,
     activeBackendSub,
     backendGroupOpen,
+    backendDistributedGroupOpen,
+    backendPermissionGroupOpen,
   };
   try {
     panelStore?.set('state', state);
@@ -1146,6 +1190,20 @@ function toggleBackendGroup() {
   savePanelState();
 }
 
+function toggleBackendDistributedGroup() {
+  backendDistributedGroupOpen = !backendDistributedGroupOpen;
+  document.getElementById('backend-distributed-sub-group').classList.toggle('hidden', !backendDistributedGroupOpen);
+  document.getElementById('backend-distributed-arrow').style.transform = backendDistributedGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
+function toggleBackendPermissionGroup() {
+  backendPermissionGroupOpen = !backendPermissionGroupOpen;
+  document.getElementById('backend-permission-sub-group').classList.toggle('hidden', !backendPermissionGroupOpen);
+  document.getElementById('backend-permission-arrow').style.transform = backendPermissionGroupOpen ? 'rotate(180deg)' : '';
+  savePanelState();
+}
+
 function showBackendRoot() {
   showBackendSub(BACKEND_SUB_KEYS[0] || 'overview');
 }
@@ -1160,12 +1218,32 @@ function showBackendSub(key, options = {}) {
       const el = document.getElementById('nav-backend-'+k);
       if (el) el.classList.toggle('active', k===activeBackendSub);
     });
+    document.getElementById('nav-backend-distributed')?.classList.toggle('active', activeBackendSub.startsWith('distributed-'));
+    document.getElementById('nav-backend-permission')?.classList.toggle('active', activeBackendSub.startsWith('permission-'));
     if (!backendGroupOpen) {
       backendGroupOpen = true;
       document.getElementById('backend-sub-group').classList.remove('hidden');
       document.getElementById('backend-arrow').style.transform = 'rotate(180deg)';
     }
-    ensureIframeLoaded('backendlab-iframe', 'backendlab-frame-state', adminPath('/admin/panel/backend/' + activeBackendSub), t('title.backend.' + activeBackendSub));
+    if (activeBackendSub.startsWith('distributed-') && !backendDistributedGroupOpen) {
+      backendDistributedGroupOpen = true;
+      document.getElementById('backend-distributed-sub-group').classList.remove('hidden');
+      document.getElementById('backend-distributed-arrow').style.transform = 'rotate(180deg)';
+    }
+    if (activeBackendSub.startsWith('permission-') && !backendPermissionGroupOpen) {
+      backendPermissionGroupOpen = true;
+      document.getElementById('backend-permission-sub-group').classList.remove('hidden');
+      document.getElementById('backend-permission-arrow').style.transform = 'rotate(180deg)';
+    }
+    const backendUrls = {
+      overview: '/admin/panel/backend/overview',
+      settings: '/admin/panel/backend/settings',
+      'distributed-nodes': '/admin/panel/distributed',
+      'distributed-data': '/admin/panel/distributed/data',
+      'permission-apikey': '/admin/panel/backend/apikey',
+      'permission-role': '/admin/panel/backend/role',
+    };
+    ensureIframeLoaded('backendlab-iframe', 'backendlab-frame-state', adminPath(backendUrls[activeBackendSub] || backendUrls.overview), t('title.backend.' + activeBackendSub));
     activateIframeResource('backendlab-iframe');
     if (!options.skipSave) savePanelState();
   };
@@ -1427,6 +1505,7 @@ bindIframeState('storagelab-iframe', 'storagelab-frame-state', '存储页面');
 bindIframeState('api-iframe', 'api-frame-state', 'API 文档');
 bindIframeState('backendlab-iframe', 'backendlab-frame-state', '后端页面');
 bindIframeState('ailab-iframe', 'ailab-frame-state', 'AI 服务');
+bindIframeState('permissionlab-iframe', 'permissionlab-frame-state', '权限页面');
 loadServerConfig();
 const restoredPanelState = restorePanelState();
 activeSystemSub = SYSTEM_SUB_KEYS.includes(restoredPanelState.activeSystemSub) ? restoredPanelState.activeSystemSub : 'overview';
@@ -1444,7 +1523,11 @@ storageGroupOpen = !!restoredPanelState.storageGroupOpen;
 activeLogSub = restoredPanelState.activeLogSub || null;
 activeStorageSub = restoredPanelState.activeStorageSub || null;
 activeBackendSub = BACKEND_SUB_KEYS.includes(restoredPanelState.activeBackendSub) ? restoredPanelState.activeBackendSub : null;
+if (!activeBackendSub && restoredPanelState.activePermissionSub === 'apikey') activeBackendSub = 'permission-apikey';
+if (!activeBackendSub && restoredPanelState.activePermissionSub === 'role') activeBackendSub = 'permission-role';
 backendGroupOpen = !!restoredPanelState.backendGroupOpen;
+backendDistributedGroupOpen = restoredPanelState.backendDistributedGroupOpen != null ? !!restoredPanelState.backendDistributedGroupOpen : !!(activeBackendSub && activeBackendSub.startsWith('distributed-'));
+backendPermissionGroupOpen = restoredPanelState.backendPermissionGroupOpen != null ? !!restoredPanelState.backendPermissionGroupOpen : !!(activeBackendSub && activeBackendSub.startsWith('permission-'));
 activeAISub = AI_SUB_KEYS.includes(restoredPanelState.activeAISub) ? restoredPanelState.activeAISub : null;
 aiGroupOpen = !!restoredPanelState.aiGroupOpen;
 document.getElementById('system-sub-group').classList.toggle('hidden', !systemGroupOpen);
@@ -1457,12 +1540,20 @@ document.getElementById('storage-sub-group').classList.toggle('hidden', !storage
 document.getElementById('storage-arrow').style.transform = storageGroupOpen ? 'rotate(180deg)' : '';
 document.getElementById('backend-sub-group').classList.toggle('hidden', !backendGroupOpen);
 document.getElementById('backend-arrow').style.transform = backendGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('backend-distributed-sub-group').classList.toggle('hidden', !backendDistributedGroupOpen);
+document.getElementById('backend-distributed-arrow').style.transform = backendDistributedGroupOpen ? 'rotate(180deg)' : '';
+document.getElementById('backend-permission-sub-group').classList.toggle('hidden', !backendPermissionGroupOpen);
+document.getElementById('backend-permission-arrow').style.transform = backendPermissionGroupOpen ? 'rotate(180deg)' : '';
 document.getElementById('ai-sub-group').classList.toggle('hidden', !aiGroupOpen);
 document.getElementById('ai-arrow').style.transform = aiGroupOpen ? 'rotate(180deg)' : '';
 if (activeRoomsSub) ROOMS_SUB_KEYS.forEach(k => document.getElementById('nav-rooms-'+k)?.classList.toggle('active', k===activeRoomsSub));
 if (activeLogSub) LOG_SUB_KEYS.forEach(k => document.getElementById('nav-log-'+k)?.classList.toggle('active', k===activeLogSub));
 if (activeStorageSub) STORAGE_SUB_KEYS.forEach(k => document.getElementById('nav-storage-'+k)?.classList.toggle('active', k===activeStorageSub));
 if (activeBackendSub) BACKEND_SUB_KEYS.forEach(k => document.getElementById('nav-backend-'+k)?.classList.toggle('active', k===activeBackendSub));
+if (activeBackendSub) {
+  document.getElementById('nav-backend-distributed')?.classList.toggle('active', activeBackendSub.startsWith('distributed-'));
+  document.getElementById('nav-backend-permission')?.classList.toggle('active', activeBackendSub.startsWith('permission-'));
+}
 if (activeAISub) AI_SUB_KEYS.forEach(k => document.getElementById('nav-ai-'+k)?.classList.toggle('active', k===activeAISub));
 const restoredActiveTab = restoredPanelState.activeTab === 'testlab'
   ? 'rooms'

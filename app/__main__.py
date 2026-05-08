@@ -223,6 +223,14 @@ if _in_main:
         _aiortc_logger.setLevel(log_lvl)
         _aioice_logger.setLevel(log_lvl)
         _grpc_logger.setLevel(log_lvl)
+
+    try:
+        from core.utils.network_utils.helper_funcs import ensure_geolite2_city_db
+
+        ensure_geolite2_city_db(timeout=30.0)
+    except Exception as exc:
+        _root_logger.warning("GeoLite2 city database startup update skipped: %s", exc)
+
     from core.server.security.admin_password import initialize_admin_password
 
     initialize_admin_password(logger=_root_logger, allow_generate=True)
@@ -596,6 +604,82 @@ if _in_main:
             env_values["__PT_ADMIN_PW_SOURCE__"] = os.getenv("__PT_ADMIN_PW_SOURCE__") or ""
         return _write_temp_env_file(env_values)
 
+    def _iter_main_process_runtime_roots() -> list[Path]:
+        from core.constants import APP_DIR
+
+        roots: list[Path] = []
+
+        def _append(path: Path) -> None:
+            if not path.is_dir():
+                return
+            try:
+                resolved = path.resolve()
+            except Exception:
+                resolved = path
+            if resolved not in roots:
+                roots.append(resolved)
+
+        extra_app_paths = config.server_config.extra_app_paths
+        if isinstance(extra_app_paths, str):
+            extra_items = [extra_app_paths]
+        else:
+            extra_items = list(extra_app_paths or [])
+        for item in extra_items:
+            _append(Path(item))
+        _append(APP_DIR)
+        return roots
+
+    def _should_import_runtime_rel_path(rel_path: Path) -> bool:
+        return rel_path.name != "__main__.py"
+
+    def _runtime_module_name(root: Path, rel_path: Path) -> str:
+        module_path = rel_path.with_suffix("")
+        parts = list(module_path.parts)
+        if parts and parts[-1] == "__init__":
+            parts = parts[:-1]
+        suffix = ".".join(parts).replace("-", "_")
+        root_key = str(root).replace("\\", "/")
+        prefix = "_main_process_runtime_" + str(abs(hash(root_key)))
+        return f"{prefix}.{suffix}" if suffix else prefix
+
+    def _import_main_process_runtime_modules() -> None:
+        import importlib.util
+        import traceback
+
+        imported_paths: set[Path] = set()
+        for root in _iter_main_process_runtime_roots():
+            for import_root in (root, root / "api"):
+                root_text = str(import_root)
+                if import_root.is_dir() and root_text not in sys.path:
+                    sys.path.insert(0, root_text)
+            for py_file in sorted(root.rglob("*.py")):
+                rel_path = py_file.relative_to(root)
+                if not _should_import_runtime_rel_path(rel_path):
+                    continue
+                try:
+                    resolved_file = py_file.resolve()
+                except Exception:
+                    resolved_file = py_file
+                if resolved_file in imported_paths:
+                    continue
+                imported_paths.add(resolved_file)
+                module_name = _runtime_module_name(root, rel_path)
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, str(py_file))
+                    if spec is None or spec.loader is None:
+                        _root_logger.warning("Main process runtime import spec failed: %s", py_file)
+                        continue
+                    module = importlib.util.module_from_spec(spec)
+                    sys.modules[module_name] = module
+                    spec.loader.exec_module(module)
+                except Exception as exc:
+                    _root_logger.warning(
+                        "Main process runtime import failed: %s: %s\n%s",
+                        py_file,
+                        exc,
+                        traceback.format_exc(),
+                    )
+
     if control_supported:
         runtime_control.install_callback_controller(
             _request_from_main_control,
@@ -611,6 +695,26 @@ if _in_main:
         )
 
     _install_main_process_signal_handlers()
+
+    _import_main_process_runtime_modules()
+    from core.server.events import start_main_process_events, stop_main_process_events
+    from core.server.scheduler import start_scheduler, stop_scheduler
+
+    _main_process_runtime_started = False
+    try:
+        start_main_process_events()
+        start_scheduler("main_process")
+        _main_process_runtime_started = True
+    except Exception:
+        try:
+            stop_scheduler("main_process")
+        except Exception:
+            pass
+        try:
+            stop_main_process_events()
+        except Exception:
+            pass
+        raise
 
     if not reload_enabled:
         from core.server.routes.system.monitoring import (
@@ -667,6 +771,15 @@ if _in_main:
         requested_action = runtime_control.consume_requested_action()
     finally:
         _shutdown_trace("supervisor cleanup: stopping background refresh threads")
+        if _main_process_runtime_started:
+            try:
+                stop_scheduler("main_process")
+            except Exception:
+                _root_logger.exception("Failed to stop main process scheduler.")
+            try:
+                stop_main_process_events()
+            except Exception:
+                _root_logger.exception("Failed to stop main process events.")
         if _main_process_refresh_started:
             try:
                 stop_main_process_system_refresh()

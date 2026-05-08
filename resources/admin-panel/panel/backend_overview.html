@@ -323,7 +323,7 @@
         <article class="panel-stat-card">
           <div class="panel-stat-kicker">Instance ID</div>
           <div id="instance-id" class="panel-stat-value panel-mono">—</div>
-          <div id="instance-subtle" class="panel-note">当前 worker PID：—</div>
+          <div id="instance-subtle" class="panel-note">当前共享管理器 PID：—</div>
         </article>
         <article class="panel-stat-card">
           <div class="panel-stat-kicker">Start Time (HK)</div>
@@ -705,7 +705,7 @@
     function renderRuntime(data) {
       runtimeData = data;
       document.getElementById('instance-id').textContent = data.instance_id || '—';
-      document.getElementById('instance-subtle').textContent = `当前 worker PID：${data.current_worker_pid ?? '—'}`;
+      document.getElementById('instance-subtle').textContent = `当前共享管理器 PID：${data.current_shared_manager_pid ?? '—'}`;
       document.getElementById('start-time').textContent = fmtDateTime(data.server_start_time_hk || data.server_start_time);
       document.getElementById('uptime').textContent = `Uptime：${fmtUptime(data.uptime_seconds)}`;
 
@@ -745,7 +745,7 @@
       document.getElementById('cache-scope').textContent = `cache_scope=${data.cache_scope || '—'}`;
 
       renderControl(control);
-      renderWorkers(data.workers || [], data.current_worker_pid);
+      renderWorkers(data.workers || [], data.current_shared_manager_pid);
       showNotice(data.runtime_warning || '', 'warn');
     }
 

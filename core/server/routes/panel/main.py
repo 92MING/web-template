@@ -128,8 +128,8 @@ def _build_swagger_doc_enhancements(*, include_export_tools: bool) -> str:
         public_export_path = _internal_admin_path("panel/api/export/public")
         tools_markup = "" if not include_export_tools else f"""
 <div class=\"proj-doc-export-tools\">
-    <a class=\"proj-doc-export-tools__button\" href=\"{full_export_path}\">导出完整 HTML<span class=\"proj-doc-export-tools__meta\">包含所有内部路由和未公开 API 的文档</span></a>
-    <a class=\"proj-doc-export-tools__button proj-doc-export-tools__button--alt\" href=\"{public_export_path}\">导出 Admin HTML<span class=\"proj-doc-export-tools__meta\">仅包含 internal admin 路由的文档</span></a>
+    <a class=\"proj-doc-export-tools__button\" href=\"{full_export_path}\">导出完整API文档HTML<span class=\"proj-doc-export-tools__meta\">包含所有内部路由、调试路由与未公开 API 的完整文档</span></a>
+    <a class=\"proj-doc-export-tools__button proj-doc-export-tools__button--alt\" href=\"{public_export_path}\">导出非内部API文档HTML<span class=\"proj-doc-export-tools__meta\">自动排除所有 internal prefix 路由，仅保留对外 API 文档</span></a>
 </div>
 """
         return f"""
@@ -379,6 +379,35 @@ def _build_swagger_doc_enhancements(*, include_export_tools: bool) -> str:
         color: var(--proj-doc-text);
         border-color: var(--proj-doc-border);
     }}
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .models-control,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-container,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box .model-jump-to-path,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box-control,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models button,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models summary {{
+        background: transparent;
+        color: var(--proj-doc-text);
+        border-color: var(--proj-doc-border);
+        box-shadow: none;
+    }}
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-container,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box {{
+        background: color-mix(in srgb, var(--proj-doc-surface-strong) 86%, transparent);
+    }}
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .models-control,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box-control,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models button {{
+        color: var(--proj-doc-muted);
+    }}
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box-control:focus,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models .model-box-control:hover,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models button:focus,
+    body.proj-openapi-page.proj-openapi-dark .swagger-ui section.models button:hover {{
+        background: rgba(148, 163, 184, 0.12);
+        color: var(--proj-doc-text);
+        outline: none;
+    }}
     .proj-doc-export-tools {{
         position: fixed;
         right: 14px;
@@ -543,13 +572,22 @@ def _prune_components_for_spec(spec: dict[str, Any], source_components: dict[str
                 kept_components["securitySchemes"] = kept_security
     return kept_components
 
-def _prune_admin_paths_from_openapi(spec: dict[str, Any]) -> dict[str, Any]:
-    admin_prefix = _internal_admin_path()
-    admin_prefix_root = admin_prefix.rstrip("/")
+def _prune_internal_paths_from_openapi(
+    spec: dict[str, Any],
+    *,
+    internal_path_prefix: str | None = None,
+) -> dict[str, Any]:
+    prefix = "/" + str(internal_path_prefix or Config.GetConfig().server_config.internal_path_prefix or "/_internal").strip("/")
+    prefix_root = prefix.rstrip("/")
+
+    def _is_internal_path(path: str) -> bool:
+        normalized = "/" + str(path or "").lstrip("/")
+        return normalized == prefix_root or normalized.startswith(prefix_root + "/")
+
     filtered_paths = {
         path: copy.deepcopy(path_item)
         for path, path_item in spec.get("paths", {}).items()
-        if isinstance(path, str) and not (path == admin_prefix_root or path.startswith(admin_prefix_root + "/"))
+        if isinstance(path, str) and not _is_internal_path(path)
     }
     pruned_spec = {
         key: copy.deepcopy(value)
@@ -652,14 +690,14 @@ def register_panel_routes(app: FastAPI):
     @app.get(_internal_admin_path("panel/api/export/public"), response_class=HTMLResponse, include_in_schema=False)
 
     async def panel_api_docs_export_public() -> HTMLResponse:
-        spec = _prune_admin_paths_from_openapi(copy.deepcopy(app.openapi()))
+        spec = _prune_internal_paths_from_openapi(copy.deepcopy(app.openapi()))
         html_body = _build_swagger_export_html(
             spec=spec,
-            title=f"{app.title} - API 文档（不含 Admin 路由）",
+            title=f"{app.title} - API 文档（非内部路由）",
         )
         return HTMLResponse(
             html_body,
-            headers={"Content-Disposition": 'attachment; filename="proj-template-api-docs-no-admin.html"'},
+            headers={"Content-Disposition": 'attachment; filename="proj-template-api-docs-no-internal.html"'},
         )
     # ---- Server config ----
 

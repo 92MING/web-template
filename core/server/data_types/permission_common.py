@@ -1,4 +1,5 @@
 import fnmatch
+import re
 
 from datetime import date as Date
 from datetime import datetime, time as DateTimeTime, timedelta
@@ -62,8 +63,20 @@ def export_whitelist_routes(patterns: list[str]) -> Literal["all"] | list[str]:
     return "all" if whitelist_routes_is_all(patterns) else normalize_patterns(patterns)
 
 
+_PATTERN_CACHE: dict[str, re.Pattern[str]] = {}
+
+
+def _compile_route_pattern(pattern: str) -> re.Pattern[str]:
+    cached = _PATTERN_CACHE.get(pattern)
+    if cached is not None:
+        return cached
+    compiled = re.compile(fnmatch.translate(pattern))
+    _PATTERN_CACHE[pattern] = compiled
+    return compiled
+
+
 def match_route_pattern(route: str, pattern: str) -> bool:
-    return fnmatch.fnmatch(route, pattern)
+    return bool(_compile_route_pattern(pattern).match(route))
 
 
 def is_route_allowed(*, banned: bool, blacklist_routes: list[str], whitelist_routes: list[str], route: str) -> bool:

@@ -65,12 +65,12 @@ index.m.html
 后端注册：
 
 ```python
-from core.server.translate import register_translation, TranslationLanguage
+from core.server.translate import register_translation
+from core.utils.text_utils import Language
 
-
-register_translation("welcome", TranslationLanguage.EN, "Welcome", category="demo")
-register_translation("welcome", TranslationLanguage.ZH_CN, "欢迎", category="demo")
-register_translation("welcome", TranslationLanguage.ZH_TW, "歡迎", category="demo")
+register_translation("welcome", Language.English, "Welcome", category="demo")
+register_translation("welcome", Language.SimplifiedChinese, "欢迎", category="demo")
+register_translation("welcome", Language.TraditionalChinese, "歡迎", category="demo")
 ```
 
 前端调用：

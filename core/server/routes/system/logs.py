@@ -74,7 +74,7 @@ class LogsResponseModel(AdvancedBaseModel):
 
 class LogsRuntimeMeta(LogsResponseModel):
     instance_uuid: str | None = None
-    worker_pid: int | None = None
+    shared_manager_pid: int | None = None
     cache_scope: str | None = None
     server_start_time: str | None = None
     worker_count: int | None = None
