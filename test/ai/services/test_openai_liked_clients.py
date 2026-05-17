@@ -12,7 +12,7 @@ import aiohttp
 
 import core.ai.base as ai_base
 from core.ai.base import _CLIENT_TYPE_REGISTRY
-from core.ai.completion import CodingAgentCompletionClient, CompletionClient, CompletionService, OpenAILikedCompletionClient, OpenRouterCompletionClient
+from core.ai.completion import CompletionClient, CompletionService, OpenAILikedCompletionClient, OpenRouterCompletionClient
 from core.ai.embedding import EmbeddingClient, EmbeddingService, OpenAILikedEmbeddingClient, OpenRouterEmbeddingClient, _decode_base64_embedding
 from core.ai.s2t import OpenAILikedS2TClient, OpenRouterS2TClient, S2TClient, S2TService
 from core.ai.t2s import OpenAILikedT2SClient, OpenRouterT2SClient, T2SClient
@@ -92,17 +92,6 @@ class TestOpenAILikedCompletionClient(unittest.TestCase):
 
         self.assertIsInstance(client, OpenRouterCompletionClient)
 
-    def test_coding_agent_completion_client_adds_required_user_agent(self) -> None:
-        client = CodingAgentCompletionClient(apikey='coding-agent-key', base_url='https://api.kimi.com/coding/v1')
-
-        headers = client._headers()
-
-        self.assertEqual(headers['Authorization'], 'Bearer coding-agent-key')
-        self.assertEqual(headers['Content-Type'], 'application/json')
-        self.assertEqual(headers['User-Agent'], 'claude-code/1.0.0')
-        self.assertNotIn('HTTP-Referer', headers)
-        self.assertNotIn('X-Title', headers)
-
     def test_openrouter_direct_constructors_use_default_base_url(self) -> None:
         clients = [
             OpenRouterCompletionClient(apikey='router-key'),
@@ -144,7 +133,6 @@ class TestOpenAILikedCompletionClient(unittest.TestCase):
                 T2SClient.CreateOpenRouterT2SClient(apikey='router-key', base_url='https://router-t2s.test/v1', ssh_tunnel='box'),
                 T2ImgClient.CreateOpenAILikedT2ImgClient(apikey='openai-key', base_url='https://t2img.test/v1', ssh_tunnel='box'),
                 T2ImgClient.CreateOpenRouterT2ImgClient(apikey='router-key', base_url='https://router-t2img.test/v1', ssh_tunnel='box'),
-                CodingAgentCompletionClient(apikey='coding-agent-key', base_url='https://coding.test/v1', ssh_tunnel='box'),
             ]
 
         self.assertEqual(rewrite_url.call_count, len(clients))

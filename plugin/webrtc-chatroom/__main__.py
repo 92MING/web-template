@@ -45,6 +45,7 @@ PLUGIN_SHARED_ID = "webrtc-chatroom"
 ROOM_HTML_FILE = PLUGIN_PUBLIC_DIR / "rtc_room.html"
 ROOM_MOBILE_HTML_FILE = PLUGIN_PUBLIC_DIR / "rtc_room.m.html"
 ROOM_MANAGE_HTML_FILE = PLUGIN_ADMIN_DIR / "room_manage.html"
+ROOM_MANAGE_CSS_FILE = PLUGIN_ADMIN_DIR / "rtc-ui-shared.css"
 ROOM_TEST_HTML_FILE = PLUGIN_ADMIN_DIR / "test_chatroom.html"
 RTC_ROOM_CREATE_TOKEN_SUB = "rtc-room-create"
 RTC_ROOM_JOIN_TOKEN_SUB = "rtc-room-join"
@@ -593,6 +594,7 @@ class WebRTCChatroomPlugin:
 
         rooms_api_path = self._admin_path(self.config.admin_rooms_api_path)
         room_manage_path = self._admin_path(self.config.admin_manage_path)
+        room_manage_asset_base_path = room_manage_path.rsplit("/", 1)[0]
         room_test_path = self._admin_path(self.config.admin_test_path)
         room_page_path = self.config.room_html_path
         room_create_path = self.config.create_path
@@ -646,6 +648,12 @@ class WebRTCChatroomPlugin:
                 ROOM_MANAGE_HTML_FILE,
                 not_found_message="webrtc-chatroom/admin/room_manage.html not found",
             )
+
+        @app.get(room_manage_asset_base_path + "/rtc-ui-shared.css", include_in_schema=False)
+        async def webrtc_chatroom_room_manage_css() -> FileResponse:
+            if not ROOM_MANAGE_CSS_FILE.is_file():
+                raise HTTPException(404, "webrtc-chatroom/admin/rtc-ui-shared.css not found")
+            return FileResponse(ROOM_MANAGE_CSS_FILE, media_type="text/css")
 
         @app.get(room_test_path, response_class=HTMLResponse)
         async def webrtc_chatroom_room_test_html() -> HTMLResponse:

@@ -150,6 +150,20 @@ def test_dashboard_mode_defaults_ai_service_exposure(monkeypatch) -> None:
     assert cfg.is_compatible_ai_services_exposed() is True
 
 
+def test_dashboard_mode_keeps_explicit_ai_service_exposure_config_false(monkeypatch) -> None:
+    monkeypatch.setenv("__DASHBOARD_MODE__", "1")
+    monkeypatch.delenv("EXPOSE_AI_SERVICE", raising=False)
+    monkeypatch.delenv("EXPOSE_COMPATIBLE_AI_SERVICES", raising=False)
+
+    cfg = ServerConfig.model_validate({
+        "expose_ai_service": False,
+        "expose_compatible_ai_services": False,
+    })
+
+    assert cfg.is_ai_service_exposed() is False
+    assert cfg.is_compatible_ai_services_exposed() is False
+
+
 def test_internal_path_allowed_ip_normalization() -> None:
     cfg = ServerConfig(internal_path_allowed_ip=["localhost", "10.0.*"])
     assert cfg.get_internal_path_allowed_ip_patterns() == ["127.0.0.1", "::1", "localhost", "10.0.*"]
@@ -172,7 +186,7 @@ def test_internal_path_defaults_to_internal_prefix() -> None:
     cfg = ServerConfig()
     assert cfg.internal_path_prefix == "/_internal"
     assert cfg.get_internal_path("ai/services") == "/_internal/ai/services"
-    assert cfg.get_internal_admin_path("api/rooms") == "/_internal/admin/api/rooms"
+    assert cfg.get_internal_admin_path("api/logs") == "/_internal/admin/api/logs"
 
 
 def test_internal_path_does_not_guess_admin_or_ai() -> None:
@@ -181,7 +195,7 @@ def test_internal_path_does_not_guess_admin_or_ai() -> None:
     assert cfg.is_internal_path("/_internal/admin") is True
     assert cfg.is_internal_path("/_internal/ai/services") is True
     assert cfg.is_internal_path("/admin") is False
-    assert cfg.is_internal_path("/admin/api/rooms") is False
+    assert cfg.is_internal_path("/admin/api/logs") is False
     assert cfg.is_internal_path("/ai") is False
     assert cfg.is_internal_path("/ai/completion/service") is False
 

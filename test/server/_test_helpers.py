@@ -1748,7 +1748,6 @@ _ALL_ROUTE_REGISTRARS: list[tuple[str, Callable]] = [
     ("object",      _register_object_routes),
     ("orm",         _register_orm_routes),
     ("vector",      _register_vector_routes),
-    ("rtc_room",    _register_rtc_room_routes),
     ("panel",       _register_panel_routes),
     ("system_monitoring", _register_system_monitoring_routes),
     ("logs",        _register_log_routes),
@@ -1813,7 +1812,6 @@ class FullAppTestBase(unittest.IsolatedAsyncioTestCase):
             cfg = Config(
                 server_config=ServerConfig(host="127.0.0.1", port=18999, expose_ai_service=True),
                 log_config=LogConfig(log_method=["db"]),
-                plugin_configs={"webrtc-chatroom": {"enabled": True}},
             )
             Config.SetConfig(cfg)
             StorageConfig.SetGlobal(sc)

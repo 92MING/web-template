@@ -198,7 +198,6 @@ resources/admin-panel/
 - `panel.html`
 - `panel_login.html`
 - `storage/`
-- `rtc_room/`
 - `tools/`
 
 ## 一个推荐的前端组织方式

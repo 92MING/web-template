@@ -43,10 +43,6 @@ ConfigMapping = dict[str, object]
 ConfigLoader = Callable[[Path], ConfigMapping]
 
 _SERVICE_KIND_FIELDS: tuple[str, ...] = ('completion', 'embedding', 's2t', 't2s', 't2img')
-_CLIENT_TYPE_ALIASES: dict[str, str] = {
-    'openai-liked': 'openai',
-    'openai_liked': 'openai',
-}
 _NUMERIC_SUFFIX_FIELDS: frozenset[str] = frozenset({
     'max_tokens',
     'max_images',
@@ -101,9 +97,6 @@ def _normalize_config_value(key: str, value: object) -> object:
         return _parse_strategy_level(value)
     if key in _NUMERIC_SUFFIX_FIELDS and isinstance(value, str):
         return _parse_numeric_suffix(value)
-    if key == 'type' and isinstance(value, str):
-        normalized = value.strip()
-        return _CLIENT_TYPE_ALIASES.get(normalized.lower(), normalized)
     return value
 
 

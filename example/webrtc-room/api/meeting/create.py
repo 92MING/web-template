@@ -9,7 +9,7 @@ class CreateMeetingRequest(BaseModel):
     user_name: str
     room_name: str | None = None
     room_password: str | None = None
-    close_room_on_creator_left: bool = True
+    close_room_on_creator_left: bool = False
 
 
 class MeetingCreateRoute(MeetingRouteBase):
@@ -28,6 +28,7 @@ class MeetingCreateRoute(MeetingRouteBase):
             name=room_name,
             password=room_password,
             user_name=user_name,
+            close_when_no_visible_candidate=False,
             close_room_on_creator_left=bool(payload.close_room_on_creator_left),
             is_public=room_password is None,
         )
@@ -36,6 +37,7 @@ class MeetingCreateRoute(MeetingRouteBase):
             "create_token": create_token,
             "name": room_name,
             "user_name": user_name,
+            "close_when_no_visible_candidate": "false",
             "close_room_on_creator_left": "true" if payload.close_room_on_creator_left else "false",
             **({"password": room_password} if room_password else {}),
         })

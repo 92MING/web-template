@@ -56,13 +56,14 @@ def main() -> None:
 
     parser = _build_run_arg_parser()
     argv = sys.argv[1:]
-    forwarded_argv = _strip_run_only_args(argv)
     args = parser.parse_args(argv)
+    dashboard_mode = bool(getattr(args, "dashboard_mode", False))
+    forwarded_argv = _strip_run_only_args(argv)
 
     instance_id = str(uuid.uuid4())
     env = os.environ.copy()
     env["__SERVER_INSTANCE_ID__"] = instance_id
-    if getattr(args, "dashboard_mode", False):
+    if dashboard_mode:
         env[_DASHBOARD_MODE_ENV] = "1"
     else:
         env.pop(_DASHBOARD_MODE_ENV, None)

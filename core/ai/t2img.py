@@ -523,7 +523,7 @@ class T2ImgClient(ServiceClientBase[T2ImgHealthProbeInput]):
         raise NotImplementedError
 
 
-class OpenAILikedT2ImgClient(T2ImgClient, OpenAILikedClientMixin, type='openai'):
+class OpenAILikedT2ImgClient(T2ImgClient, OpenAILikedClientMixin, type='openai-liked', alias='openai'):
     @classmethod
     def CreateFromConfig(cls, **kwargs: object) -> 'OpenAILikedT2ImgClient':
         return cast(Any, T2ImgClient.CreateOpenAILikedT2ImgClient(**cast(Any, kwargs)))

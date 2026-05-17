@@ -10,7 +10,7 @@ from core.utils.concurrent_utils import run_any_func
 from .shared import *
 from .config import *
 from .base import ServiceBase, ServiceClientBase
-from .completion import CodingAgentCompletionClient, CompletionClient, CompletionService, OpenAILikedCompletionClient, OpenRouterCompletionClient, ThinkThinkSynCompletionClient
+from .completion import CompletionClient, CompletionService, OpenAILikedCompletionClient, OpenRouterCompletionClient, ThinkThinkSynCompletionClient
 from .embedding import EmbeddingClient, EmbeddingService, OpenAILikedEmbeddingClient, OpenRouterEmbeddingClient, ThinkThinkSynEmbeddingClient
 from .s2t import CompletionAsS2TClient, OpenAILikedS2TClient, OpenRouterS2TClient, S2TClient, S2TService
 from .t2s import OpenAILikedT2SClient, OpenRouterT2SClient, T2SClient, T2SService, ThinkThinkSynT2SClient

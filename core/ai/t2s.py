@@ -430,7 +430,7 @@ class ThinkThinkSynT2SClient(T2SClient, type='thinkthinksyn'):
             yield chunk
 
 
-class OpenAILikedT2SClient(T2SClient, OpenAILikedClientMixin, type='openai'):
+class OpenAILikedT2SClient(T2SClient, OpenAILikedClientMixin, type='openai-liked', alias='openai'):
     '''OpenAI 协议兼容的文本转语音客户端。'''
 
     @classmethod

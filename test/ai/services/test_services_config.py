@@ -32,6 +32,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from core.ai.base import (
     ProbeInterval,
+    _CLIENT_ALIAS_REGISTRY,
     _CLIENT_TYPE_REGISTRY,
     ServiceBase,
     ServiceClient,
@@ -99,6 +100,23 @@ class _FakeConfigClient(ServiceClientBase, type='fake-config-test'):
         return True
 
 
+class _FakeAliasConfigClient(ServiceClientBase, type='fake-alias-config-test', alias=('fake-alias', 'fake_alias_2')):
+    """A minimal client whose aliases are registered for config lookup."""
+
+    ServiceKind = 'completion'
+
+    def __init__(self, *, key: str | None = None, model: str = 'alias-model', **kw):
+        super().__init__(key=key, **kw)
+        self.model = model
+
+    @classmethod
+    def TestingInput(cls):
+        return None
+
+    async def probe_min_health(self) -> bool:
+        return True
+
+
 class _FakeConfigService(ServiceBase):
     """A minimal service for testing config-driven creation."""
 
@@ -121,8 +139,21 @@ class _FakeConfigPredefined(AIPredefinedService['_FakeConfigService']):
 
 
 def tearDownModule() -> None:
+    for instance in list(ServiceBase.ServiceInstances.values()):
+        try:
+            instance.close(close_clients=True)
+        except Exception:
+            pass
+    ServiceBase.ServiceInstances.clear()
+    ServiceClientBase.ClearClientCache(close=True)
     _CLIENT_TYPE_REGISTRY.pop(('completion', 'fake-config-test'), None)
     _CLIENT_TYPE_REGISTRY.pop(('completion', 'fakeconfigtest'), None)
+    _CLIENT_TYPE_REGISTRY.pop(('completion', 'fake-alias-config-test'), None)
+    _CLIENT_TYPE_REGISTRY.pop(('completion', 'fakealiasconfigtest'), None)
+    _CLIENT_ALIAS_REGISTRY.pop(('completion', 'fake-alias'), None)
+    _CLIENT_ALIAS_REGISTRY.pop(('completion', 'fakealias'), None)
+    _CLIENT_ALIAS_REGISTRY.pop(('completion', 'fake_alias_2'), None)
+    _CLIENT_ALIAS_REGISTRY.pop(('completion', 'fakealias2'), None)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -170,6 +201,14 @@ class TestAIServiceClientInitData(unittest.TestCase):
         client = cfg.get_client()
         self.assertIsNone(client)
 
+    def test_get_client_falls_back_to_registered_alias(self):
+        cfg = AIServiceClientInitData(type='fake-alias', kwargs={'model': 'from-alias'})
+        client = cfg.get_client(service_kind='completion')
+
+        self.assertIsInstance(client, _FakeAliasConfigClient)
+        self.assertEqual(client.model, 'from-alias')
+        self.assertIs(ServiceClientBase.GetClientCls('fake_alias_2', service_kind='completion'), _FakeAliasConfigClient)
+
     def test_get_client_key_override(self):
         cfg = AIServiceClientInitData(type='fake-config-test', key='original')
         client = cfg.get_client(key='overridden')
@@ -181,27 +220,37 @@ class TestAIServiceClientInitData(unittest.TestCase):
     def test_registered_client_types_are_scoped_by_service_kind(self):
         self.assertIs(ServiceClientBase.GetClientCls('thinkthinksyn', service_kind='completion'), ThinkThinkSynCompletionClient)
         self.assertIs(ServiceClientBase.GetClientCls('openai', service_kind='completion'), OpenAILikedCompletionClient)
+        self.assertIs(ServiceClientBase.GetClientCls('openai-liked', service_kind='completion'), OpenAILikedCompletionClient)
         self.assertIs(ServiceClientBase.GetClientCls('openrouter', service_kind='completion'), OpenRouterCompletionClient)
         self.assertIs(ServiceClientBase.GetClientCls('custom', service_kind='completion'), CustomCompletionClient)
         self.assertIs(ServiceClientBase.GetClientCls('thinkthinksyn', service_kind='embedding'), ThinkThinkSynEmbeddingClient)
         self.assertIs(ServiceClientBase.GetClientCls('openai', service_kind='embedding'), OpenAILikedEmbeddingClient)
+        self.assertIs(ServiceClientBase.GetClientCls('openai-liked', service_kind='embedding'), OpenAILikedEmbeddingClient)
         self.assertIs(ServiceClientBase.GetClientCls('custom', service_kind='embedding'), CustomEmbeddingClient)
         self.assertIs(ServiceClientBase.GetClientCls('completion', service_kind='s2t'), CompletionAsS2TClient)
         self.assertIs(ServiceClientBase.GetClientCls('openai', service_kind='s2t'), OpenAILikedS2TClient)
+        self.assertIs(ServiceClientBase.GetClientCls('openai-liked', service_kind='s2t'), OpenAILikedS2TClient)
         self.assertIs(ServiceClientBase.GetClientCls('openrouter', service_kind='s2t'), OpenRouterS2TClient)
         self.assertIs(ServiceClientBase.GetClientCls('custom', service_kind='s2t'), CustomS2TClient)
         self.assertIs(ServiceClientBase.GetClientCls('thinkthinksyn', service_kind='t2s'), ThinkThinkSynT2SClient)
         self.assertIs(ServiceClientBase.GetClientCls('openai', service_kind='t2s'), OpenAILikedT2SClient)
+        self.assertIs(ServiceClientBase.GetClientCls('openai-liked', service_kind='t2s'), OpenAILikedT2SClient)
         self.assertIs(ServiceClientBase.GetClientCls('custom', service_kind='t2s'), CustomT2SClient)
         self.assertIs(ServiceClientBase.GetClientCls('openai', service_kind='t2img'), OpenAILikedT2ImgClient)
+        self.assertIs(ServiceClientBase.GetClientCls('openai-liked', service_kind='t2img'), OpenAILikedT2ImgClient)
         self.assertIs(ServiceClientBase.GetClientCls('openrouter', service_kind='t2img'), OpenRouterT2ImgClient)
         self.assertIn('openai', ServiceClientBase.RegisteredClientTypes(service_kind='completion'))
+        self.assertIn('openai-liked', ServiceClientBase.RegisteredClientTypes(service_kind='completion'))
         self.assertIn('openrouter', ServiceClientBase.RegisteredClientTypes(service_kind='completion'))
         self.assertIn('openai', ServiceClientBase.RegisteredClientTypes(service_kind='embedding'))
+        self.assertIn('openai-liked', ServiceClientBase.RegisteredClientTypes(service_kind='embedding'))
         self.assertIn('openai', ServiceClientBase.RegisteredClientTypes(service_kind='s2t'))
+        self.assertIn('openai-liked', ServiceClientBase.RegisteredClientTypes(service_kind='s2t'))
         self.assertIn('openrouter', ServiceClientBase.RegisteredClientTypes(service_kind='s2t'))
         self.assertIn('openai', ServiceClientBase.RegisteredClientTypes(service_kind='t2s'))
+        self.assertIn('openai-liked', ServiceClientBase.RegisteredClientTypes(service_kind='t2s'))
         self.assertIn('openai', ServiceClientBase.RegisteredClientTypes(service_kind='t2img'))
+        self.assertIn('openai-liked', ServiceClientBase.RegisteredClientTypes(service_kind='t2img'))
         self.assertIn('openrouter', ServiceClientBase.RegisteredClientTypes(service_kind='t2img'))
         self.assertIn('thinkthinksyn', ServiceClientBase.RegisteredClientTypes(service_kind='completion'))
 
@@ -1013,11 +1062,11 @@ class TestAIServicesConfig(unittest.TestCase):
         self.assertEqual(merged_client.kwargs['model'], 'local-model')
         self.assertEqual(merged_client.kwargs['temperature'], 0.2)
         self.assertIn('default', cfg.completion.service)
-        self.assertEqual(cfg.kwargs['openai-compatible']['type'], 'openai')
+        self.assertEqual(cfg.kwargs['openai-compatible']['type'], 'openai-liked')
         self.assertEqual(cfg.kwargs['openai-compatible']['max_tokens'], 262000)
 
         alias_client = cfg.completion.clients['openai-alias-client']
-        self.assertEqual(alias_client.type, 'openai')
+        self.assertEqual(alias_client.type, 'openai-liked')
         self.assertEqual(alias_client.max_tokens, 262000)
         self.assertEqual(alias_client.kwargs['model'], 'alias-model')
 

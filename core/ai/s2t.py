@@ -268,7 +268,7 @@ class CompletionAsS2TClient(S2TClient, type='completion'):
         )
 
 
-class OpenAILikedS2TClient(S2TClient, OpenAILikedClientMixin, type='openai'):
+class OpenAILikedS2TClient(S2TClient, OpenAILikedClientMixin, type='openai-liked', alias='openai'):
     '''OpenAI 协议兼容的语音转文本客户端。'''
 
     @classmethod

@@ -2065,7 +2065,7 @@ def register_ai_service_routes(app: FastAPI):
         file: UploadFile = File(...),
         client_key: str = Form(''),
     ) -> TextOperationResponse:
-        """图片 OCR 文字识别。"""
+        """以completion作图片 OCR 文字识别。"""
         target = await _resolve_ai_service_instance('completion', service_key)
         return await _run_ocr_request(target, False, file, client_key or None)
 
@@ -2233,7 +2233,7 @@ def register_ai_service_routes(app: FastAPI):
                 ).model_dump() | {
                     'service_key': _normalize_service_key(service_key) if service_key else None,
                     'client_key': str(pinned_client_key or '').strip() or None,
-                },
+                },  # type: ignore
             )
         except Exception as e:
             raise HTTPException(500, f"S2T failed: {e}")

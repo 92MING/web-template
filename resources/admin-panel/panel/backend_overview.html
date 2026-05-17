@@ -373,9 +373,9 @@
                 <div id="process-meta" class="panel-note">—</div>
               </div>
               <div class="panel-stat-card">
-                <div class="panel-stat-kicker">Rooms / Cache</div>
-                <div id="rooms-open" class="panel-stat-value">—</div>
-                <div id="cache-scope" class="panel-note">—</div>
+                <div class="panel-stat-kicker">Cache Scope</div>
+                <div id="cache-scope" class="panel-stat-value panel-mono backend-overview-tight-line">—</div>
+                <div class="panel-note">Runtime shared cache</div>
               </div>
             </div>
           </div>
@@ -641,7 +641,6 @@
         const tone = getWorkerStatusTone(worker.status);
         const isCurrent = currentWorkerPid != null && String(worker.pid) === String(currentWorkerPid);
         const requestCount = Number(worker.request_count || 0);
-        const roomsRunning = Number(worker.rooms_running || 0);
         const lastRequest = fmtDateTime(worker.last_request_at);
         const startedAt = fmtDateTime(worker.started_at);
         return `
@@ -656,7 +655,6 @@
               <div class="backend-worker-subtitle">Msg Port ${escapeHtml(worker.msg_port ?? '—')} · Started ${escapeHtml(startedAt)}</div>
               <div class="backend-worker-kpis">
                 <span class="backend-worker-chip"><strong>${escapeHtml(requestCount)}</strong> Requests</span>
-                <span class="backend-worker-chip"><strong>${escapeHtml(roomsRunning)}</strong> Rooms</span>
                 <span class="backend-worker-chip"><strong>${escapeHtml(lastRequest)}</strong> Last Seen</span>
               </div>
             </div>
@@ -682,10 +680,6 @@
               <div class="backend-worker-meta">
                 <div class="backend-worker-meta-label">Last Request</div>
                 <div class="backend-worker-meta-value">${escapeHtml(lastRequest)}</div>
-              </div>
-              <div class="backend-worker-meta">
-                <div class="backend-worker-meta-label">Rooms Running</div>
-                <div class="backend-worker-meta-value">${escapeHtml(roomsRunning)}</div>
               </div>
               <div class="backend-worker-meta">
                 <div class="backend-worker-meta-label">Request Count</div>
@@ -741,8 +735,7 @@
       document.getElementById('process-pids').title = `supervisor=${control.supervisor_pid ?? '—'} / server=${control.server_pid ?? '—'}`;
       document.getElementById('process-meta').textContent = `mode=${control.mode || '—'}`;
 
-      document.getElementById('rooms-open').textContent = String(data.open_rooms ?? 0);
-      document.getElementById('cache-scope').textContent = `cache_scope=${data.cache_scope || '—'}`;
+      document.getElementById('cache-scope').textContent = String(data.cache_scope || '—');
 
       renderControl(control);
       renderWorkers(data.workers || [], data.current_shared_manager_pid);

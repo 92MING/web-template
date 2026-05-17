@@ -156,10 +156,11 @@ class TestAIServicesSettingsAPI(_AIServicesPanelTestBase):
         s2t_types = settings_data['client_types_by_kind']['s2t']
         t2s_types = settings_data['client_types_by_kind']['t2s']
 
-        self.assertTrue({'coding-agent', 'custom', 'openai', 'openrouter', 'thinkthinksyn'}.issubset(set(completion_types)))
-        self.assertTrue({'custom', 'openai', 'openrouter', 'thinkthinksyn'}.issubset(set(embedding_types)))
-        self.assertTrue({'completion', 'custom', 'openai', 'openrouter'}.issubset(set(s2t_types)))
-        self.assertTrue({'custom', 'openai', 'openrouter', 'thinkthinksyn'}.issubset(set(t2s_types)))
+        self.assertTrue({'custom', 'openai', 'openai-liked', 'openrouter', 'thinkthinksyn'}.issubset(set(completion_types)))
+        self.assertTrue({'custom', 'openai', 'openai-liked', 'openrouter', 'thinkthinksyn'}.issubset(set(embedding_types)))
+        self.assertTrue({'completion', 'custom', 'openai', 'openai-liked', 'openrouter'}.issubset(set(s2t_types)))
+        self.assertTrue({'custom', 'openai', 'openai-liked', 'openrouter', 'thinkthinksyn'}.issubset(set(t2s_types)))
+        self.assertNotIn('coding-agent', completion_types)
         self.assertNotIn('coding-agent', embedding_types)
         self.assertNotIn('coding-agent', s2t_types)
         self.assertNotIn('coding-agent', t2s_types)
@@ -306,10 +307,10 @@ class TestAIServicesSettingsAPI(_AIServicesPanelTestBase):
                 self.assertEqual(settings_resp.status_code, 200)
                 settings_data = settings_resp.json()
                 self.assertIn('openai-base', settings_data['config']['kwargs'])
-                self.assertEqual(settings_data['config']['kwargs']['openai-base']['type'], 'openai')
+                self.assertEqual(settings_data['config']['kwargs']['openai-base']['type'], 'openai-liked')
                 self.assertEqual(settings_data['config']['kwargs']['openai-base']['max_tokens'], 14000)
                 preset_client = settings_data['config']['completion']['clients']['preset-client']
-                self.assertEqual(preset_client['type'], 'openai')
+                self.assertEqual(preset_client['type'], 'openai-liked')
                 self.assertEqual(preset_client['max_tokens'], 14000)
                 self.assertEqual(preset_client['kwargs']['model'], 'local-model')
                 self.assertEqual(preset_client['kwargs']['temperature'], 0.2)

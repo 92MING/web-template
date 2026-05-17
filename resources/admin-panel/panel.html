@@ -389,32 +389,6 @@
 
   </div>
 
-  <!-- ── Room Detail Modal ────────────────────────────────── -->
-  <div id="room-detail-modal" class="hidden fixed inset-0 z-40 bg-black/35 items-center justify-center p-4">
-    <div class="w-full max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-xl">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10">
-        <div class="text-sm font-semibold" id="room-detail-title">房间详情</div>
-        <button onclick="closeRoomDetailModal()" class="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700">关闭</button>
-      </div>
-      <div class="p-4 space-y-3 text-sm">
-        <div class="grid grid-cols-2 gap-3 text-xs text-slate-600 dark:text-slate-300">
-          <div><span class="text-slate-400">房间ID</span><div id="room-detail-id" class="font-mono break-all mt-0.5">—</div></div>
-          <div><span class="text-slate-400">Worker</span><div id="room-detail-worker" class="mt-0.5">—</div></div>
-          <div><span class="text-slate-400">房间名称</span><div id="room-detail-name" class="mt-0.5">—</div></div>
-          <div><span class="text-slate-400">成员数</span><div id="room-detail-count" class="mt-0.5">0</div></div>
-        </div>
-        <div>
-          <div class="text-xs text-slate-400 mb-1">成员列表</div>
-          <div id="room-detail-members" class="max-h-48 overflow-y-auto rounded border border-slate-200 dark:border-white/10 divide-y divide-slate-100 dark:divide-white/5"></div>
-        </div>
-      </div>
-      <div class="px-4 py-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
-        <button id="room-detail-copy" class="text-xs px-3 py-1.5 rounded bg-slate-100 dark:bg-slate-800">复制ID</button>
-        <button id="room-detail-stop" class="text-xs px-3 py-1.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">强制停止</button>
-      </div>
-    </div>
-  </div>
-
   <div id="terminal-leave-modal" class="hidden fixed inset-0 z-50 bg-black/45 items-center justify-center p-4 backdrop-blur-[1px]">
     <div class="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden">
       <div class="px-5 py-4 border-b border-slate-200 dark:border-white/10">
@@ -502,9 +476,6 @@ const PANEL_I18N = {
   'nav.sys.files':   { 'zh-cn':'文件','zh-tw':'文件',en:'Files' },
   'nav.sys.processes':{ 'zh-cn':'进程','zh-tw':'進程',en:'Processes' },
   'nav.sys.ports':   { 'zh-cn':'占用端口','zh-tw':'佔用端口',en:'Ports' },
-  'nav.rooms':       { 'zh-cn':'RTC聊天室','zh-tw':'RTC聊天室',en:'RTC Chatroom' },
-  'nav.rooms.manage':{ 'zh-cn':'管理','zh-tw':'管理',en:'Manage' },
-  'nav.rooms.test':  { 'zh-cn':'测试','zh-tw':'測試',en:'Test' },
   'nav.log':         { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
   'nav.log.overview':{ 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
   'nav.log.service': { 'zh-cn':'服务日志','zh-tw':'服務日誌',en:'Service Logs' },
@@ -528,7 +499,6 @@ const PANEL_I18N = {
   'dark-on':         { 'zh-cn':'浅色','zh-tw':'淺色',en:'Light' },
   'dark-off':        { 'zh-cn':'深色','zh-tw':'深色',en:'Dark' },
   'tab.system':      { 'zh-cn':'系统','zh-tw':'系統',en:'System' },
-  'tab.rooms':       { 'zh-cn':'RTC聊天室','zh-tw':'RTC聊天室',en:'RTC Chatroom' },
   'tab.loglab':      { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
   'tab.storagelab':  { 'zh-cn':'存储','zh-tw':'存儲',en:'Storage' },
   'tab.api':         { 'zh-cn':'API 文档','zh-tw':'API 文檔',en:'API Docs' },
@@ -541,8 +511,6 @@ const PANEL_I18N = {
   'title.sys.files':     { 'zh-cn':'系统 · 文件','zh-tw':'系統 · 文件',en:'System · Files' },
   'title.sys.processes': { 'zh-cn':'系统 · 进程','zh-tw':'系統 · 進程',en:'System · Processes' },
   'title.sys.ports':     { 'zh-cn':'系统 · 占用端口','zh-tw':'系統 · 佔用端口',en:'System · Ports' },
-  'title.rooms.manage': { 'zh-cn':'RTC聊天室 · 管理','zh-tw':'RTC聊天室 · 管理',en:'RTC Chatroom · Manage' },
-  'title.rooms.test':   { 'zh-cn':'RTC聊天室 · 测试','zh-tw':'RTC聊天室 · 測試',en:'RTC Chatroom · Test' },
   'title.test.ai':       { 'zh-cn':'AI 服务测试','zh-tw':'AI 服務測試',en:'AI Test' },
   'title.log.overview':  { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
   'title.log.service':   { 'zh-cn':'服务日志','zh-tw':'服務日誌',en:'Service Logs' },
@@ -1283,95 +1251,6 @@ async function fetchPanelJson(url, options = {}) {
   return response.json();
 }
 
-// ── Rooms ─────────────────────────────────────────────────────────────────────
-let _roomsPageData = [], _roomsPage = 1, _roomsTotal = 0;
-const _ROOMS_PAGE_SIZE = 10;
-
-async function loadRooms(page) {
-  if (page != null) _roomsPage = page;
-  const list = document.getElementById('rooms-list');
-  list.innerHTML = '<div class="text-slate-400 text-sm">加载中…</div>';
-  document.getElementById('rooms-pagination').innerHTML = '';
-  try {
-    const resp = await fetchPanelJson(`/admin/api/rooms?page=${_roomsPage}`);
-    _roomsPageData = resp.items || []; _roomsTotal = resp.total || 0; _roomsPage = resp.page || 1;
-    if (!_roomsTotal) { list.innerHTML = '<div class="text-slate-400 text-sm">暂无活跃房间。</div>'; return; }
-    const detailById = new Map();
-    const results = await Promise.allSettled(_roomsPageData.map(r => fetchPanelJson(`/admin/api/rooms/${encodeURIComponent(r.id)}`)));
-    results.forEach(r => { if (r.status==='fulfilled' && r.value?.id) detailById.set(r.value.id, r.value); });
-    _roomsPageData = _roomsPageData.map(r => ({ ...r, _full: detailById.get(r.id) || r }));
-    renderRoomPage();
-  } catch(e) { list.innerHTML = `<div class="text-red-400 text-sm">加载失败: ${e.message}</div>`; }
-}
-
-function renderRoomPage() {
-  const list = document.getElementById('rooms-list');
-  const q = (document.getElementById('rooms-search')?.value||'').trim().toLowerCase();
-  const filtered = q ? _roomsPageData.filter(r => { const f=r._full||r; return ((f.name||r.name||'')+' '+(r.id||'')).toLowerCase().includes(q); }) : _roomsPageData;
-  list.innerHTML = '';
-  if (!filtered.length) { list.innerHTML = '<div class="text-slate-400 text-sm">暂无匹配房间。</div>'; renderPagination(); return; }
-  filtered.forEach(room => {
-    const full = room._full || room;
-    const cnt = Number(full.candidate_count || Object.keys(full.candidates||{}).length || 0);
-    const card = document.createElement('div');
-    card.className = 'room-card card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10';
-    card.innerHTML = `<div class="flex items-start justify-between mb-2"><div><div class="font-semibold">${escHtml(full.name||room.name||'未命名')}</div><div class="text-xs text-slate-400 font-mono mt-0.5">${(room.id||'').substring(0,16)}…</div></div><span class="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full px-2 py-0.5">${cnt} 成员</span></div>
-      <div class="text-xs text-slate-500 flex gap-3 flex-wrap"><span>PID: ${full.worker||room.worker||'—'}</span><span>${full.password?'有密码':'公开'}</span></div>
-      <div class="mt-2 flex items-center gap-3 text-xs"><button class="room-copy text-slate-500 hover:text-slate-400">复制 ID</button><button class="room-detail text-slate-600 dark:text-slate-300 hover:text-slate-500">详情</button><button class="room-stop text-red-500 hover:text-red-400">强制停止</button></div>`;
-    card.querySelector('.room-copy')?.addEventListener('click', async () => { await navigator.clipboard.writeText(full.id||room.id||''); });
-    card.querySelector('.room-detail')?.addEventListener('click', () => showRoomDetail(full.id||room.id));
-    card.querySelector('.room-stop')?.addEventListener('click', () => forceStopRoom(full.id||room.id, full.name||room.name));
-    list.appendChild(card);
-  });
-  renderPagination();
-}
-
-function renderPagination() {
-  const pagEl = document.getElementById('rooms-pagination'); pagEl.innerHTML = '';
-  const totalPages = Math.max(1, Math.ceil(_roomsTotal / _ROOMS_PAGE_SIZE));
-  if (totalPages <= 1) { pagEl.innerHTML = `<span class="text-xs text-slate-400">共 ${_roomsTotal} 个房间</span>`; return; }
-  const mkBtn = (label, page, disabled, active) => {
-    const b = document.createElement('button'); b.textContent = label; b.disabled = disabled;
-    b.className = active ? 'px-2.5 py-1 rounded text-xs font-bold bg-indigo-600 text-white' : 'px-2.5 py-1 rounded text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-40';
-    if (!disabled && !active) b.onclick = () => loadRooms(page); return b;
-  };
-  pagEl.appendChild(mkBtn('«',1,_roomsPage===1,false)); pagEl.appendChild(mkBtn('‹',_roomsPage-1,_roomsPage===1,false));
-  let lo=Math.max(1,_roomsPage-3), hi=Math.min(totalPages,lo+6); if(hi-lo<6) lo=Math.max(1,hi-6);
-  for (let p=lo;p<=hi;p++) pagEl.appendChild(mkBtn(String(p),p,false,p===_roomsPage));
-  pagEl.appendChild(mkBtn('›',_roomsPage+1,_roomsPage===totalPages,false)); pagEl.appendChild(mkBtn('»',totalPages,_roomsPage===totalPages,false));
-}
-
-async function showRoomDetail(roomId) {
-  if (!roomId) return;
-  try {
-    const room = await fetchPanelJson(`/admin/api/rooms/${encodeURIComponent(roomId)}`);
-    document.getElementById('room-detail-title').textContent = `房间详情 · ${room.name||'未命名'}`;
-    document.getElementById('room-detail-id').textContent = room.id||roomId;
-    document.getElementById('room-detail-worker').textContent = `PID ${room.worker||'—'} · 创建者 ${room.creator||'—'}`;
-    document.getElementById('room-detail-name').textContent = room.name||'未命名';
-    document.getElementById('room-detail-count').textContent = String(room.candidate_count||0);
-    const membersEl = document.getElementById('room-detail-members'); membersEl.innerHTML = '';
-    const ids = Object.keys(room.candidates||{});
-    if (!ids.length) { membersEl.innerHTML = '<div class="px-3 py-2 text-xs text-slate-400">暂无成员</div>'; } else {
-      ids.forEach(id => {
-        const c = room.candidates[id]||{};
-        const row = document.createElement('div'); row.className = 'px-3 py-2 text-xs flex items-center justify-between gap-2';
-        row.innerHTML = `<div class="min-w-0"><div class="font-mono truncate">${escHtml(id)}</div><div class="text-slate-500 truncate mt-0.5">${escHtml(c.name||'未命名')} ${c.is_admin?'· Admin':''} ${c.muted?'· 静音':''}</div></div><div class="text-slate-400 shrink-0">${escHtml(c.join_time?new Date(c.join_time).toLocaleString('zh-CN'):'—')}</div>`;
-        membersEl.appendChild(row);
-      });
-    }
-    document.getElementById('room-detail-copy').onclick = async () => { await navigator.clipboard.writeText(room.id||roomId); };
-    document.getElementById('room-detail-stop').onclick = () => forceStopRoom(room.id||roomId, room.name||roomId, true);
-    const modal = document.getElementById('room-detail-modal'); modal.classList.remove('hidden'); modal.classList.add('flex');
-  } catch(e) { console.error(e); }
-}
-function closeRoomDetailModal() { const m=document.getElementById('room-detail-modal'); m.classList.add('hidden'); m.classList.remove('flex'); }
-async function forceStopRoom(roomId, name, fromModal=false) {
-  if (!confirm(`确认强制停止房间"${name||roomId}"？`)) return;
-  try { await fetchPanelJson(`/admin/api/rooms/${encodeURIComponent(roomId)}`,{method:'DELETE'}); if(fromModal) closeRoomDetailModal(); await loadRooms(); } catch{}
-}
-function filterRooms() { _roomsPage=1; renderRoomPage(); }
-
 // ── Server config ─────────────────────────────────────────────────────────────
 function setPanelHealth(status) {
   const dot = document.getElementById('health-dot');
@@ -1444,7 +1323,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.getElementById('room-detail-modal')?.addEventListener('click', e => { if(e.target.id==='room-detail-modal') closeRoomDetailModal(); });
 document.getElementById('terminal-leave-keep-btn')?.addEventListener('click', () => resolveTerminalLeaveChoice('keep'));
 document.getElementById('terminal-leave-close-btn')?.addEventListener('click', () => resolveTerminalLeaveChoice('close'));
 document.addEventListener('keydown', (event) => {
@@ -1452,7 +1330,6 @@ document.addEventListener('keydown', (event) => {
   event.preventDefault();
   resolveTerminalLeaveChoice('keep');
 });
-bindIframeState('rooms-iframe', 'rooms-frame-state', 'RTC 房间管理');
 bindIframeState('system-overview-iframe', 'system-overview-frame-state', '系统概览');
 bindIframeState('system-cpu-iframe', 'system-cpu-frame-state', 'CPU 页面');
 bindIframeState('system-gpu-iframe', 'system-gpu-frame-state', 'GPU 页面');
@@ -1505,7 +1382,7 @@ if (activeBackendSub) {
   document.getElementById('nav-backend-permission')?.classList.toggle('active', activeBackendSub.startsWith('permission-'));
 }
 if (activeAISub) AI_SUB_KEYS.forEach(k => document.getElementById('nav-ai-'+k)?.classList.toggle('active', k===activeAISub));
-const restoredActiveTab = restoredPanelState.activeTab === 'testlab' || restoredPanelState.activeTab === 'rooms'
+const restoredActiveTab = restoredPanelState.activeTab === 'testlab'
   ? 'pluginlab'
   : restoredPanelState.activeTab;
 const initialTab = TABS.includes(restoredActiveTab) ? restoredActiveTab : (activeLogSub ? 'loglab' : activeAISub ? 'ailab' : activeStorageSub ? 'storagelab' : activeBackendSub ? 'backendlab' : 'system');

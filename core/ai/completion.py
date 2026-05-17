@@ -1821,7 +1821,7 @@ class ThinkThinkSynCompletionClient(CompletionClient, type='thinkthinksyn'):
                     continue
                 raise
 
-class OpenAILikedCompletionClient(CompletionClient, OpenAILikedClientMixin, type='openai'):
+class OpenAILikedCompletionClient(CompletionClient, OpenAILikedClientMixin, type='openai-liked', alias='openai'):
     '''OpenAI 协议兼容的补全客户端实现。'''
 
     @classmethod
@@ -2112,15 +2112,6 @@ class OpenRouterCompletionClient(OpenAILikedCompletionClient, type='openrouter')
 
     def _headers(self) -> dict[str, str]:
         return self._openrouter_headers()
-
-
-class CodingAgentCompletionClient(OpenAILikedCompletionClient, type='coding-agent'):
-    '''Coding agent 专用的 OpenAI 协议兼容补全客户端。'''
-
-    def _headers(self) -> dict[str, str]:
-        headers = super()._headers()
-        headers['User-Agent'] = 'claude-code/1.0.0'
-        return headers
 
 
 class CompletionService(CompletionCallableMixin, ServiceBase):
@@ -4217,7 +4208,6 @@ __all__ += [
     'ThinkThinkSynCompletionClient',
     'OpenAILikedCompletionClient',
     'OpenRouterCompletionClient',
-    'CodingAgentCompletionClient',
     'CompletionService',
     'CustomCompletionAdapterProtocol',
     'CustomCompletionClient',

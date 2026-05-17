@@ -863,7 +863,7 @@ class ThinkThinkSynEmbeddingClient(EmbeddingClient, type='thinkthinksyn'):
         return []
 
 
-class OpenAILikedEmbeddingClient(EmbeddingClient, OpenAILikedClientMixin, type='openai'):
+class OpenAILikedEmbeddingClient(EmbeddingClient, OpenAILikedClientMixin, type='openai-liked', alias='openai'):
     '''OpenAI 协议兼容的向量嵌入客户端实现。'''
 
     @classmethod

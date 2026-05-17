@@ -133,7 +133,7 @@ def test_ai_test_ui_service_client_target_markers():
 def test_ai_services_settings_shared_kwargs_markers():
     root = Path(__file__).resolve().parents[2]
     body = (root / "resources" / "admin-panel" / "panel" / "ai_services_settings.html").read_text(encoding="utf-8")
-    assert "data-instance-tab=\"kwargs\"" in body
+    assert "data-instance-category=\"kwargs\"" in body
     assert "kwargs-preset-library" in body
     assert "openKwargsPresetModal" in body
     assert "parseClientKwargsInput" in body
@@ -239,15 +239,15 @@ def test_prune_internal_paths_from_openapi_removes_all_internal_prefix_routes():
                     },
                 },
             },
-            "/rtc_room/create": {
+            "/_internal/status/health": {
                 "post": {
-                    "tags": ["RTC"],
+                    "tags": ["Internal"],
                     "responses": {
                         "200": {
                             "description": "ok",
                             "content": {
                                 "application/json": {
-                                    "schema": {"$ref": "#/components/schemas/InternalRtcResponse"},
+                                    "schema": {"$ref": "#/components/schemas/InternalHealthResponse"},
                                 },
                             },
                         },
@@ -259,13 +259,13 @@ def test_prune_internal_paths_from_openapi_removes_all_internal_prefix_routes():
             "schemas": {
                 "PublicResponse": {"type": "object"},
                 "InternalResponse": {"type": "object"},
-                "InternalRtcResponse": {"type": "object"},
+                "InternalHealthResponse": {"type": "object"},
             },
         },
         "tags": [
             {"name": "Public"},
             {"name": "Admin"},
-            {"name": "RTC"},
+            {"name": "Internal"},
         ],
     }
 
@@ -294,24 +294,6 @@ class TestPanelPageRoutes(FullAppTestBase):
 
     def _admin_headers(self) -> dict[str, str]:
         return {"x-api-key": str(self._admin_apikey.key)}
-
-    async def test_rtc_room_runtime_routes_exist(self):
-        shared_room_page = await self._client.get("/shared/components/rtc_room.html")
-        self.assertEqual(shared_room_page.status_code, 200)
-        self.assertIn("__RTC_ROOM_URLS__", shared_room_page.text)
-
-        room_page = await self._client.get("/rtc_room/room")
-        self.assertEqual(room_page.status_code, 200)
-        self.assertIn("__RTC_ROOM_URLS__", room_page.text)
-
-        test_audio = await self._client.get("/rtc_room/test-audio/__missing__.mp3")
-        self.assertEqual(test_audio.status_code, 404)
-
-        create = await self._client.post("/rtc_room/create", json={})
-        self.assertEqual(create.status_code, 422)
-
-        join = await self._client.post("/rtc_room/join", json={})
-        self.assertEqual(join.status_code, 422)
 
     async def test_nested_vendor_assets_are_served(self):
         for path in (
@@ -353,15 +335,6 @@ class TestPanelPageRoutes(FullAppTestBase):
         self.assertNotIn("/_internal/admin/test/papers", r.text)
         self.assertNotIn("/api/papers/types", r.text)
         self.assertNotIn("/api/papers/generate-and-render", r.text)
-
-    async def test_missing_room_detail_and_delete_routes_exist(self):
-        headers = self._admin_headers()
-
-        detail = await self._client.get("/_internal/admin/api/rooms/__missing__", headers=headers)
-        self.assertEqual(detail.status_code, 404)
-
-        deleted = await self._client.delete("/_internal/admin/api/rooms/__missing__", headers=headers)
-        self.assertEqual(deleted.status_code, 404)
 
     async def test_panel_distributed_page(self):
         headers = self._admin_headers()

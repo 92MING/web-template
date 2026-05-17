@@ -562,10 +562,10 @@ def test_set_config_applies_plugin_configs_by_plugin_key() -> None:
 
     try:
         plugin_key = "configured-plugin"
-        Config.SetConfig(Config(plugin_configs={plugin_key: {"enabled": True, "label": "rtc"}}))
+        Config.SetConfig(Config(plugin_configs={plugin_key: {"enabled": True, "label": "configured"}}))
 
         stored = plugin_module._plugin_configs.get(plugin_key)
-        assert stored == {"enabled": True, "label": "rtc"}
+        assert stored == {"enabled": True, "label": "configured"}
     finally:
         clear_plugins()
         Config.__Instance__ = saved_config  # type: ignore[attr-defined]
@@ -576,7 +576,7 @@ def test_plugin_explicit_key_overrides_dynamic_module_key() -> None:
 
     @register_plugin
     class KeyedPlugin:
-        Key = "webrtc-chatroom"
+        Key = "explicit-plugin-key"
         Name = "keyed-plugin"
         Type = "main-only"
 
@@ -585,6 +585,6 @@ def test_plugin_explicit_key_overrides_dynamic_module_key() -> None:
             return cls()
 
     try:
-        assert plugin_module.get_plugin_key(KeyedPlugin) == "webrtc-chatroom"
+        assert plugin_module.get_plugin_key(KeyedPlugin) == "explicit-plugin-key"
     finally:
         clear_plugins()

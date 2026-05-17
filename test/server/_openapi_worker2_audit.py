@@ -141,8 +141,6 @@ DEFAULT_BATCH1_CASES: tuple[AuditCase, ...] = (
     AuditCase("logs config", "GET", "/_internal/admin/api/logs/config"),
     AuditCase("logs query", "GET", "/_internal/admin/api/logs", params={"limit": 5}, expect_status=(200, 400, 422)),
     AuditCase("logs service stats", "GET", "/_internal/admin/api/logs/service/stats", expect_status=(200, 400, 422)),
-    AuditCase("rooms list", "GET", "/_internal/admin/api/rooms", params={"page": 1, "page_size": 10}, expect_status=(200, 400, 422)),
-    AuditCase("rooms missing", "GET", "/_internal/admin/api/rooms/__nope__", baseline_path="/_internal/admin/api/rooms/{room_id}", expect_status=(200, 400, 404, 422)),
     AuditCase("ai services overview", "GET", "/_internal/admin/ai-services/overview", expect_status=(200, 400, 422)),
     AuditCase("ai services settings", "GET", "/_internal/admin/ai-services/settings", expect_status=(200, 400, 422)),
     AuditCase("files upload unauth", "POST", "/api/files/upload", expect_status=(401, 422)),
@@ -198,12 +196,9 @@ DEFAULT_BATCH5_CASES: tuple[AuditCase, ...] = (
 
 DEFAULT_BATCH6_CASES: tuple[AuditCase, ...] = (
     AuditCase("logs before future", "DELETE", "/_internal/admin/api/logs/before/2030-01-01T00:00:00", baseline_path="/_internal/admin/api/logs/before/{timestamp:path}", expect_status=(200, 404)),
-    AuditCase("test audio missing", "GET", "/rtc_room/test-audio/__missing__.mp3", baseline_path="/rtc_room/test-audio/{filename}", expect_status=(404,)),
     AuditCase("system process invalid pid", "GET", "/_internal/admin/api/system/processes/0", baseline_path="/_internal/admin/api/system/processes/{pid}", expect_status=(400, 403, 404)),
     AuditCase("system process terminate missing", "POST", "/_internal/admin/api/system/processes/999999/terminate", baseline_path="/_internal/admin/api/system/processes/{pid}/terminate", expect_status=(404,)),
     AuditCase("system process kill missing", "POST", "/_internal/admin/api/system/processes/999999/kill", baseline_path="/_internal/admin/api/system/processes/{pid}/kill", expect_status=(404,)),
-    AuditCase("rooms create invalid empty", "POST", "/rtc_room/create", json_body={}, expect_status=(422,)),
-    AuditCase("rooms join invalid empty", "POST", "/rtc_room/join", json_body={}, expect_status=(422,)),
 )
 
 
@@ -267,7 +262,6 @@ DEFAULT_BATCH7_CASES: tuple[AuditCase, ...] = (
 DEFAULT_BATCH8_CASES: tuple[AuditCase, ...] = (
     AuditCase("logs delete all", "DELETE", "/_internal/admin/api/logs", expect_status=(200, 404)),
     AuditCase("backend settings invalid empty", "POST", "/_internal/admin/api/backend/settings", json_body={}, expect_status=(422,)),
-    AuditCase("rooms delete missing", "DELETE", "/_internal/admin/api/rooms/__nope__", baseline_path="/_internal/admin/api/rooms/{room_id}", expect_status=(404,)),
     AuditCase("system files delete missing", "DELETE", "/_internal/admin/api/system/files/item", params={"path": "tmp/__openapi_missing__.txt"}, expect_status=(404,)),
     AuditCase("system files download missing", "GET", "/_internal/admin/api/system/files/download", params={"path": "tmp/__openapi_missing__.txt"}, expect_status=(404,)),
     AuditCase("system files office preview missing", "GET", "/_internal/admin/api/system/files/office-preview", params={"path": "tmp/__openapi_missing__.docx"}, expect_status=(404,)),

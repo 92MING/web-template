@@ -1434,6 +1434,8 @@ class _CacheSaveTask:
 
 _CLIENT_TYPE_REGISTRY: dict[tuple[str, str], type['ServiceClientBase']] = {}
 '''AI 客户端类型注册表，key 为 ``(service_kind, normalized_type)``。'''
+_CLIENT_ALIAS_REGISTRY: dict[tuple[str, str], type['ServiceClientBase']] = {}
+'''AI 客户端类型别名注册表，key 为 ``(service_kind, normalized_alias)``。'''
 
 _SERVICE_RUNTIME_STATE_LOCK = threading.RLock()
 _SERVICE_RUNTIME_EVENTS: dict[str, threading.Event] = {}
@@ -1556,6 +1558,8 @@ class ServiceClientBase(ServiceCallLogMixin, ABC, Generic[ProbeInputT]):
 
     Type: ClassVar[str | None] = None
     '''通过 ``__init_subclass__(type=...)`` 注册的客户端类型标识。'''
+    Alias: ClassVar[tuple[str, ...]] = ()
+    '''通过 ``__init_subclass__(alias=...)`` 注册的客户端类型别名。'''
 
     _STREAM_TTFT_TIMEOUT: ClassVar[float] = 16.0
     '''流式请求首个有效数据块的默认超时 (秒)。'''
@@ -1611,9 +1615,22 @@ class ServiceClientBase(ServiceCallLogMixin, ABC, Generic[ProbeInputT]):
             cls._instance_cache[cache_key] = instance
         return instance
 
-    def __init_subclass__(cls, *, type: str | None = None, **kwargs: Any) -> None:  # noqa: A002
+    def __init_subclass__(
+        cls,
+        *,
+        type: str | None = None,  # noqa: A002
+        alias: str | Sequence[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init_subclass__(**kwargs)
         cls.Type = type
+        if alias is None:
+            aliases: tuple[str, ...] = ()
+        elif isinstance(alias, str):
+            aliases = (alias,)
+        else:
+            aliases = tuple(str(item) for item in alias)
+        cls.Alias = aliases
         if type is not None:
             registry_key = _normalize_client_registry_key(cls.ServiceKind or cls, type)
             if registry_key in _CLIENT_TYPE_REGISTRY:
@@ -1623,6 +1640,17 @@ class ServiceClientBase(ServiceCallLogMixin, ABC, Generic[ProbeInputT]):
                     f"(normalized: {registry_key[1]!r}) is already registered by {existing.__qualname__}"
                 )
             _CLIENT_TYPE_REGISTRY[registry_key] = cls
+            for alias_item in aliases:
+                alias_key = _normalize_client_registry_key(cls.ServiceKind or cls, alias_item)
+                if alias_key == registry_key:
+                    continue
+                if alias_key in _CLIENT_ALIAS_REGISTRY:
+                    existing = _CLIENT_ALIAS_REGISTRY[alias_key]
+                    raise TypeError(
+                        f"Client alias {alias_item!r} under service kind {alias_key[0]!r} "
+                        f"(normalized: {alias_key[1]!r}) is already registered by {existing.__qualname__}"
+                    )
+                _CLIENT_ALIAS_REGISTRY[alias_key] = cls
         own_init = cls.__dict__.get('__init__')
         if own_init is not None:
             @functools.wraps(own_init)
@@ -1980,7 +2008,8 @@ class ServiceClientBase(ServiceCallLogMixin, ABC, Generic[ProbeInputT]):
         '''根据 service kind 与 type 字符串获取客户端类。'''
         normalized_type = _normalize_client_type(type)
         if service_kind is not None:
-            return _CLIENT_TYPE_REGISTRY.get(_normalize_client_registry_key(service_kind, type))
+            registry_key = _normalize_client_registry_key(service_kind, type)
+            return _CLIENT_TYPE_REGISTRY.get(registry_key) or _CLIENT_ALIAS_REGISTRY.get(registry_key)
 
         matches = [
             registered_cls
@@ -1989,7 +2018,17 @@ class ServiceClientBase(ServiceCallLogMixin, ABC, Generic[ProbeInputT]):
         ]
         if len(matches) == 1:
             return matches[0]
-        return _CLIENT_TYPE_REGISTRY.get(('', normalized_type))
+        global_match = _CLIENT_TYPE_REGISTRY.get(('', normalized_type))
+        if global_match is not None:
+            return global_match
+        alias_matches = [
+            registered_cls
+            for (registered_kind, registered_type), registered_cls in _CLIENT_ALIAS_REGISTRY.items()
+            if registered_type == normalized_type and registered_kind
+        ]
+        if len(alias_matches) == 1:
+            return alias_matches[0]
+        return _CLIENT_ALIAS_REGISTRY.get(('', normalized_type))
 
     @classmethod
     def GetClient(cls, key: str) -> 'Self | None':
@@ -2019,6 +2058,12 @@ class ServiceClientBase(ServiceCallLogMixin, ABC, Generic[ProbeInputT]):
             for (registered_kind, _), registered in _CLIENT_TYPE_REGISTRY.items()
             if not normalized_kind or registered_kind == normalized_kind
         ]
+        values.extend(
+            alias
+            for (registered_kind, _), registered in _CLIENT_ALIAS_REGISTRY.items()
+            if (not normalized_kind or registered_kind == normalized_kind)
+            for alias in registered.Alias
+        )
         return sorted({str(value) for value in values})
 
     @classmethod
