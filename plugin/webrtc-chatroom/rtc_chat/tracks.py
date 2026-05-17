@@ -1,47 +1,40 @@
 import asyncio
 import logging
 
-from fractions import Fraction
 from abc import abstractmethod
+from fractions import Fraction
+from typing import Final, Literal, override
 
-from typing import Literal, Final, override
-
-from av import AudioFrame, VideoFrame, Packet
+from aiortc import MediaStreamError
+from aiortc import MediaStreamTrack as _MediaStreamTrack
+from av import AudioFrame, Packet, VideoFrame
 from av.audio.resampler import AudioResampler
-
-from aiortc import MediaStreamTrack as _MediaStreamTrack, MediaStreamError
 
 _logger = logging.getLogger(__name__)
 
-# 诊断日志间隔(帧数), ~每5秒 at 50fps
 _STAT_LOG_INTERVAL: Final[int] = 250
-# 音频队列最大积压帧数, 超过时丢弃旧帧
 _AUDIO_MAX_QUEUE: Final[int] = 10
+
 
 class MediaStreamTrack(_MediaStreamTrack):
     data_queue: asyncio.Queue
-    
+
     def __init__(self):
         super().__init__()
         self.data_queue = asyncio.Queue()
-    
+
     @abstractmethod
-    async def recv(self) -> Packet: 
-        '''
-        定义(客户端)接收媒体数据的逻辑. client side会不断调用这个方法来获取媒体数据, 直到连接关闭.
-        '''
+    async def recv(self) -> Packet:
         raise NotImplementedError
-    
+
     async def send(self, data):
         await self.data_queue.put(data)
 
-    async def on_end(self): ...
+    async def on_end(self) -> None: ...
 
 
 class AudioSendTrack(MediaStreamTrack):
-    '''音频轨道, 由后端创建并添加到RTC连接中, 用于向客户端发送音频数据和接收客户端发送的音频数据.'''
-    
-    kind: Final[Literal['audio']] = "audio"
+    kind: Final[Literal["audio"]] = "audio"
 
     sample_rate: int
     sample_width: int
@@ -54,7 +47,7 @@ class AudioSendTrack(MediaStreamTrack):
     _resampler: AudioResampler
 
     def __init__(
-        self, 
+        self,
         sample_rate: int = 48000,
         sample_width: int = 2,
         channels: int = 1,
@@ -72,9 +65,8 @@ class AudioSendTrack(MediaStreamTrack):
         self._layout = "mono" if channels == 1 else "stereo"
         self._time_base = Fraction(1, sample_rate)
         self._silence_bytes = b"\x00" * self.bytes_per_frame
-        self._recv_timeout = frame_duration_ms * 3 / 1000  # 3x帧时长容忍relay抖动
+        self._recv_timeout = frame_duration_ms * 3 / 1000
         self._resampler = AudioResampler(format="s16", layout=self._layout, rate=sample_rate)
-        # Diagnostic counters (logged periodically in recv())
         self._stat_total = 0
         self._stat_silence = 0
         self._stat_real = 0
@@ -82,20 +74,18 @@ class AudioSendTrack(MediaStreamTrack):
     @override
     async def send(self, data: AudioFrame | bytes, sender: str | None = None):
         self._current_sender = sender
-        q = self.data_queue
-        while q.qsize() > _AUDIO_MAX_QUEUE:
+        while self.data_queue.qsize() > _AUDIO_MAX_QUEUE:
             try:
-                q.get_nowait()
+                self.data_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-        await q.put(data)
+        await self.data_queue.put(data)
 
     @property
     def current_sender(self) -> str | None:
         return self._current_sender
 
-    def _log_stats(self, extra: str = ''):
-        '''周期性输出诊断统计.'''
+    def _log_stats(self, extra: str = "") -> None:
         if self._stat_total % _STAT_LOG_INTERVAL != 0:
             return
         pct = self._stat_silence / self._stat_total * 100 if self._stat_total else 0
@@ -117,7 +107,6 @@ class AudioSendTrack(MediaStreamTrack):
         self._stat_total += 1
 
         if isinstance(data, AudioFrame):
-            # Normalize frame format/layout/rate to avoid plane-size mismatch crashes.
             frames = self._resampler.resample(data)
             if frames:
                 out = frames[0]
@@ -129,7 +118,6 @@ class AudioSendTrack(MediaStreamTrack):
                 self._log_stats(f" samples={out.samples} rate={out.sample_rate}")
                 return out
 
-        # Silence / fallback frame
         self._stat_silence += 1
         self._log_stats()
 
@@ -139,7 +127,7 @@ class AudioSendTrack(MediaStreamTrack):
         frame.sample_rate = self.sample_rate
 
         if isinstance(data, bytes) and len(data) >= self.bytes_per_frame:
-            frame.planes[0].update(data[:self.bytes_per_frame])
+            frame.planes[0].update(data[: self.bytes_per_frame])
         else:
             frame.planes[0].update(self._silence_bytes)
 
@@ -148,15 +136,13 @@ class AudioSendTrack(MediaStreamTrack):
 
 
 class VideoSendTrack(MediaStreamTrack):
-    '''视频轨道, 由后端创建并添加到RTC连接中, 用于向客户端发送视频数据和接收客户端发送的视频数据.'''
-    
-    kind: Final[Literal['video']] = "video"
-    
+    kind: Final[Literal["video"]] = "video"
+
     width: int
     height: int
     fps: int
     _time_base: Fraction
-    
+
     def __init__(
         self,
         width: int = 640,
@@ -173,7 +159,7 @@ class VideoSendTrack(MediaStreamTrack):
         self._last_frame_hold = 0
         self._max_hold_frames = 30
 
-    def update_format(self, width: int, height: int):
+    def update_format(self, width: int, height: int) -> None:
         if width <= 0 or height <= 0:
             return
         if self.width == width and self.height == height:
@@ -184,17 +170,21 @@ class VideoSendTrack(MediaStreamTrack):
         self._last_frame_hold = 0
 
     @override
-    async def send(self, data: 'VideoFrame | bytes'):
-        q = self.data_queue
-        while q.qsize() > 0:
+    async def send(self, data: VideoFrame | bytes):
+        while self.data_queue.qsize() > 0:
             try:
-                q.get_nowait()
+                self.data_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-        await q.put(data)
+        await self.data_queue.put(data)
 
-    def _make_frame(self, *, y_data: bytes | None = None, u_data: bytes | None = None, v_data: bytes | None = None) -> VideoFrame:
-        '''创建一个VideoFrame并设置pts/time_base, 可选填充平面数据.'''
+    def _make_frame(
+        self,
+        *,
+        y_data: bytes | None = None,
+        u_data: bytes | None = None,
+        v_data: bytes | None = None,
+    ) -> VideoFrame:
         y_size = self.width * self.height
         uv_size = y_size // 4
         frame = VideoFrame(width=self.width, height=self.height, format="yuv420p")
@@ -230,8 +220,8 @@ class VideoSendTrack(MediaStreamTrack):
             if len(data) >= frame_size:
                 frame = self._make_frame(
                     y_data=data[:y_size],
-                    u_data=data[y_size:y_size + uv_size],
-                    v_data=data[y_size + uv_size:],
+                    u_data=data[y_size : y_size + uv_size],
+                    v_data=data[y_size + uv_size :],
                 )
                 self._last_frame = frame
                 self._last_frame_hold = 0
@@ -245,14 +235,13 @@ class VideoSendTrack(MediaStreamTrack):
             self._timestamp += 1
             return self._last_frame
 
-        # 生成黑帧
         frame = self._make_frame()
         self._timestamp += 1
         return frame
 
 
 __all__ = [
-    'MediaStreamTrack',
-    'AudioSendTrack',
-    'VideoSendTrack'
+    "AudioSendTrack",
+    "MediaStreamTrack",
+    "VideoSendTrack",
 ]

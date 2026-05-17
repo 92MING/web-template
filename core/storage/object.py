@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import json
 import threading
 import mimetypes
 import tempfile
@@ -9,7 +10,8 @@ from io import BytesIO
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Iterable, Mapping, Self, TypeAlias, TypedDict, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Iterable, Iterator, Mapping, Self, TypeAlias, TypedDict, cast
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from typing_extensions import Unpack
 
 from ..utils.concurrent_utils import get_async_generator, run_async_in_sync as _run_async_in_sync
@@ -31,8 +33,8 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-ObjectMetadataValue: TypeAlias = (
-    str | int | float | bool | None | list['ObjectMetadataValue'] | dict[str, 'ObjectMetadataValue']
+type ObjectMetadataValue = (
+    str | int | float | bool | None | list[ObjectMetadataValue] | dict[str, ObjectMetadataValue]
 )
 ObjectMetadataMapping: TypeAlias = Mapping[str, ObjectMetadataValue]
 
@@ -43,10 +45,122 @@ class ObjectMetadata(TypedDict, total=False):
     path: str
     size: int
     content_type: str | None
+    created_at: float | None
+    updated_at: float | None
+    accessed_at: float | None
     expire_at: float | None
     metadata: dict[str, ObjectMetadataValue]
 
 ObjectDataSource = bytes | bytearray | memoryview | Iterable[bytes] | AsyncIterable[bytes]
+
+
+class OBS_Object(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    storage_name: str = "default"
+    object_id: str = ""
+    name: str = ""
+    path: str = ""
+    size: int = 0
+    content_type: str | None = None
+    created_at: float | None = None
+    updated_at: float | None = None
+    accessed_at: float | None = None
+    expire_at: float | None = None
+    metadata: dict[str, ObjectMetadataValue] = Field(default_factory=dict)
+
+    _object_client: "ObjectClientBase | None" = PrivateAttr(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_input(cls, data: object) -> object:
+        if isinstance(data, OBS_Object):
+            return data.model_dump(mode="python")
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        path = str(normalized.get("path") or normalized.get("object_id") or "").strip()
+        if path:
+            normalized["path"] = path
+            normalized.setdefault("object_id", path)
+            normalized.setdefault("name", Path(path).name)
+        elif normalized.get("object_id"):
+            object_id = str(normalized["object_id"]).strip()
+            normalized["object_id"] = object_id
+            normalized.setdefault("path", object_id)
+            normalized.setdefault("name", Path(object_id).name)
+
+        if normalized.get("storage_name") is None:
+            for alias in ("client_name", "object_storage", "object_storage_name", "storage"):
+                alias_value = normalized.get(alias)
+                if alias_value:
+                    normalized["storage_name"] = alias_value
+                    break
+        normalized.setdefault("storage_name", "default")
+        if not isinstance(normalized.get("metadata"), dict):
+            normalized["metadata"] = {}
+        return normalized
+
+    def bind_client(self, client: "ObjectClientBase") -> Self:
+        self._object_client = client
+        if getattr(client, "_name", None):
+            self.storage_name = str(client._name)
+        return self
+
+    def _resolve_client(self) -> "ObjectClientBase":
+        if self._object_client is not None:
+            return self._object_client
+        from .config import StorageConfig
+
+        client = StorageConfig.Global().get_object_client(self.storage_name or "default")
+        self._object_client = client
+        return client
+
+    async def _get_bytes(self) -> bytes | None:
+        return await self._resolve_client().get_bytes(self.path)
+
+    def get(self, key: str | None = None, default: Any = None) -> Any:
+        if key is not None:
+            return self.model_dump(mode="python").get(key, default)
+        return self._get_bytes()
+
+    async def get_stream(self, *, chunk_size: int = 65536) -> AsyncGenerator[bytes, None]:
+        async for chunk in self._resolve_client().get(self.path, chunk_size=chunk_size):
+            yield chunk
+
+    async def get_text(self, *, encoding: str = "utf-8", errors: str = "strict") -> str | None:
+        data = await self._get_bytes()
+        if data is None:
+            return None
+        return data.decode(encoding, errors=errors)
+
+    async def get_json(self) -> Any:
+        text = await self.get_text()
+        if text is None:
+            return None
+        return json.loads(text)
+
+    async def exists(self) -> bool:
+        return await self._resolve_client()._get_metadata(self.path) is not None
+
+    async def delete(self) -> bool:
+        return await self._resolve_client().delete(self.path)
+
+    async def set_expire(self, expire: float | int | None) -> bool:
+        updated = await self._resolve_client().set_expire(self.path, expire)
+        if updated:
+            self.expire_at = _normalize_expire_at(expire)
+        return updated
+
+    def to_metadata_dict(self) -> ObjectMetadata:
+        return cast(ObjectMetadata, self.model_dump(mode="python", exclude={"storage_name"}))
+
+    def __getitem__(self, key: str) -> Any:
+        return self.model_dump(mode="python")[key]
+
+    def __iter__(self) -> Iterator[tuple[str, Any]]:
+        return iter(self.model_dump(mode="python").items())
 
 class ObjectClientInitParams(StorageClientInitParams, total=False):
     namespace: str
@@ -91,7 +205,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         '''Start the client. Called automatically if *auto_start* is ``True`` (default).'''
         ...
 
-    async def put_bytes(self, data: bytes, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put_bytes(self, data: bytes, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         '''Store raw bytes as a new or replacement object.
 
         Args:
@@ -102,7 +216,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
             content_type: MIME type; inferred from *object_name* when ``None``.
 
         Returns:
-            :class:`ObjectMetadata` dict describing the stored object.
+            :class:`OBS_Object` describing the stored object.
         '''
         return await self._put_bytes(
             object_name,
@@ -113,7 +227,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         )
 
     @abstractmethod
-    async def put_file(self, source: str | Path, *, object_name: str | None = None, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put_file(self, source: str | Path, *, object_name: str | None = None, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         '''Store a local file as a new or replacement object.
 
         Args:
@@ -125,7 +239,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
             content_type: MIME type; inferred from *source* when ``None``.
 
         Returns:
-            :class:`ObjectMetadata` dict describing the stored object.
+            :class:`OBS_Object` describing the stored object.
         '''
         ...
 
@@ -137,7 +251,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         '''
         return await self._get_bytes(object_name)
 
-    async def put(self, data: ObjectDataSource, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put(self, data: ObjectDataSource, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         '''Default streaming put: spills chunks to a temp file then delegates to :meth:`put_file`.
 
         Subclasses may override for backend-native streaming (avoiding the temp-file hop).
@@ -171,7 +285,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         metadata: ObjectMetadataMapping | None = None,
         expire: float | int | None = None,
         content_type: str | None = None,
-    ) -> ObjectMetadata:
+    ) -> OBS_Object:
         '''Store object bytes and return metadata.'''
         ...
 
@@ -190,7 +304,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         min_size: int | None = None,
         max_size: int | None = None,
         metadata: ObjectMetadataMapping | None = None,
-    ) -> AsyncGenerator[ObjectMetadata, None]:
+    ) -> AsyncGenerator[OBS_Object, None]:
         _ = (name, path_prefix, created_from, created_to, min_size, max_size, metadata)
         self._ensure_metadata_store()
         metadata_kv = self._metadata_kv
@@ -219,7 +333,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
     async def list_objects(self, prefix: str = "") -> AsyncGenerator[str, None]:
         normalized_prefix = _normalize_object_name(prefix) if prefix else ""
         async for item in self.list_metadata():
-            path = str(item.get("path") or item.get("object_id") or "")
+            path = str(item.path or item.object_id or "")
             if normalized_prefix and not path.startswith(normalized_prefix):
                 continue
             yield path
@@ -248,7 +362,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         meta = await self._get_metadata(object_name)
         if meta is None:
             return False
-        meta["expire_at"] = _normalize_expire_at(expire)
+        meta.expire_at = _normalize_expire_at(expire)
         await self._set_metadata(object_name, meta)
         return True
 
@@ -256,7 +370,7 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         meta = await self._get_metadata(object_name)
         if meta is None:
             return None
-        ttl = _ttl_from_expire_at(meta.get("expire_at"))
+        ttl = _ttl_from_expire_at(meta.expire_at)
         if ttl == 0.0:
             await self.delete(object_name)
         return ttl
@@ -271,29 +385,29 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         min_size: int | None = None,
         max_size: int | None = None,
         metadata: ObjectMetadataMapping | None = None,
-    ) -> AsyncGenerator[ObjectMetadata, None]:
+    ) -> AsyncGenerator[OBS_Object, None]:
         async for item in self._iter_metadata():
-            if name and name not in item.get("name", ""):
+            if name and name not in item.name:
                 continue
-            if path_prefix and not item.get("path", "").startswith(path_prefix):
+            if path_prefix and not item.path.startswith(path_prefix):
                 continue
-            created_at = float(item.get("accessed_at", 0.0))
+            created_at = float(item.created_at or item.accessed_at or 0.0)
             if created_from is not None and created_at < _to_ts(created_from):
                 continue
             if created_to is not None and created_at > _to_ts(created_to):
                 continue
-            size = int(item.get("size", 0))
+            size = int(item.size)
             if min_size is not None and size < min_size:
                 continue
             if max_size is not None and size > max_size:
                 continue
-            meta = item.get("metadata") or {}
+            meta = item.metadata or {}
             if metadata:
                 if any(meta.get(k) != v for k, v in metadata.items()):
                     continue
             yield item
 
-    async def list_metadata(self) -> AsyncGenerator[ObjectMetadata, None]:
+    async def list_metadata(self) -> AsyncGenerator[OBS_Object, None]:
         async for item in self._iter_metadata():
             yield item
 
@@ -400,14 +514,17 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
             return object_name[len(self._folder_prefix):]
         return object_name
 
-    def _present_metadata(self, metadata: ObjectMetadata) -> ObjectMetadata:
-        payload = dict(metadata)
+    def _present_metadata(self, metadata: ObjectMetadata | OBS_Object) -> OBS_Object:
+        payload = metadata.to_metadata_dict() if isinstance(metadata, OBS_Object) else dict(metadata)
         full_path = str(payload.get("path") or payload.get("object_id") or "")
         logical_path = self._logical_object_name(full_path)
         payload["path"] = logical_path
         payload["object_id"] = logical_path
         payload["name"] = Path(logical_path).name if logical_path else ""
-        return cast(ObjectMetadata, payload)
+        return OBS_Object.model_validate({
+            **payload,
+            "storage_name": getattr(self, "_name", "default") or "default",
+        }).bind_client(self)
 
     def open_folder(self, folder: str | None) -> Self:
         normalized = _normalize_folder_prefix(folder)
@@ -419,19 +536,19 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         clone._owns_metadata_kv = False
         return clone
 
-    async def _set_metadata(self, object_name: str, metadata: ObjectMetadata) -> None:
+    async def _set_metadata(self, object_name: str, metadata: ObjectMetadata | OBS_Object) -> None:
         self._ensure_metadata_store()
         metadata_kv = self._metadata_kv
         if metadata_kv is None:
             raise RuntimeError("Metadata KV store is not initialized.")
         resolved_name = self._resolve_object_name(object_name)
-        payload = dict(metadata)
+        payload = metadata.to_metadata_dict() if isinstance(metadata, OBS_Object) else dict(metadata)
         payload["path"] = resolved_name
         payload["object_id"] = resolved_name
         payload["name"] = Path(resolved_name).name
         await metadata_kv.set(self._meta_prefix(object_name), payload)
 
-    async def _get_metadata(self, object_name: str) -> ObjectMetadata | None:
+    async def _get_metadata(self, object_name: str) -> OBS_Object | None:
         self._ensure_metadata_store()
         metadata_kv = self._metadata_kv
         if metadata_kv is None:
@@ -455,12 +572,16 @@ class ObjectClientBase(StorageClientBase, ABC, storage_kind="object"):
         return await metadata_kv.delete(self._meta_prefix(object_name))
 
     def _make_metadata(self, *, object_name: str, size: int, metadata: ObjectMetadataMapping | None, expire: float | int | None, content_type: str | None = None) -> ObjectMetadata:
+        now_ts = _now_ts()
         return {
             "object_id": object_name,
             "name": Path(object_name).name,
             "path": object_name,
             "size": int(size),
             "content_type": content_type,
+            "created_at": now_ts,
+            "updated_at": now_ts,
+            "accessed_at": now_ts,
             "expire_at": _normalize_expire_at(expire if expire is not None else self._default_expire),
             "metadata": dict(metadata or {}),
         }
@@ -489,7 +610,7 @@ class LocalObjectClient(ObjectClientBase, type="local"):
         target.parent.mkdir(parents=True, exist_ok=True)
         return target
 
-    async def _put_bytes(self, object_name: str, data: bytes | bytearray | memoryview, *, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def _put_bytes(self, object_name: str, data: bytes | bytearray | memoryview, *, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         if not self._started:
             self.start()
         import aiofiles  # type: ignore
@@ -503,7 +624,7 @@ class LocalObjectClient(ObjectClientBase, type="local"):
         self._schedule_cleanup()
         return self._present_metadata(meta)
 
-    async def put_file(self, source: str | Path, *, object_name: str | None = None, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put_file(self, source: str | Path, *, object_name: str | None = None, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         import aiofiles  # type: ignore
         source_path = Path(source).expanduser().resolve()
         name = object_name or source_path.name
@@ -532,7 +653,7 @@ class LocalObjectClient(ObjectClientBase, type="local"):
             while chunk := await fh.read(max(1, chunk_size)):
                 yield chunk
 
-    async def put(self, data: ObjectDataSource, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put(self, data: ObjectDataSource, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         """Stream-aware put: writes chunks directly to disk via aiofiles."""
         if isinstance(data, (bytes, bytearray, memoryview)):
             return await self.put_bytes(bytes(data), object_name=object_name, metadata=metadata, expire=expire, content_type=content_type)
@@ -584,8 +705,8 @@ class LocalObjectClient(ObjectClientBase, type="local"):
             expired_names: list[str] = []
             orphaned_names: list[str] = []
             async for meta in self.list_metadata():
-                object_name = meta.get("path", "")
-                expire_at = meta.get("expire_at")
+                object_name = meta.path
+                expire_at = meta.expire_at
                 target = self._full_path(self._resolve_object_name(object_name))
                 if expire_at is not None and expire_at <= _now_ts():
                     expired_names.append(object_name)
@@ -593,9 +714,9 @@ class LocalObjectClient(ObjectClientBase, type="local"):
                 if not target.exists():
                     orphaned_names.append(object_name)
                     continue
-                size = int(meta.get("size", 0))
+                size = int(meta.size)
                 total_size += size
-                live_items.append((object_name, size, float(meta.get("accessed_at", 0.0))))
+                live_items.append((object_name, size, float(meta.accessed_at or 0.0)))
             for name in expired_names:
                 if await self.delete(name):
                     removed += 1
@@ -677,7 +798,7 @@ class MinIOObjectClient(ObjectClientBase, type="minio"):
                 _logger.warning('MinIOObjectClient.close() failed for bucket %s: %s', self._bucket, e)
         super().close()
 
-    async def _put_bytes(self, object_name: str, data: bytes | bytearray | memoryview, *, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def _put_bytes(self, object_name: str, data: bytes | bytearray | memoryview, *, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         if not self._started:
             self.start()
         await self._ensure_bucket()
@@ -692,7 +813,7 @@ class MinIOObjectClient(ObjectClientBase, type="minio"):
         self._schedule_cleanup()
         return self._present_metadata(meta)
 
-    async def put_file(self, source: str | Path, *, object_name: str | None = None, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put_file(self, source: str | Path, *, object_name: str | None = None, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         if not self._started:
             self.start()
         await self._ensure_bucket()
@@ -721,7 +842,7 @@ class MinIOObjectClient(ObjectClientBase, type="minio"):
         finally:
             response.close()
 
-    async def put(self, data: ObjectDataSource, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> ObjectMetadata:
+    async def put(self, data: ObjectDataSource, *, object_name: str, metadata: ObjectMetadataMapping | None = None, expire: float | int | None = None, content_type: str | None = None) -> OBS_Object:
         """Stream-aware put: spills to temp file then uses async fput_object."""
         if isinstance(data, (bytes, bytearray, memoryview)):
             return await self.put_bytes(bytes(data), object_name=object_name, metadata=metadata, expire=expire, content_type=content_type)
@@ -791,14 +912,14 @@ class MinIOObjectClient(ObjectClientBase, type="minio"):
             live_items: list[tuple[str, int, float]] = []
             expired_names: list[str] = []
             async for meta in self.list_metadata():
-                object_name = meta.get("path", "")
-                expire_at = meta.get("expire_at")
+                object_name = meta.path
+                expire_at = meta.expire_at
                 if expire_at is not None and expire_at <= _now_ts():
                     expired_names.append(object_name)
                     continue
-                size = int(meta.get("size", 0))
+                size = int(meta.size)
                 total_size += size
-                live_items.append((object_name, size, float(meta.get("accessed_at", 0.0))))
+                live_items.append((object_name, size, float(meta.accessed_at or 0.0)))
             for name in expired_names:
                 if await self.delete(name):
                     removed += 1
@@ -856,6 +977,7 @@ __all__ = [
     "LocalObjectClientInitParams",
     "MinIOObjectClient",
     "MinIOObjectClientInitParams",
+    "OBS_Object",
     "ObjectClientBase",
     "ObjectClientInitParams",
     "ObjectDataSource",

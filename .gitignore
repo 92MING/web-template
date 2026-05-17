@@ -25,3 +25,5 @@ resources/common/GeoLite2-City.update.json
 *_AppSharedData
 *.sock
 .venv/
+.claude/settings.local.json
+.claude/

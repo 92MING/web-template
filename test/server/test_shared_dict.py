@@ -36,14 +36,6 @@ async def _wait_for_gsd_value(
     raise AssertionError(f"Expected {key!r} to become {expected!r}, got {actual!r}")
 
 
-def _gsd_entry(gsd: GlobalSharedDict, namespace: str, key: str) -> dict[str, object] | None:
-    return gsd._shared.get_global_shared_dict_entry(namespace, key)
-
-
-def _set_gsd_entry(gsd: GlobalSharedDict, namespace: str, key: str, entry: dict[str, object]) -> None:
-    gsd._shared.set_global_shared_dict_entry(namespace, key, entry)
-
-
 @pytest.fixture
 def shared_data():
     sd = AppSharedData("test-instance")
@@ -201,9 +193,7 @@ class TestGlobalSharedDict:
             g = GlobalSharedDict(AppSharedData("gsd-tombstone-test"), listen_port=0)
             try:
                 await g.set("x", 1)
-                current = _gsd_entry(g, "default", "x")
-                assert current is not None
-                newer = current["ts"]
+                newer = g._local_data["default"]["x"]["ts"]
                 await g._process_inbound(
                     {
                         "cmd": "delete",
@@ -242,9 +232,7 @@ class TestGlobalSharedDict:
                 await node_b._process_inbound(delete_from_a, None)  # type: ignore[arg-type]
 
                 assert await node_b.get("x") == 1
-                current = _gsd_entry(node_b, "default", "x")
-                assert current is not None
-                assert current["ts"] == 1000.001
+                assert node_b._local_data["default"]["x"]["ts"] == 1000.001
             finally:
                 await node_b.stop()
 
@@ -279,7 +267,7 @@ class TestGlobalSharedDict:
                     "seen": ["node-a"],
                 }
 
-                _set_gsd_entry(node_c, "default", "x", dict(set_from_c["entry"]))
+                node_c._local_data.setdefault("default", {})["x"] = dict(set_from_c["entry"])
                 await node_b._process_inbound(set_from_c, None)  # type: ignore[arg-type]
                 await _wait_for_gsd_value(node_a, "x", 1)
                 await node_b._process_inbound(old_delete_from_a, None)  # type: ignore[arg-type]
@@ -287,12 +275,8 @@ class TestGlobalSharedDict:
                 await asyncio.sleep(0.2)
                 assert await node_b.get("x") == 1
                 assert await node_c.get("x") == 1
-                node_b_entry = _gsd_entry(node_b, "default", "x")
-                node_c_entry = _gsd_entry(node_c, "default", "x")
-                assert node_b_entry is not None
-                assert node_c_entry is not None
-                assert node_b_entry["ts"] == 1000.002
-                assert node_c_entry["ts"] == 1000.002
+                assert node_b._local_data["default"]["x"]["ts"] == 1000.002
+                assert node_c._local_data["default"]["x"]["ts"] == 1000.002
             finally:
                 await node_c.stop()
                 await node_b.stop()
@@ -310,11 +294,11 @@ class TestGlobalSharedDict:
         ) -> None:
             deadline = asyncio.get_running_loop().time() + timeout
             while asyncio.get_running_loop().time() < deadline:
-                entry = _gsd_entry(gsd, namespace, key)
+                entry = gsd._local_data.get(namespace, {}).get(key)
                 if predicate(entry):
                     return
                 await asyncio.sleep(0.05)
-            raise AssertionError(f"Expected {namespace}.{key} to match predicate, got {_gsd_entry(gsd, namespace, key)!r}")
+            raise AssertionError(f"Expected {namespace}.{key} to match predicate, got {gsd._local_data.get(namespace, {}).get(key)!r}")
 
         async def scenario() -> None:
             node_a = GlobalSharedDict(AppSharedData("gsd-jitter-node-a-live"), listen_port=0, node_id="node-a")
@@ -358,8 +342,8 @@ class TestGlobalSharedDict:
                     "seen": ["node-a"],
                 }
 
-                _set_gsd_entry(node_c, "alpha", "x", dict(alpha_new_set["entry"]))
-                _set_gsd_entry(node_c, "beta", "y", dict(beta_new_delete["entry"]))
+                node_c._local_data.setdefault("alpha", {})["x"] = dict(alpha_new_set["entry"])
+                node_c._local_data.setdefault("beta", {})["y"] = dict(beta_new_delete["entry"])
 
                 await node_b._process_inbound(alpha_new_set, None)  # type: ignore[arg-type]
                 await node_b._process_inbound(beta_new_delete, None)  # type: ignore[arg-type]
@@ -373,13 +357,9 @@ class TestGlobalSharedDict:
                 for node in (node_a, node_b, node_c):
                     assert await node.get("x", namespace="alpha") == 1
                     assert await node.get("y", namespace="beta") is None
-                    alpha_entry = _gsd_entry(node, "alpha", "x")
-                    beta_entry = _gsd_entry(node, "beta", "y")
-                    assert alpha_entry is not None
-                    assert beta_entry is not None
-                    assert alpha_entry["ts"] == 1000.004
-                    assert beta_entry["ts"] == 1000.006
-                    assert beta_entry.get("deleted") is True
+                    assert node._local_data["alpha"]["x"]["ts"] == 1000.004
+                    assert node._local_data["beta"]["y"]["ts"] == 1000.006
+                    assert node._local_data["beta"]["y"].get("deleted") is True
             finally:
                 await node_c.stop()
                 await node_b.stop()
@@ -432,7 +412,7 @@ class TestGlobalSharedDict:
 
                 for node in nodes:
                     for (namespace, key), expected_entry in expected_entries.items():
-                        local_entry = _gsd_entry(node, namespace, key)
+                        local_entry = node._local_data.get(namespace, {}).get(key)
                         assert local_entry is not None
                         assert local_entry["ts"] == expected_entry["ts"]
                         assert bool(local_entry.get("deleted")) is bool(expected_entry.get("deleted"))

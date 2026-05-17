@@ -10,11 +10,11 @@
 
 ## 1. 服务主配置
 
-服务主配置由 `Config` 负责，里面当前只有三个子配置：
+服务主配置由 `Config` 负责，里面当前主要有三个子配置：
 
 - `server_config`
 - `log_config`
-- `rtc_room_config`
+- `plugins`
 
 ### 服务主配置加载方式
 
@@ -30,14 +30,17 @@ server_config:
    host: 127.0.0.1
    port: 8000
    worker: 1
+   expose_compatible_ai_services: false
 
 log_config:
    log_method:
       - db
 
-rtc_room_config:
-   enable_rtc_chatroom: false
-   audio_sample_rate: 16000
+plugins:
+   - path: plugin/webrtc-chatroom
+     config:
+        webrtc-chatroom:
+           enabled: false
 ```
 
 完整示例见 [server_example.yaml](server_example.yaml)。
@@ -97,6 +100,7 @@ AI 配置由 `AIServicesConfig` 单独负责，也不属于服务主配置文件
 
 - 如果没有任何 AI 配置，`AIServicesConfig.Global()` 可以返回 `None`。
 - 这不影响服务主配置本身的加载。
+- 每类能力下的客户端放在 `clients`，service 实例放在 `service`，例如 `completion.service.default`。
 
 完整示例见 [ai_services_example.yaml](ai_services_example.yaml)。
 
@@ -104,7 +108,7 @@ AI 配置由 `AIServicesConfig` 单独负责，也不属于服务主配置文件
 
 推荐的职责边界：
 
-- 服务监听、管理面板、日志、RTC 参数：放服务主配置
+- 服务监听、管理面板、日志、RTC 参数、AI HTTP 暴露开关：放服务主配置
 - 数据库、对象存储、向量库：放存储配置
 - 模型、provider、service 绑定：放 AI 配置
 

@@ -12,11 +12,11 @@
 <div class="ai-shell">
   <div class="ai-header">
     <div class="ai-header-main">
-      <a href="/admin/test/ai" class="ai-back-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg><span data-i18n="translate.backLink">返回 AI 测试中心</span></a>
+      <a href="../ai" class="ai-back-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg><span data-i18n="translate.backLink">返回 AI 测试中心</span></a>
       <h1 data-i18n="translate.title">翻译测试</h1>
     </div>
     <div class="ai-pills">
-      <span class="ai-pill">POST /ai/translate</span>
+      <span class="ai-pill">POST /ai/completion/{service|client}/{key}/translate</span>
       <span class="ai-pill"><strong id="translateStatus">就绪</strong></span>
     </div>
   </div>
@@ -28,6 +28,14 @@
         <label for="targetLang" data-i18n="translate.targetLang">目标语言</label>
         <input id="targetLang" class="ai-input" list="targetLangOptions" type="text" value="zh-tw" placeholder="输入语言代码（如 zh-tw / en / ja）" />
         <datalist id="targetLangOptions"></datalist>
+      </div>
+      <div class="ai-field">
+        <label for="service-target">Service/Client</label>
+        <select id="service-target" class="ai-select"><option value="service">service</option></select>
+      </div>
+      <div class="ai-field">
+        <label for="service-instance">Key</label>
+        <select id="service-instance" class="ai-select"><option value="default">default</option></select>
       </div>
       <div class="ai-field">
         <label data-i18n="translate.mode.label">模式</label>
@@ -146,6 +154,7 @@
   const store = utils.createHistoryStore('translate_history', 18);
   const LANG_LABELS = {};
   const uiState = { busy: false, status: 'idle' };
+  let targetController = null;
 
   const srcText = document.getElementById('srcText');
   const outText = document.getElementById('outText');
@@ -252,10 +261,14 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  function selectedTargetPath(operation) {
+    return targetController ? targetController.buildPath(operation) : `completion/service/default/${operation}`;
+  }
+
   async function translateLine(text, lang) {
     const req = { text, target_language: lang };
     const started = performance.now();
-    const resp = await fetch(window.projAiApiPath('/ai/translate'), {
+    const resp = await fetch(window.projAiApiPath(`/ai/${selectedTargetPath('translate')}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
@@ -276,7 +289,7 @@
     syncStatus();
 
     const lang = resolveTargetLanguage();
-    const requestPayload = { text, target_language: lang, batch_mode: batchMode.checked };
+    const requestPayload = { text, target_language: lang, batch_mode: batchMode.checked, target_path: selectedTargetPath('translate') };
     let responsePayload = null;
     let errorPayload = null;
     let totalServerMs = 0;
@@ -378,6 +391,7 @@
     }
   });
 
+  utils.initServiceTargetControls('completion', 'service-target', 'service-instance').then((controller) => { targetController = controller; });
   updateCounts();
   loadLanguageOptions();
   renderHistory();

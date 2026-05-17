@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI
 
+from _test_helpers import _load_webrtc_chatroom_module, _register_rtc_room_routes
 
 _server_dir = Path(__file__).resolve().parent.parent.parent / "app" / "core" / "server"
 if str(_server_dir.parent.parent) not in sys.path:
@@ -18,16 +19,15 @@ if str(_server_dir.parent) not in sys.path:
 
 
 from core.server.app import register_public_fallback
-from core.server.data_types.config import Config, LogConfig, ServerConfig, WebRTCRoomConfig
-from core.server.routes.rtc_room import register_rtc_room_routes
-from core.server.rtc_room import (
-    build_room_create_request,
-    build_room_join_request,
-    create_room_invite_token,
-    create_room_token,
-    verify_room_create_token,
-)
+from core.server.data_types.config import Config, LogConfig, ServerConfig
 from core.server.security.jwt import ensure_jwt_keys_or_warn
+
+_chatroom_module = _load_webrtc_chatroom_module()
+build_room_create_request = _chatroom_module.build_room_create_request
+build_room_join_request = _chatroom_module.build_room_join_request
+create_room_invite_token = _chatroom_module.create_room_invite_token
+create_room_token = _chatroom_module.create_room_token
+verify_room_create_token = _chatroom_module.verify_room_create_token
 
 
 class TestRTCRoomTokenHelpers(unittest.TestCase):
@@ -102,11 +102,11 @@ class TestRTCRoomDisabledGating(unittest.IsolatedAsyncioTestCase):
         self.cfg = Config(
             server_config=ServerConfig(host="127.0.0.1", port=18999, expose_ai_service=True),
             log_config=LogConfig(log_method=["db"]),
-            rtc_room_config=WebRTCRoomConfig(rtc_room_enable=False),
+            plugin_configs={"webrtc-chatroom": {"enabled": False}},
         )
         Config.SetConfig(self.cfg)
         self.app = FastAPI()
-        register_rtc_room_routes(self.app)
+        _register_rtc_room_routes(self.app)
         register_public_fallback(self.app, self.cfg)
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url="http://testserver")
 
@@ -120,7 +120,7 @@ class TestRTCRoomDisabledGating(unittest.IsolatedAsyncioTestCase):
     async def test_create_route_returns_404_when_disabled(self):
         token = create_room_token(name="Disabled Room")
         response = await self.client.post(
-            "/_internal/rtc_room/create",
+            "/rtc_room/create",
             json={
                 "token": token,
                 "sdp": "v=0",

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>文字生成图片</title>
+  <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
+  <link rel="stylesheet" href="/html-assets/css/ai-test-shared.css"/>
+  <style>
+    .t2img-preview {
+      min-height: 260px;
+      border: 1px dashed rgba(148, 163, 184, 0.55);
+      border-radius: 16px;
+      background: repeating-conic-gradient(rgba(148, 163, 184, 0.18) 0% 25%, transparent 0% 50%) 50% / 24px 24px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .t2img-preview img { max-width: 100%; max-height: 520px; object-fit: contain; }
+    .t2img-preview-empty { color: #64748b; font-size: 14px; }
+    .t2img-error { display:none; margin-top: 14px; padding: 12px 14px; border-radius: 8px; border: 1px solid #fecaca; background: rgba(239, 68, 68, 0.12); color: #991b1b; font-size: 13px; line-height: 1.7; }
+    html.dark .t2img-error { color: #fecaca; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.18); }
+  </style>
+  <script src="/html-assets/js/page-controls.js"></script>
+</head>
+<body class="ai-page">
+  <div class="ai-shell">
+    <a href="../ai" class="ai-back-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      <span>返回 AI 测试中心</span>
+    </a>
+
+    <div class="ai-header">
+      <div class="ai-header-main"><h1>文字生成图片</h1></div>
+      <div class="ai-pills">
+        <span class="ai-pill"><strong id="mode-pill">Generate</strong></span>
+        <span class="ai-pill">历史保留 <strong>8</strong> 条</span>
+      </div>
+    </div>
+
+    <section class="ai-card">
+      <div class="ai-card-title"><h2>快速提示词</h2></div>
+      <div class="ai-toolbar">
+        <button class="ai-button ai-button-secondary" type="button" data-quick="A watercolor cat sitting beside a window, soft morning light">水彩猫</button>
+        <button class="ai-button ai-button-secondary" type="button" data-quick="A futuristic classroom dashboard UI, clean flat design, blue and white">课堂 UI</button>
+        <button class="ai-button ai-button-secondary" type="button" data-quick="A beautiful sunset over mountains, cinematic lighting">山脉日落</button>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title"><h2>请求参数</h2></div>
+      <div class="ai-grid-3">
+        <div class="ai-field" style="grid-column: span 2;">
+          <label for="prompt-input">Prompt</label>
+          <textarea id="prompt-input" class="ai-textarea" placeholder="输入图片生成/编辑提示词"></textarea>
+        </div>
+        <div class="ai-field">
+          <label for="operation-select">操作</label>
+          <select id="operation-select" class="ai-select">
+            <option value="generate" selected>Generate</option>
+            <option value="edit">Edit</option>
+            <option value="variation">Variation</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="service-target">Service/Client</label>
+          <select id="service-target" class="ai-select"><option value="service">service</option></select>
+        </div>
+        <div class="ai-field">
+          <label for="service-instance">Key</label>
+          <select id="service-instance" class="ai-select"><option value="default">default</option></select>
+        </div>
+        <div class="ai-field">
+          <label for="mode-select">请求方式</label>
+          <select id="mode-select" class="ai-select">
+            <option value="normal" selected>普通</option>
+            <option value="stream">Stream</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="size-input">Size</label>
+          <input id="size-input" class="ai-input" value="1024x1024"/>
+        </div>
+        <div class="ai-field">
+          <label for="count-input">n</label>
+          <input id="count-input" class="ai-input" type="number" min="1" max="10" value="1"/>
+        </div>
+        <div class="ai-field">
+          <label for="quality-input">Quality</label>
+          <input id="quality-input" class="ai-input" placeholder="auto / high / medium / low"/>
+        </div>
+        <div class="ai-field">
+          <label for="background-input">Background</label>
+          <input id="background-input" class="ai-input" placeholder="transparent / white / #ffffff"/>
+        </div>
+        <div class="ai-field">
+          <label for="output-format">Output format</label>
+          <select id="output-format" class="ai-select">
+            <option value="png" selected>png</option>
+            <option value="jpeg">jpeg</option>
+            <option value="webp">webp</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="response-format">Response format</label>
+          <select id="response-format" class="ai-select">
+            <option value="url" selected>url</option>
+            <option value="b64_json">b64_json</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="image-input">Image / Edit source</label>
+          <input id="image-input" class="ai-input" type="file" accept="image/*"/>
+        </div>
+        <div class="ai-field">
+          <label for="mask-input">Mask</label>
+          <input id="mask-input" class="ai-input" type="file" accept="image/*"/>
+        </div>
+        <div class="ai-field" style="grid-column: span 3;">
+          <label class="ai-label">操作</label>
+          <div class="ai-toolbar">
+            <button id="run-btn" class="ai-button ai-button-primary" type="button">开始生成</button>
+            <button id="clear-btn" class="ai-button ai-button-secondary" type="button">清空</button>
+            <span class="ai-pill"><strong id="prompt-count">0</strong>&nbsp;字符</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title">
+        <h2>结果</h2>
+        <div class="ai-toolbar">
+          <span id="result-badge" class="ai-badge ai-badge-muted">等待请求</span>
+          <a id="download-link" class="ai-button ai-button-secondary" href="#" download="t2img.png" aria-disabled="true">下载图片</a>
+        </div>
+      </div>
+      <div class="ai-metric-grid" style="margin-bottom:16px;">
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-elapsed">—</div><div class="ai-metric-label">耗时</div></div>
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-count">—</div><div class="ai-metric-label">图片数</div></div>
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-format">—</div><div class="ai-metric-label">格式</div></div>
+        <div class="ai-metric"><div class="ai-metric-value" id="metric-mode">—</div><div class="ai-metric-label">模式</div></div>
+      </div>
+      <div id="error-box" class="t2img-error"></div>
+      <div id="preview" class="t2img-preview"><span class="t2img-preview-empty">生成结果会显示在这里</span></div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title"><h2>调试检查器</h2></div>
+      <div id="inspector" class="ai-grid-2">
+        <div><div class="ai-card-subtitle">Request</div><pre class="ai-json" data-kind="request">—</pre></div>
+        <div><div class="ai-card-subtitle">Response</div><pre class="ai-json" data-kind="response">—</pre></div>
+        <div><div class="ai-card-subtitle">Error</div><pre class="ai-json" data-kind="error">—</pre></div>
+        <div><div class="ai-card-subtitle">Timing</div><pre class="ai-json" data-kind="timing">—</pre></div>
+      </div>
+    </section>
+
+    <section class="ai-card">
+      <div class="ai-card-title"><h2>本地历史</h2><button id="history-clear-btn" class="ai-button ai-button-secondary" type="button">清空历史</button></div>
+      <div id="history-list"></div>
+    </section>
+  </div>
+
+  <script src="/html-assets/js/ai-test-shared.js"></script>
+  <script>
+  'use strict';
+  const historyStore = AITestShared.createHistoryStore('t2img', 8);
+  const els = {
+    prompt: document.getElementById('prompt-input'), operation: document.getElementById('operation-select'), target: document.getElementById('service-target'),
+    instance: document.getElementById('service-instance'), mode: document.getElementById('mode-select'), size: document.getElementById('size-input'), count: document.getElementById('count-input'),
+    quality: document.getElementById('quality-input'), background: document.getElementById('background-input'), outputFormat: document.getElementById('output-format'),
+    responseFormat: document.getElementById('response-format'), image: document.getElementById('image-input'), mask: document.getElementById('mask-input'), run: document.getElementById('run-btn'),
+    clear: document.getElementById('clear-btn'), promptCount: document.getElementById('prompt-count'), badge: document.getElementById('result-badge'), preview: document.getElementById('preview'),
+    error: document.getElementById('error-box'), download: document.getElementById('download-link'), modePill: document.getElementById('mode-pill')
+  };
+  let targetController = null;
+  let latestUrl = '';
+
+  AITestShared.bindFormState('t2img', [
+    { id: 'prompt-input' }, { id: 'operation-select' }, { id: 'service-target' }, { id: 'service-instance' }, { id: 'mode-select' },
+    { id: 'size-input' }, { id: 'count-input' }, { id: 'quality-input' }, { id: 'background-input' }, { id: 'output-format' }, { id: 'response-format' }
+  ]);
+
+  function setBadge(text, cls) { els.badge.className = `ai-badge ${cls || 'ai-badge-muted'}`; els.badge.textContent = text; }
+  function setError(message) { els.error.style.display = message ? 'block' : 'none'; els.error.textContent = message || ''; }
+  function firstImageUrl(payload) {
+    const item = payload && Array.isArray(payload.data) ? payload.data[0] : null;
+    if (!item) return '';
+    if (item.url) return item.url;
+    if (item.b64_json) return `data:image/${els.outputFormat.value || 'png'};base64,${item.b64_json}`;
+    return '';
+  }
+  function renderImage(url) {
+    latestUrl = url || '';
+    els.preview.innerHTML = latestUrl ? `<img alt="T2Img result" src="${AITestShared.escapeHtml(latestUrl)}"/>` : '<span class="t2img-preview-empty">生成结果会显示在这里</span>';
+    els.download.href = latestUrl || '#';
+    els.download.setAttribute('aria-disabled', latestUrl ? 'false' : 'true');
+    els.download.download = `t2img.${els.outputFormat.value || 'png'}`;
+  }
+  function syncUi() {
+    els.promptCount.textContent = String(els.prompt.value.length);
+    els.modePill.textContent = `${els.operation.value} / ${els.mode.value}`;
+    const needsImage = els.operation.value !== 'generate';
+    els.image.closest('.ai-field').style.display = needsImage ? '' : 'none';
+    els.mask.closest('.ai-field').style.display = els.operation.value === 'edit' ? '' : 'none';
+    els.prompt.disabled = els.operation.value === 'variation';
+  }
+  function targetPath(operation) {
+    const suffix = operation === 'edit' ? 'openai/v1/images/edits' : operation === 'variation' ? 'openai/v1/images/variations' : 'openai/v1/images/generations';
+    return targetController ? targetController.buildPath(suffix) : `t2img/service/default/${suffix}`;
+  }
+  function applyCommonPayload(payload) {
+    payload.n = Math.max(1, Number(els.count.value || 1));
+    payload.size = els.size.value.trim() || undefined;
+    payload.quality = els.quality.value.trim() || undefined;
+    payload.background = els.background.value.trim() || undefined;
+    payload.output_format = els.outputFormat.value;
+    payload.response_format = els.responseFormat.value;
+    payload.stream = els.mode.value === 'stream' && els.operation.value === 'generate';
+    Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
+    return payload;
+  }
+  async function runGenerate(path, payload) {
+    const response = await AITestShared.fetchAi(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (payload.stream) {
+      const text = await response.text();
+      if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
+      const events = text.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).filter((line) => line && line !== '[DONE]');
+      const parsed = events.map((line) => AITestShared.safeParse(line, {}));
+      const last = [...parsed].reverse().find((item) => item && item.data);
+      return { stream_events: parsed.length, ...(last || {}) };
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    return data;
+  }
+  async function runMultipart(path, payload) {
+    const form = new FormData();
+    Object.entries(payload).forEach(([key, value]) => form.append(key, String(value)));
+    if (els.image.files[0]) form.append('image', els.image.files[0]);
+    if (els.mask.files[0] && els.operation.value === 'edit') form.append('mask', els.mask.files[0]);
+    const response = await AITestShared.fetchAi(path, { method: 'POST', body: form });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    return data;
+  }
+  async function run() {
+    setError('');
+    const operation = els.operation.value;
+    if (operation !== 'variation' && !els.prompt.value.trim()) { setError('请输入 prompt。'); return; }
+    if (operation !== 'generate' && !els.image.files[0]) { setError('Edit/Variation 需要上传 image。'); return; }
+    els.run.disabled = true;
+    els.run.textContent = '请求中…';
+    setBadge('请求中', 'ai-badge-warning');
+    const started = performance.now();
+    const selection = targetController.getSelection();
+    const path = targetPath(operation);
+    const payload = applyCommonPayload({ prompt: els.prompt.value.trim() });
+    const requestInfo = { path, operation, selection, payload };
+    try {
+      const data = operation === 'generate' ? await runGenerate(path, payload) : await runMultipart(path, payload);
+      const elapsed = performance.now() - started;
+      const url = firstImageUrl(data);
+      renderImage(url);
+      setBadge('成功', 'ai-badge-success');
+      document.getElementById('metric-elapsed').textContent = AITestShared.formatDuration(elapsed);
+      document.getElementById('metric-count').textContent = String((data.data || []).length || data.stream_events || 0);
+      document.getElementById('metric-format').textContent = data.output_format || els.outputFormat.value;
+      document.getElementById('metric-mode').textContent = `${operation}/${els.mode.value}`;
+      AITestShared.setInspector('inspector', { request: requestInfo, response: data, error: null, timing: { elapsed_ms: Math.round(elapsed) } });
+      historyStore.push({ title: els.prompt.value.trim() || operation, operation, url, request: requestInfo, response: data, created_at: AITestShared.nowIso() });
+      renderHistory();
+    } catch (err) {
+      setBadge('失败', 'ai-badge-danger');
+      setError(err.message || String(err));
+      AITestShared.setInspector('inspector', { request: requestInfo, response: null, error: err.message || String(err), timing: { elapsed_ms: Math.round(performance.now() - started) } });
+    } finally {
+      els.run.disabled = false;
+      els.run.textContent = '开始生成';
+    }
+  }
+  function renderHistory() {
+    const items = historyStore.load();
+    AITestShared.renderHistoryList(document.getElementById('history-list'), items, (item) => `
+      <div class="ai-card" style="padding:14px; margin-top:12px;">
+        <div class="ai-card-title" style="margin-bottom:8px;">
+          <h3>${AITestShared.escapeHtml(item.title || item.operation || 't2img')}</h3>
+          <span class="ai-badge ai-badge-muted">${AITestShared.escapeHtml(item.operation || '')} · ${AITestShared.toLocaleTime(item.created_at || item.ts)}</span>
+        </div>
+        ${item.url ? `<img alt="T2Img history" src="${AITestShared.escapeHtml(item.url)}" style="max-width:100%;max-height:180px;border-radius:12px;margin-bottom:10px;object-fit:contain;"/>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="ai-button ai-button-secondary" type="button" onclick="loadHistoryItem('${item.id}')">载入</button>
+          <button class="ai-button ai-button-secondary" type="button" onclick="copyHistoryItem('${item.id}')">复制 JSON</button>
+        </div>
+      </div>
+    `);
+  }
+  window.loadHistoryItem = function(id) {
+    const item = historyStore.load().find((entry) => entry.id === id);
+    if (!item) return;
+    renderImage(item.url);
+    AITestShared.setInspector('inspector', { request: item.request, response: item.response });
+    setBadge('已载入历史', 'ai-badge-muted');
+  };
+  window.copyHistoryItem = function(id) {
+    const item = historyStore.load().find((entry) => entry.id === id);
+    if (item) AITestShared.copyText(JSON.stringify(item, null, 2));
+  };
+  document.querySelectorAll('[data-quick]').forEach((btn) => btn.addEventListener('click', () => { els.prompt.value = btn.dataset.quick || ''; syncUi(); }));
+  els.prompt.addEventListener('input', syncUi);
+  els.operation.addEventListener('change', syncUi);
+  els.mode.addEventListener('change', syncUi);
+  els.run.addEventListener('click', run);
+  els.clear.addEventListener('click', () => { els.prompt.value = ''; els.image.value = ''; els.mask.value = ''; renderImage(''); setError(''); syncUi(); });
+  document.getElementById('history-clear-btn').addEventListener('click', () => { historyStore.clear(); renderHistory(); });
+  (async function init() {
+    targetController = await AITestShared.initServiceTargetControls('t2img', 'service-target', 'service-instance');
+    syncUi();
+    renderHistory();
+    AITestShared.setInspector('inspector', { request: null, response: null, error: null, timing: null });
+  })();
+  </script>
+</body>
+</html>

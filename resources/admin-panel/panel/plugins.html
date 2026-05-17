@@ -1,0 +1,2585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plugin</title>
+  <link rel="stylesheet" href="/html-assets/css/core-design-tokens.css" />
+  <script src="/html-assets/js/page-controls.js"></script>
+  <script src="/html-assets/js/core-url-state-sync.js"></script>
+  <style>
+    :root {
+      --plugin-sidebar-width: 220px;
+      --plugin-gap: 8px;
+      --plugin-surface: color-mix(in srgb, var(--ai-surface, #ffffff) 95%, #ffffff 5%);
+      --plugin-bg: color-mix(in srgb, var(--ai-bg, #eef4fb) 90%, #ffffff 10%);
+      --plugin-border: color-mix(in srgb, var(--ai-border, #cbd5e1) 82%, transparent 18%);
+      --plugin-text: var(--ai-text, #0f172a);
+      --plugin-muted: var(--ai-text-muted, #64748b);
+      --plugin-accent: var(--ai-accent, #0f766e);
+      --plugin-danger: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      min-height: 100%;
+    }
+
+    body.plugin-page {
+      height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(14, 116, 144, 0.14), transparent 30%),
+        linear-gradient(180deg, color-mix(in srgb, var(--plugin-bg) 92%, #ffffff 8%), var(--plugin-bg));
+      color: var(--plugin-text);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .plugin-shell {
+      display: grid;
+      grid-template-columns: var(--plugin-sidebar-width) minmax(0, 1fr);
+      gap: var(--plugin-gap);
+      padding: 6px;
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .plugin-sidebar,
+    .plugin-hero,
+    .plugin-frame-shell,
+    .plugin-empty-state,
+    .plugin-import-dialog {
+      background: color-mix(in srgb, var(--plugin-surface) 94%, #ffffff 6%);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--plugin-border);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+    }
+
+    .plugin-sidebar {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-radius: 18px;
+      padding: 6px;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .plugin-sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 4px 2px;
+    }
+
+    .plugin-sidebar-label {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-sidebar-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .plugin-sidebar-toggle,
+    .plugin-sidebar-add,
+    .plugin-import-close,
+    .plugin-remote-inline-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--plugin-border);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--plugin-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background .16s ease, color .16s ease, transform .16s ease, border-color .16s ease;
+    }
+
+    .plugin-sidebar-toggle:hover,
+    .plugin-sidebar-add:hover,
+    .plugin-import-close:hover,
+    .plugin-remote-inline-btn:hover {
+      background: color-mix(in srgb, var(--plugin-surface) 78%, var(--plugin-border) 22%);
+      color: var(--plugin-text);
+      border-color: color-mix(in srgb, var(--plugin-accent) 24%, transparent 76%);
+    }
+
+    .plugin-sidebar-add {
+      color: var(--plugin-accent);
+    }
+
+    .plugin-sidebar-toggle svg,
+    .plugin-sidebar-add svg,
+    .plugin-import-close svg,
+    .plugin-remote-inline-btn svg {
+      width: 15px;
+      height: 15px;
+      transition: transform .18s ease;
+    }
+
+    .plugin-sidebar-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 0 2px 2px;
+    }
+
+    .plugin-nav-item {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+
+    .plugin-nav-row {
+      position: relative;
+    }
+
+    .plugin-nav-row .plugin-nav-item {
+      padding-right: 42px;
+    }
+
+    .plugin-nav-gear {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      width: 26px;
+      height: 26px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--plugin-border) 88%, transparent 12%);
+      background: color-mix(in srgb, var(--plugin-surface) 92%, transparent 8%);
+      color: var(--plugin-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%) scale(.96);
+      transition: opacity .16s ease, transform .16s ease, color .16s ease, border-color .16s ease, background .16s ease;
+    }
+
+    .plugin-nav-row:hover .plugin-nav-gear,
+    .plugin-nav-gear:focus-visible,
+    .plugin-nav-row .plugin-nav-item.is-active + .plugin-nav-gear {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(-50%) scale(1);
+    }
+
+    .plugin-nav-gear:hover {
+      color: var(--plugin-text);
+      border-color: color-mix(in srgb, var(--plugin-accent) 28%, transparent 72%);
+      background: color-mix(in srgb, var(--plugin-surface) 72%, var(--plugin-border) 28%);
+    }
+
+    .plugin-nav-gear svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .plugin-nav-item:hover {
+      background: color-mix(in srgb, var(--plugin-surface) 76%, var(--plugin-border) 24%);
+      border-color: color-mix(in srgb, var(--plugin-accent) 24%, transparent 76%);
+      transform: translateY(-1px);
+    }
+
+    .plugin-nav-item.is-active {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--plugin-accent) 16%, #ffffff 84%), color-mix(in srgb, var(--plugin-accent) 10%, #ffffff 90%));
+      border-color: color-mix(in srgb, var(--plugin-accent) 30%, transparent 70%);
+    }
+
+    .plugin-nav-item.is-disabled {
+      opacity: .68;
+    }
+
+    .plugin-nav-title {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--plugin-text);
+    }
+
+    .plugin-nav-meta {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--plugin-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .plugin-content {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: var(--plugin-gap);
+      overflow: hidden;
+    }
+
+    .plugin-hero {
+      border-radius: 18px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .plugin-kicker {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .plugin-title {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .plugin-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--plugin-accent) 22%, transparent 78%);
+      background: color-mix(in srgb, var(--plugin-accent) 10%, transparent 90%);
+      color: color-mix(in srgb, var(--plugin-accent) 78%, #0f172a 22%);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .plugin-description {
+      margin: 0;
+      max-width: 82ch;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-frame-shell,
+    .plugin-empty-state {
+      min-height: 0;
+      height: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .plugin-frame-shell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .plugin-frame {
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #ffffff;
+    }
+
+    .plugin-empty-state {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+    }
+
+    .plugin-empty-state.is-visible {
+      display: flex;
+    }
+
+    .plugin-empty-card {
+      width: min(520px, 100%);
+      padding: 22px 24px;
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--plugin-surface) 90%, transparent 10%);
+      border: 1px dashed color-mix(in srgb, var(--plugin-border) 84%, transparent 16%);
+    }
+
+    .plugin-empty-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: var(--plugin-text);
+    }
+
+    .plugin-empty-copy {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-sidebar-empty {
+      margin: 4px;
+      padding: 14px 12px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+      color: var(--plugin-muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .plugin-import-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+
+    .plugin-import-modal[hidden] {
+      display: none;
+    }
+
+    .plugin-import-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.52);
+      backdrop-filter: blur(8px);
+    }
+
+    .plugin-import-dialog {
+      position: relative;
+      z-index: 1;
+      width: min(860px, 100%);
+      max-height: min(84vh, 920px);
+      border-radius: 24px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .plugin-import-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .plugin-import-title-wrap {
+      display: grid;
+      gap: 6px;
+    }
+
+    .plugin-import-kicker {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-import-title {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .plugin-import-subtitle {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-import-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px;
+      border-radius: 999px;
+      width: fit-content;
+      background: color-mix(in srgb, var(--plugin-surface) 82%, var(--plugin-border) 18%);
+    }
+
+    .plugin-import-tab {
+      min-height: 34px;
+      border: 0;
+      padding: 0 16px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--plugin-muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+    }
+
+    .plugin-import-tab.is-active {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--plugin-accent) 20%, #ffffff 80%), color-mix(in srgb, var(--plugin-accent) 10%, #ffffff 90%));
+      color: var(--plugin-text);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plugin-accent) 26%, transparent 74%);
+    }
+
+    .plugin-import-body {
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .plugin-import-panel {
+      display: grid;
+      gap: 10px;
+    }
+
+    .plugin-import-panel[hidden] {
+      display: none !important;
+    }
+
+    .plugin-import-card {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 90%, transparent 10%);
+    }
+
+    .plugin-import-section-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--plugin-text);
+    }
+
+    .plugin-import-copy {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-dropzone {
+      display: grid;
+      gap: 10px;
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px dashed color-mix(in srgb, var(--plugin-accent) 28%, var(--plugin-border) 72%);
+      background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--plugin-accent) 12%, transparent 88%), transparent 42%),
+        color-mix(in srgb, var(--plugin-surface) 86%, transparent 14%);
+      transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+
+    .plugin-dropzone.is-dragover {
+      border-color: color-mix(in srgb, var(--plugin-accent) 56%, transparent 44%);
+      background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--plugin-accent) 18%, transparent 82%), transparent 48%),
+        color-mix(in srgb, var(--plugin-surface) 78%, transparent 22%);
+      transform: translateY(-1px);
+    }
+
+    .plugin-dropzone-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .plugin-import-primary,
+    .plugin-local-picker {
+      min-height: 38px;
+      border: 1px solid color-mix(in srgb, var(--plugin-accent) 24%, transparent 76%);
+      border-radius: 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--plugin-accent) 90%, #ffffff 10%), color-mix(in srgb, var(--plugin-accent) 76%, #0f172a 24%));
+      color: #ffffff;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: opacity .16s ease, transform .16s ease;
+    }
+
+    .plugin-import-primary:hover,
+    .plugin-local-picker:hover {
+      transform: translateY(-1px);
+      opacity: .96;
+    }
+
+    .plugin-import-primary:disabled,
+    .plugin-local-picker:disabled,
+    .plugin-import-close:disabled,
+    .plugin-remote-inline-btn:disabled,
+    .plugin-import-tab:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .plugin-status-chip {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+      color: var(--plugin-muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .plugin-status-chip.is-error {
+      color: var(--plugin-danger);
+      border-color: color-mix(in srgb, var(--plugin-danger) 28%, transparent 72%);
+      background: color-mix(in srgb, var(--plugin-danger) 8%, transparent 92%);
+    }
+
+    .plugin-status-chip.is-success {
+      color: color-mix(in srgb, var(--plugin-accent) 78%, #0f172a 22%);
+      border-color: color-mix(in srgb, var(--plugin-accent) 28%, transparent 72%);
+      background: color-mix(in srgb, var(--plugin-accent) 8%, transparent 92%);
+    }
+
+    .plugin-selection-list {
+      min-height: 88px;
+      max-height: 180px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 80%, transparent 20%);
+    }
+
+    .plugin-selection-list.is-empty {
+      display: flex;
+      align-items: center;
+      color: var(--plugin-muted);
+      font-size: 12px;
+    }
+
+    .plugin-selection-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--plugin-surface) 90%, transparent 10%);
+      border: 1px solid color-mix(in srgb, var(--plugin-border) 90%, transparent 10%);
+    }
+
+    .plugin-selection-item-path {
+      min-width: 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--plugin-text);
+      word-break: break-all;
+    }
+
+    .plugin-selection-item-meta {
+      flex: 0 0 auto;
+      color: var(--plugin-muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .plugin-remote-toolbar {
+      display: grid;
+      grid-template-columns: minmax(150px, 210px) auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .plugin-field,
+    .plugin-path-pill {
+      min-height: 36px;
+      border-radius: 12px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+      color: var(--plugin-text);
+      padding: 0 12px;
+    }
+
+    .plugin-path-pill {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .plugin-remote-browser {
+      min-height: 320px;
+      max-height: 420px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 16px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 82%, transparent 18%);
+    }
+
+    .plugin-remote-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--plugin-surface) 90%, transparent 10%);
+    }
+
+    .plugin-remote-row.is-selected {
+      border-color: color-mix(in srgb, var(--plugin-accent) 26%, transparent 74%);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--plugin-accent) 10%, #ffffff 90%), color-mix(in srgb, var(--plugin-accent) 6%, #ffffff 94%));
+    }
+
+    .plugin-remote-main {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .plugin-remote-name {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: var(--plugin-text);
+      word-break: break-all;
+    }
+
+    .plugin-remote-meta {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-remote-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .plugin-remote-action {
+      min-height: 30px;
+      border-radius: 10px;
+      border: 1px solid var(--plugin-border);
+      background: transparent;
+      color: var(--plugin-text);
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease, color .16s ease;
+    }
+
+    .plugin-remote-action:hover {
+      background: color-mix(in srgb, var(--plugin-surface) 74%, var(--plugin-border) 26%);
+      border-color: color-mix(in srgb, var(--plugin-accent) 24%, transparent 76%);
+    }
+
+    .plugin-remote-action.is-primary {
+      background: color-mix(in srgb, var(--plugin-accent) 88%, #ffffff 12%);
+      border-color: color-mix(in srgb, var(--plugin-accent) 28%, transparent 72%);
+      color: #ffffff;
+    }
+
+    .plugin-remote-action.is-muted {
+      color: var(--plugin-muted);
+    }
+
+    .plugin-remote-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .plugin-remote-selection {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+      color: var(--plugin-muted);
+      font-size: 11px;
+      font-weight: 700;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .plugin-import-feedback {
+      min-height: 20px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-import-feedback.is-error {
+      color: var(--plugin-danger);
+    }
+
+    .plugin-import-feedback.is-success {
+      color: color-mix(in srgb, var(--plugin-accent) 78%, #0f172a 22%);
+    }
+
+    .plugin-config-source {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+      color: var(--plugin-muted);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .plugin-config-list {
+      min-height: 0;
+      overflow: auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    .plugin-config-card {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 90%, transparent 10%);
+    }
+
+    .plugin-config-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .plugin-config-card-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 800;
+      color: var(--plugin-text);
+    }
+
+    .plugin-config-card-copy {
+      margin: 6px 0 0;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-config-card-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .plugin-config-platforms {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--plugin-border);
+      color: var(--plugin-muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+    }
+
+    .plugin-config-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px;
+      width: fit-content;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--plugin-surface) 82%, var(--plugin-border) 18%);
+    }
+
+    .plugin-config-tab {
+      min-height: 32px;
+      border: 0;
+      padding: 0 14px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--plugin-muted);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background .16s ease, color .16s ease;
+    }
+
+    .plugin-config-tab.is-active {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--plugin-accent) 20%, #ffffff 80%), color-mix(in srgb, var(--plugin-accent) 10%, #ffffff 90%));
+      color: var(--plugin-text);
+    }
+
+    .plugin-config-pane[hidden] {
+      display: none !important;
+    }
+
+    .plugin-config-form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .plugin-config-field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .plugin-config-label {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--plugin-text);
+    }
+
+    .plugin-config-label em {
+      color: var(--plugin-danger);
+      font-style: normal;
+      margin-left: 4px;
+    }
+
+    .plugin-config-hint {
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-config-input,
+    .plugin-config-json {
+      width: 100%;
+      min-height: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--plugin-border);
+      background: color-mix(in srgb, var(--plugin-surface) 84%, transparent 16%);
+      color: var(--plugin-text);
+      padding: 10px 12px;
+    }
+
+    .plugin-config-input[type="checkbox"] {
+      width: 18px;
+      min-height: 18px;
+      padding: 0;
+      accent-color: var(--plugin-accent);
+    }
+
+    .plugin-config-boolean {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+    }
+
+    .plugin-config-input.is-invalid,
+    .plugin-config-json.is-invalid {
+      border-color: color-mix(in srgb, var(--plugin-danger) 44%, transparent 56%);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--plugin-danger) 18%, transparent 82%);
+    }
+
+    .plugin-config-json {
+      min-height: 220px;
+      resize: vertical;
+      font-family: "Consolas", "SFMono-Regular", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .plugin-config-json-status {
+      min-height: 18px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--plugin-muted);
+    }
+
+    .plugin-config-json-status.is-error {
+      color: var(--plugin-danger);
+    }
+
+    .plugin-config-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .plugin-import-secondary {
+      min-height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--plugin-border);
+      background: transparent;
+      color: var(--plugin-text);
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .plugin-import-secondary:disabled,
+    .plugin-config-tab:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    body.plugin-sidebar-collapsed .plugin-shell {
+      --plugin-sidebar-width: 48px;
+    }
+
+    body.plugin-sidebar-collapsed .plugin-sidebar {
+      padding-inline: 5px;
+    }
+
+    body.plugin-sidebar-collapsed .plugin-sidebar-label,
+    body.plugin-sidebar-collapsed .plugin-sidebar-list {
+      display: none;
+    }
+
+    body.plugin-sidebar-collapsed .plugin-sidebar-toggle svg {
+      transform: rotate(180deg);
+    }
+
+    html.dark body.plugin-page {
+      background:
+        radial-gradient(circle at top left, rgba(14, 116, 144, 0.18), transparent 30%),
+        linear-gradient(180deg, color-mix(in srgb, #0f172a 90%, #020617 10%), #020617);
+    }
+
+    html.dark .plugin-nav-item.is-active,
+    html.dark .plugin-remote-row.is-selected,
+    html.dark .plugin-import-tab.is-active {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--plugin-accent) 22%, #0f172a 78%), color-mix(in srgb, var(--plugin-accent) 14%, #0f172a 86%));
+    }
+
+    html.dark .plugin-frame {
+      background: #0f172a;
+    }
+
+    @media (max-width: 920px) {
+      .plugin-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .plugin-frame {
+        height: 72vh;
+      }
+
+      .plugin-remote-toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .plugin-path-pill {
+        grid-column: 1 / -1;
+      }
+
+      body.plugin-sidebar-collapsed .plugin-shell {
+        --plugin-sidebar-width: 1fr;
+      }
+
+      body.plugin-sidebar-collapsed .plugin-sidebar {
+        padding-inline: 6px;
+      }
+
+      body.plugin-sidebar-collapsed .plugin-sidebar-label,
+      body.plugin-sidebar-collapsed .plugin-sidebar-list {
+        display: initial;
+      }
+    }
+  </style>
+</head>
+<body class="plugin-page">
+  <div class="plugin-shell">
+    <aside class="plugin-sidebar">
+      <div class="plugin-sidebar-header">
+        <div class="plugin-sidebar-label" id="plugin-sidebar-label">Plugin</div>
+        <div class="plugin-sidebar-actions">
+          <button id="plugin-import-open" class="plugin-sidebar-add" type="button" title="新增插件" aria-label="新增插件">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 4.25a.75.75 0 01.75.75v4.25H15a.75.75 0 010 1.5h-4.25V15a.75.75 0 01-1.5 0v-4.25H5a.75.75 0 010-1.5h4.25V5a.75.75 0 01.75-.75z" /></svg>
+          </button>
+          <button id="plugin-sidebar-toggle" class="plugin-sidebar-toggle" type="button" title="折叠侧栏" aria-label="折叠侧栏" aria-expanded="true">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.78 4.22a.75.75 0 010 1.06L8.06 10l4.72 4.72a.75.75 0 11-1.06 1.06l-5.25-5.25a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clip-rule="evenodd" /></svg>
+          </button>
+        </div>
+      </div>
+      <div id="plugin-sidebar-empty" class="plugin-sidebar-empty">正在加载插件列表…</div>
+      <div id="plugin-nav" class="plugin-sidebar-list"></div>
+    </aside>
+
+    <section class="plugin-content">
+      <section class="plugin-hero">
+        <div class="plugin-kicker" id="plugin-kicker">Plugin</div>
+        <div class="plugin-title-row">
+          <h1 id="plugin-title" class="plugin-title">Plugin</h1>
+          <div id="plugin-badge" class="plugin-badge">Panel</div>
+        </div>
+        <p id="plugin-description" class="plugin-description">从左侧选择一个插件后，右侧才会载入对应的管理面板。</p>
+      </section>
+
+      <section id="plugin-empty" class="plugin-empty-state is-visible">
+        <div class="plugin-empty-card">
+          <div id="plugin-empty-title" class="plugin-empty-title">暂无可展示的插件</div>
+          <div id="plugin-empty-copy" class="plugin-empty-copy">当前还没有已注册插件，或者还没有选择目标插件。</div>
+        </div>
+      </section>
+
+      <section id="plugin-frame-shell" class="plugin-frame-shell" hidden>
+        <iframe id="plugin-frame" class="plugin-frame" src="about:blank" title="Plugin Panel"></iframe>
+      </section>
+    </section>
+  </div>
+
+  <div id="plugin-import-modal" class="plugin-import-modal" hidden>
+    <div class="plugin-import-backdrop" data-close-plugin-import="true"></div>
+    <section class="plugin-import-dialog" role="dialog" aria-modal="true" aria-labelledby="plugin-import-title">
+      <header class="plugin-import-header">
+        <div class="plugin-import-title-wrap">
+          <div class="plugin-import-kicker" id="plugin-import-kicker">Plugin</div>
+          <h2 id="plugin-import-title" class="plugin-import-title">导入插件</h2>
+          <p id="plugin-import-subtitle" class="plugin-import-subtitle">选择本地文件上传，或直接浏览服务器上的插件路径。</p>
+        </div>
+        <button id="plugin-import-close" class="plugin-import-close" type="button" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 011.06 0L10 7.94l2.66-2.72a.75.75 0 111.08 1.04L11.06 9l2.68 2.72a.75.75 0 01-1.08 1.04L10 10.06l-2.66 2.7a.75.75 0 11-1.08-1.04L8.94 9 6.28 6.28a.75.75 0 010-1.06z" /></svg>
+        </button>
+      </header>
+
+      <div id="plugin-import-tabs" class="plugin-import-tabs">
+        <button id="plugin-import-tab-local" class="plugin-import-tab is-active" type="button" data-tab="local">本地</button>
+        <button id="plugin-import-tab-remote" class="plugin-import-tab" type="button" data-tab="remote">远端</button>
+      </div>
+
+      <div class="plugin-import-body">
+        <section id="plugin-import-panel-local" class="plugin-import-panel">
+          <div class="plugin-import-card">
+            <div class="plugin-import-section-title" id="plugin-local-title">本地导入</div>
+            <p id="plugin-local-copy" class="plugin-import-copy">点击按钮选择本地插件文件，或把文件/目录拖到下面区域。选择后会立即上传并注册。</p>
+            <div id="plugin-local-dropzone" class="plugin-dropzone">
+              <div class="plugin-dropzone-head">
+                <button id="plugin-local-picker" class="plugin-local-picker" type="button">选择路径</button>
+                <div id="plugin-local-status" class="plugin-status-chip">尚未选择任何内容</div>
+              </div>
+              <div id="plugin-local-drop-copy" class="plugin-import-copy">支持单个 `.py` / `.zip` / `.tar.gz` / `.tgz` / `.gz` 插件文件，也支持直接拖入一个插件目录。</div>
+            </div>
+            <input id="plugin-local-input" type="file" multiple accept=".py,.zip,.gz,.tgz,.tar,.tar.gz" hidden />
+            <div id="plugin-local-selection" class="plugin-selection-list is-empty">选择后会在这里显示待上传内容。</div>
+          </div>
+        </section>
+
+        <section id="plugin-import-panel-remote" class="plugin-import-panel" hidden>
+          <div class="plugin-import-card">
+            <div class="plugin-import-section-title" id="plugin-remote-title">远端浏览</div>
+            <p id="plugin-remote-copy" class="plugin-import-copy">浏览服务器允许访问的目录，选择一个插件文件、压缩包，或一个插件目录后注册。</p>
+            <div class="plugin-remote-toolbar">
+              <select id="plugin-remote-root" class="plugin-field" aria-label="远端根目录"></select>
+              <button id="plugin-remote-up" class="plugin-remote-inline-btn" type="button" title="上一级" aria-label="上一级">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 01.53.22l4 4a.75.75 0 01-1.06 1.06l-2.72-2.72V15a.75.75 0 01-1.5 0V6.81L6.53 9.53a.75.75 0 11-1.06-1.06l4-4A.75.75 0 0110 4.25z" clip-rule="evenodd" /></svg>
+              </button>
+              <div id="plugin-remote-path" class="plugin-path-pill">.</div>
+              <button id="plugin-remote-refresh" class="plugin-remote-inline-btn" type="button" title="刷新" aria-label="刷新">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15.31 4.69a.75.75 0 010 1.06L14.06 7h1.44a.75.75 0 010 1.5h-3.25A.75.75 0 0111.5 7.75V4.5a.75.75 0 011.5 0v1.44l1.25-1.25a.75.75 0 011.06 0zM4.69 15.31a.75.75 0 010-1.06L5.94 13H4.5a.75.75 0 010-1.5h3.25a.75.75 0 01.75.75v3.25a.75.75 0 01-1.5 0v-1.44l-1.25 1.25a.75.75 0 01-1.06 0z" clip-rule="evenodd" /></svg>
+              </button>
+            </div>
+            <div id="plugin-remote-browser" class="plugin-remote-browser"></div>
+            <div class="plugin-remote-footer">
+              <div id="plugin-remote-selection" class="plugin-remote-selection">尚未选择服务器路径</div>
+              <button id="plugin-remote-submit" class="plugin-import-primary" type="button" disabled>注册所选路径</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="plugin-import-feedback" class="plugin-import-feedback"></div>
+    </section>
+  </div>
+
+  <div id="plugin-config-modal" class="plugin-import-modal" hidden>
+    <div class="plugin-import-backdrop" data-close-plugin-config="true"></div>
+    <section class="plugin-import-dialog" role="dialog" aria-modal="true" aria-labelledby="plugin-config-title">
+      <header class="plugin-import-header">
+        <div class="plugin-import-title-wrap">
+          <div class="plugin-import-kicker" id="plugin-config-kicker">Plugin</div>
+          <h2 id="plugin-config-title" class="plugin-import-title">设置插件参数</h2>
+          <p id="plugin-config-subtitle" class="plugin-import-subtitle">确认导入插件后的配置。参数面板和 Raw JSON 会保持同步。</p>
+        </div>
+        <button id="plugin-config-close" class="plugin-import-close" type="button" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 011.06 0L10 7.94l2.66-2.72a.75.75 0 111.08 1.04L11.06 9l2.68 2.72a.75.75 0 01-1.08 1.04L10 10.06l-2.66 2.7a.75.75 0 11-1.08-1.04L8.94 9 6.28 6.28a.75.75 0 010-1.06z" /></svg>
+        </button>
+      </header>
+
+      <div id="plugin-config-source" class="plugin-config-source"></div>
+      <div id="plugin-config-list" class="plugin-config-list"></div>
+      <div id="plugin-config-feedback" class="plugin-import-feedback"></div>
+      <div class="plugin-config-footer">
+        <button id="plugin-config-cancel" class="plugin-import-secondary" type="button">取消</button>
+        <button id="plugin-config-restart" class="plugin-import-secondary" type="button" hidden>重启插件</button>
+        <button id="plugin-config-delete" class="plugin-import-secondary" type="button" hidden>删除插件</button>
+        <button id="plugin-config-submit" class="plugin-import-primary" type="button">注册插件</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    'use strict';
+
+    const PLUGIN_I18N = {
+      title: { 'zh-cn': '插件', 'zh-tw': '外掛', en: 'Plugin' },
+      badge: {
+        'main-only': { 'zh-cn': '主进程', 'zh-tw': '主行程', en: 'Main Only' },
+        'worker-only': { 'zh-cn': '仅工作进程', 'zh-tw': '僅工作行程', en: 'Worker Only' },
+        'main-and-worker': { 'zh-cn': '双作用域', 'zh-tw': '雙作用域', en: 'Main + Worker' },
+        none: { 'zh-cn': '面板', 'zh-tw': '面板', en: 'Panel' }
+      },
+      sidebarLabel: { 'zh-cn': '插件', 'zh-tw': '外掛', en: 'Plugin' },
+      sidebarToggleExpand: { 'zh-cn': '展开侧栏', 'zh-tw': '展開側欄', en: 'Expand sidebar' },
+      sidebarToggleCollapse: { 'zh-cn': '折叠侧栏', 'zh-tw': '折疊側欄', en: 'Collapse sidebar' },
+      loading: { 'zh-cn': '正在加载插件列表…', 'zh-tw': '正在載入插件列表…', en: 'Loading plugins…' },
+      noPlugins: { 'zh-cn': '还没有已注册插件。', 'zh-tw': '還沒有已註冊插件。', en: 'No plugins are registered yet.' },
+      defaultDesc: { 'zh-cn': '从左侧选择一个插件后，右侧才会载入对应的管理面板。', 'zh-tw': '從左側選擇一個插件後，右側才會載入對應的管理面板。', en: 'Choose a plugin on the left to load its admin panel.' },
+      emptyTitle: { 'zh-cn': '暂无可展示的插件', 'zh-tw': '暫無可展示的插件', en: 'No plugin to display' },
+      emptyCopy: { 'zh-cn': '当前还没有已注册插件，或者还没有选择目标插件。', 'zh-tw': '目前還沒有已註冊插件，或者還沒有選擇目標插件。', en: 'There are no registered plugins yet, or no plugin has been selected.' },
+      hoverFallback: { 'zh-cn': '暂无介绍', 'zh-tw': '暫無介紹', en: 'No description' },
+      noPanelMeta: { 'zh-cn': '无面板', 'zh-tw': '無面板', en: 'No panel' },
+      noPanelDesc: { 'zh-cn': '这个插件没有声明独立的管理面板。', 'zh-tw': '這個插件沒有宣告獨立的管理面板。', en: 'This plugin does not expose a dedicated admin panel.' },
+      iframeTitle: { 'zh-cn': '插件管理面板', 'zh-tw': '外掛管理面板', en: 'Plugin admin panel' },
+      authExpired: { 'zh-cn': '登录状态已失效，正在跳转登录页。', 'zh-tw': '登入狀態已失效，正在跳轉登入頁。', en: 'Session expired. Redirecting to login.' },
+      loadFailed: { 'zh-cn': '加载插件列表失败', 'zh-tw': '載入插件列表失敗', en: 'Failed to load plugins' },
+      importOpen: { 'zh-cn': '新增插件', 'zh-tw': '新增插件', en: 'Add plugin' },
+      importTitle: { 'zh-cn': '导入插件', 'zh-tw': '匯入插件', en: 'Import plugin' },
+      importSubtitle: { 'zh-cn': '选择本地文件上传，或直接浏览服务器上的插件路径。', 'zh-tw': '選擇本地檔案上傳，或直接瀏覽伺服器上的插件路徑。', en: 'Upload a local plugin source, or browse a server path directly.' },
+      importClose: { 'zh-cn': '关闭', 'zh-tw': '關閉', en: 'Close' },
+      tabLocal: { 'zh-cn': '本地', 'zh-tw': '本地', en: 'Local' },
+      tabRemote: { 'zh-cn': '远端', 'zh-tw': '遠端', en: 'Remote' },
+      localTitle: { 'zh-cn': '本地导入', 'zh-tw': '本地匯入', en: 'Local import' },
+      localCopy: { 'zh-cn': '点击按钮选择本地插件文件，或把文件/目录拖到下面区域。上传后会先读取插件信息，再进入参数设置。', 'zh-tw': '點擊按鈕選擇本地插件檔案，或把檔案/目錄拖到下面區域。上傳後會先讀取插件資訊，再進入參數設定。', en: 'Choose a local plugin file, or drag a file or directory here. It uploads first, then opens the config step.' },
+      localDropCopy: { 'zh-cn': '支持单个 `.py` / `.zip` / `.tar.gz` / `.tgz` / `.gz` 插件文件，也支持直接拖入一个插件目录。', 'zh-tw': '支援單個 `.py` / `.zip` / `.tar.gz` / `.tgz` / `.gz` 插件檔案，也支援直接拖入一個插件目錄。', en: 'Accepts a single `.py` / `.zip` / `.tar.gz` / `.tgz` / `.gz` plugin source, or one dragged plugin directory.' },
+      localChoose: { 'zh-cn': '选择路径', 'zh-tw': '選擇路徑', en: 'Choose path' },
+      localIdle: { 'zh-cn': '尚未选择任何内容', 'zh-tw': '尚未選擇任何內容', en: 'Nothing selected yet' },
+      localEmptySelection: { 'zh-cn': '选择后会在这里显示待上传内容。', 'zh-tw': '選擇後會在這裡顯示待上傳內容。', en: 'Pending uploads appear here after selection.' },
+      localUploading: { 'zh-cn': '正在上传并读取插件信息…', 'zh-tw': '正在上傳並讀取插件資訊…', en: 'Uploading and reading plugin metadata…' },
+      localDragOver: { 'zh-cn': '松手后上传并进入参数设置', 'zh-tw': '放開後上傳並進入參數設定', en: 'Drop to upload and continue to config' },
+      remoteTitle: { 'zh-cn': '远端浏览', 'zh-tw': '遠端瀏覽', en: 'Remote browser' },
+      remoteCopy: { 'zh-cn': '浏览服务器允许访问的目录，选择一个插件文件、压缩包，或一个插件目录后先读取插件信息。', 'zh-tw': '瀏覽伺服器允許訪問的目錄，選擇一個插件檔案、壓縮包，或一個插件目錄後先讀取插件資訊。', en: 'Browse server directories and inspect a plugin file, archive, or directory before registration.' },
+      remoteNoSelection: { 'zh-cn': '尚未选择服务器路径', 'zh-tw': '尚未選擇伺服器路徑', en: 'No server path selected yet' },
+      remoteSubmit: { 'zh-cn': '下一步', 'zh-tw': '下一步', en: 'Next' },
+      remoteLoading: { 'zh-cn': '正在加载服务器目录…', 'zh-tw': '正在載入伺服器目錄…', en: 'Loading server directory…' },
+      remoteEmpty: { 'zh-cn': '当前目录没有可显示的内容。', 'zh-tw': '目前目錄沒有可顯示的內容。', en: 'This directory is empty.' },
+      remoteEnter: { 'zh-cn': '进入', 'zh-tw': '進入', en: 'Open' },
+      remotePick: { 'zh-cn': '选择', 'zh-tw': '選擇', en: 'Select' },
+      remotePickDir: { 'zh-cn': '选择目录', 'zh-tw': '選擇目錄', en: 'Select directory' },
+      remoteUnsupported: { 'zh-cn': '不是可直接注册的插件路径', 'zh-tw': '不是可直接註冊的插件路徑', en: 'Not a registrable plugin path' },
+      remoteRootLoading: { 'zh-cn': '正在加载根目录…', 'zh-tw': '正在載入根目錄…', en: 'Loading roots…' },
+      remotePathEmpty: { 'zh-cn': '根目录', 'zh-tw': '根目錄', en: 'Root' },
+      remoteUp: { 'zh-cn': '上一级', 'zh-tw': '上一級', en: 'Up' },
+      remoteRefresh: { 'zh-cn': '刷新', 'zh-tw': '重新整理', en: 'Refresh' },
+      importSuccess: { 'zh-cn': '插件已注册。', 'zh-tw': '插件已註冊。', en: 'Plugin registered.' },
+      importBusy: { 'zh-cn': '正在处理插件请求…', 'zh-tw': '正在處理插件請求…', en: 'Processing plugin request…' },
+      importPathPrefix: { 'zh-cn': '当前选择', 'zh-tw': '目前選擇', en: 'Selected' },
+      configTitle: { 'zh-cn': '设置插件参数', 'zh-tw': '設定插件參數', en: 'Configure plugin' },
+      configSubtitle: { 'zh-cn': '确认导入插件后的配置。参数面板和 Raw JSON 会保持同步。', 'zh-tw': '確認匯入插件後的設定。參數面板和 Raw JSON 會保持同步。', en: 'Confirm the plugin configuration. The parameter form and raw JSON stay in sync.' },
+      configSourcePrefix: { 'zh-cn': '插件来源', 'zh-tw': '插件來源', en: 'Source' },
+      configSubmit: { 'zh-cn': '注册插件', 'zh-tw': '註冊插件', en: 'Register plugin' },
+      configCancel: { 'zh-cn': '取消', 'zh-tw': '取消', en: 'Cancel' },
+      configTabFields: { 'zh-cn': '参数', 'zh-tw': '參數', en: 'Fields' },
+      configTabJson: { 'zh-cn': 'JSON', 'zh-tw': 'JSON', en: 'JSON' },
+      configNoTypedFields: { 'zh-cn': '这个插件没有声明 ConfigType，只能输入 Raw JSON。', 'zh-tw': '這個插件沒有宣告 ConfigType，只能輸入 Raw JSON。', en: 'This plugin does not declare a ConfigType. Only raw JSON is available.' },
+      configJsonHint: { 'zh-cn': '请输入 JSON 对象。', 'zh-tw': '請輸入 JSON 物件。', en: 'Enter a JSON object.' },
+      configJsonInvalid: { 'zh-cn': 'JSON 无法解析为对象。', 'zh-tw': 'JSON 無法解析為物件。', en: 'JSON must parse to an object.' },
+      configLoadBusy: { 'zh-cn': '正在读取插件信息…', 'zh-tw': '正在讀取插件資訊…', en: 'Loading plugin metadata…' },
+      configRegisterBusy: { 'zh-cn': '正在注册插件…', 'zh-tw': '正在註冊插件…', en: 'Registering plugin…' },
+      configPlatformsPrefix: { 'zh-cn': '平台', 'zh-tw': '平台', en: 'Platforms' },
+      configMultiplePlugins: { 'zh-cn': '这个导入源包含多个插件，请分别确认它们的配置。', 'zh-tw': '這個匯入來源包含多個插件，請分別確認它們的設定。', en: 'This import source contains multiple plugins. Review each configuration below.' },
+      manageOpen: { 'zh-cn': '管理插件', 'zh-tw': '管理插件', en: 'Manage plugin' },
+      manageTitle: { 'zh-cn': '插件管理', 'zh-tw': '插件管理', en: 'Plugin management' },
+      manageSubtitle: { 'zh-cn': '可以编辑参数、重启插件，或删除这个插件。修改参数后需要重启才会生效。', 'zh-tw': '可以編輯參數、重新啟動插件，或刪除這個插件。修改參數後需要重新啟動才會生效。', en: 'Edit configuration, restart the plugin, or delete it. Config changes only take effect after restart.' },
+      manageSave: { 'zh-cn': '保存并重启', 'zh-tw': '儲存並重新啟動', en: 'Save and restart' },
+      manageRestart: { 'zh-cn': '重启插件', 'zh-tw': '重新啟動插件', en: 'Restart plugin' },
+      manageDelete: { 'zh-cn': '删除插件', 'zh-tw': '刪除插件', en: 'Delete plugin' },
+      manageConfirmRestartAfterEdit: { 'zh-cn': '插件参数修改后需要重启才能生效，是否现在重启并应用修改？', 'zh-tw': '插件參數修改後需要重新啟動才能生效，是否現在重新啟動並套用修改？', en: 'Config changes require a plugin restart. Restart now and apply the changes?' },
+      manageReverted: { 'zh-cn': '已撤回本次修改。', 'zh-tw': '已撤回這次修改。', en: 'Changes were reverted.' },
+      manageConfirmRestart: { 'zh-cn': '确定要重启这个插件吗？', 'zh-tw': '確定要重新啟動這個插件嗎？', en: 'Restart this plugin?' },
+      manageConfirmDelete: { 'zh-cn': '确定要删除这个插件吗？', 'zh-tw': '確定要刪除這個插件嗎？', en: 'Delete this plugin?' },
+      manageRestartBusy: { 'zh-cn': '正在重启插件…', 'zh-tw': '正在重新啟動插件…', en: 'Restarting plugin…' },
+      manageDeleteBusy: { 'zh-cn': '正在删除插件…', 'zh-tw': '正在刪除插件…', en: 'Deleting plugin…' }
+    };
+
+    const LOCAL_HOSTS = new Set(['127.0.0.1', '::1', 'localhost', 'testclient', 'testserver']);
+    const PLUGIN_SIDEBAR_KEY = 'proj-plugin-panel-sidebar-collapsed';
+    const PLUGIN_PANEL_MARKER = '/admin/panel/plugins';
+    const PLUGIN_IMPORTABLE_SUFFIXES = ['.py', '.zip', '.tar.gz', '.tgz', '.gz'];
+
+    const navRoot = document.getElementById('plugin-nav');
+    const navEmpty = document.getElementById('plugin-sidebar-empty');
+    const sidebarToggle = document.getElementById('plugin-sidebar-toggle');
+    const importOpenButton = document.getElementById('plugin-import-open');
+    const frameShell = document.getElementById('plugin-frame-shell');
+    const frame = document.getElementById('plugin-frame');
+    const emptyState = document.getElementById('plugin-empty');
+    const titleEl = document.getElementById('plugin-title');
+    const descEl = document.getElementById('plugin-description');
+    const badgeEl = document.getElementById('plugin-badge');
+    const kickerEl = document.getElementById('plugin-kicker');
+    const emptyTitleEl = document.getElementById('plugin-empty-title');
+    const emptyCopyEl = document.getElementById('plugin-empty-copy');
+    const sidebarLabelEl = document.getElementById('plugin-sidebar-label');
+
+    const importModal = document.getElementById('plugin-import-modal');
+    const importCloseButton = document.getElementById('plugin-import-close');
+    const importTabs = Array.from(document.querySelectorAll('.plugin-import-tab[data-tab]'));
+    const importPanels = {
+      local: document.getElementById('plugin-import-panel-local'),
+      remote: document.getElementById('plugin-import-panel-remote')
+    };
+    const importFeedback = document.getElementById('plugin-import-feedback');
+    const importTitleEl = document.getElementById('plugin-import-title');
+    const importSubtitleEl = document.getElementById('plugin-import-subtitle');
+    const importKickerEl = document.getElementById('plugin-import-kicker');
+    const configModal = document.getElementById('plugin-config-modal');
+    const configCloseButton = document.getElementById('plugin-config-close');
+    const configTitleEl = document.getElementById('plugin-config-title');
+    const configSubtitleEl = document.getElementById('plugin-config-subtitle');
+    const configKickerEl = document.getElementById('plugin-config-kicker');
+    const configSourceEl = document.getElementById('plugin-config-source');
+    const configListEl = document.getElementById('plugin-config-list');
+    const configFeedbackEl = document.getElementById('plugin-config-feedback');
+    const configCancelButton = document.getElementById('plugin-config-cancel');
+    const configRestartButton = document.getElementById('plugin-config-restart');
+    const configDeleteButton = document.getElementById('plugin-config-delete');
+    const configSubmitButton = document.getElementById('plugin-config-submit');
+
+    const localTitleEl = document.getElementById('plugin-local-title');
+    const localCopyEl = document.getElementById('plugin-local-copy');
+    const localDropCopyEl = document.getElementById('plugin-local-drop-copy');
+    const localPickerButton = document.getElementById('plugin-local-picker');
+    const localFileInput = document.getElementById('plugin-local-input');
+    const localDropzone = document.getElementById('plugin-local-dropzone');
+    const localStatus = document.getElementById('plugin-local-status');
+    const localSelection = document.getElementById('plugin-local-selection');
+
+    const remoteTitleEl = document.getElementById('plugin-remote-title');
+    const remoteCopyEl = document.getElementById('plugin-remote-copy');
+    const remoteRootSelect = document.getElementById('plugin-remote-root');
+    const remotePath = document.getElementById('plugin-remote-path');
+    const remoteUpButton = document.getElementById('plugin-remote-up');
+    const remoteRefreshButton = document.getElementById('plugin-remote-refresh');
+    const remoteBrowser = document.getElementById('plugin-remote-browser');
+    const remoteSelection = document.getElementById('plugin-remote-selection');
+    const remoteSubmitButton = document.getElementById('plugin-remote-submit');
+
+    const isLocalhostAccess = LOCAL_HOSTS.has(String(window.location.hostname || '').toLowerCase());
+
+    let pluginItems = [];
+    let activePluginKey = null;
+    let navButtons = [];
+    let activeImportTab = 'local';
+    let importBusy = false;
+    let lastFocusedElement = null;
+    let localSelectionItems = [];
+    let configBusy = false;
+    let configModalState = {
+      mode: 'import',
+      path: '',
+      plugins: [],
+      drafts: {},
+      originalDrafts: {},
+      rawTextByKey: {},
+      jsonErrors: {},
+      activeTabByKey: {},
+    };
+    let remoteState = {
+      roots: [],
+      root: '',
+      path: '',
+      parentPath: null,
+      selectedPath: ''
+    };
+
+    function getLang() {
+      return typeof window.PageControls?.getLang === 'function'
+        ? String(window.PageControls.getLang() || 'zh-cn').toLowerCase()
+        : String(document.documentElement.dataset.projLang || 'zh-cn').toLowerCase();
+    }
+
+    function getDark() {
+      return !!(window.PageControls && typeof window.PageControls.getDark === 'function'
+        ? window.PageControls.getDark()
+        : document.documentElement.classList.contains('dark'));
+    }
+
+    function t(key, fallback) {
+      const entry = PLUGIN_I18N[key];
+      if (!entry) return fallback || key;
+      const lang = getLang();
+      return entry[lang] || entry['zh-cn'] || fallback || key;
+    }
+
+    function tb(group, key, fallback) {
+      const entry = (PLUGIN_I18N[group] || {})[key];
+      if (!entry) return fallback || key;
+      const lang = getLang();
+      return entry[lang] || entry['zh-cn'] || fallback || key;
+    }
+
+    function escHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value || 0);
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1).replace(/\.0$/, '') + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '') + ' MB';
+    }
+
+    function normalizeBrowserRelativePath(value) {
+      const normalized = String(value || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+      if (!normalized || normalized === '.' || normalized === '..') return '';
+      const parts = normalized.split('/').filter(Boolean);
+      if (!parts.length || parts.some((part) => part === '.' || part === '..')) return '';
+      return parts.join('/');
+    }
+
+    function isImportablePluginPath(path, isDir) {
+      if (isDir) return true;
+      const lower = String(path || '').toLowerCase();
+      return PLUGIN_IMPORTABLE_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+    }
+
+    function computeAdminBasePath() {
+      const pathname = window.location.pathname || '';
+      const markerIndex = pathname.lastIndexOf(PLUGIN_PANEL_MARKER);
+      return markerIndex >= 0 ? pathname.slice(0, markerIndex) + '/admin' : '/admin';
+    }
+
+    const adminBasePath = computeAdminBasePath();
+
+    function adminPath(path) {
+      if (!path) return adminBasePath;
+      return path.startsWith('/admin') ? adminBasePath + path.slice('/admin'.length) : path;
+    }
+
+    function buildSyncedUrl(url) {
+      if (window.ProjUrlStateSync && typeof window.ProjUrlStateSync.withUiState === 'function') {
+        return window.ProjUrlStateSync.withUiState(url, {
+          dark: getDark(),
+          lang: getLang(),
+          controls: false,
+        });
+      }
+      const resolved = new URL(url, window.location.origin);
+      resolved.searchParams.set('lang', getLang());
+      return resolved.toString();
+    }
+
+    function buildPluginListUrl() {
+      const resolved = new URL(adminPath('/admin/api/plugins'), window.location.origin);
+      resolved.searchParams.set('lang', getLang());
+      return resolved.toString();
+    }
+
+    function buildPluginViewUrl(pluginKey) {
+      const resolvedPath = adminPath('/admin/panel/plugins/view/' + encodeURIComponent(pluginKey));
+      const resolved = new URL(resolvedPath, window.location.origin);
+      resolved.searchParams.set('lang', getLang());
+      return buildSyncedUrl(resolved.toString());
+    }
+
+    function buildPluginRuntimeUrl(action) {
+      return new URL(adminPath('/admin/api/plugins/runtime/' + action), window.location.origin).toString();
+    }
+
+    function buildSystemToolsConfigUrl() {
+      return new URL(adminPath('/admin/api/system/tools/config'), window.location.origin).toString();
+    }
+
+    function buildSystemFilesListUrl(rootKey, path) {
+      const resolved = new URL(adminPath('/admin/api/system/files/list'), window.location.origin);
+      if (rootKey) resolved.searchParams.set('root', rootKey);
+      resolved.searchParams.set('path', path || '');
+      return resolved.toString();
+    }
+
+    function notifyAuthExpired() {
+      const nextPath = `${window.location.pathname || ''}${window.location.search || ''}${window.location.hash || ''}` || adminPath('/admin/panel/plugins');
+      try {
+        window.parent.postMessage({ type: 'proj-admin-auth-expired', nextPath }, '*');
+      } catch {}
+    }
+
+    function pluginHashKey() {
+      return decodeURIComponent((window.location.hash || '').replace(/^#/, '').trim());
+    }
+
+    function setSidebarCollapsed(collapsed) {
+      const next = !!collapsed;
+      document.body.classList.toggle('plugin-sidebar-collapsed', next);
+      if (sidebarToggle) {
+        sidebarToggle.setAttribute('aria-expanded', String(!next));
+        sidebarToggle.setAttribute('aria-label', next ? t('sidebarToggleExpand') : t('sidebarToggleCollapse'));
+        sidebarToggle.setAttribute('title', next ? t('sidebarToggleExpand') : t('sidebarToggleCollapse'));
+      }
+      try {
+        localStorage.setItem(PLUGIN_SIDEBAR_KEY, next ? '1' : '0');
+      } catch {}
+    }
+
+    function setImportBusy(nextBusy) {
+      importBusy = !!nextBusy;
+      localPickerButton.disabled = importBusy;
+      remoteSubmitButton.disabled = importBusy || !remoteState.selectedPath;
+      remoteRootSelect.disabled = importBusy;
+      remoteUpButton.disabled = importBusy || !remoteState.parentPath;
+      remoteRefreshButton.disabled = importBusy;
+      importOpenButton.disabled = importBusy;
+      importCloseButton.disabled = importBusy;
+      importTabs.forEach((button) => {
+        if (button.dataset.tab === 'remote' && isLocalhostAccess) {
+          button.disabled = true;
+          return;
+        }
+        button.disabled = importBusy;
+      });
+    }
+
+    function setImportFeedback(message, tone) {
+      importFeedback.textContent = String(message || '');
+      importFeedback.classList.toggle('is-error', tone === 'error');
+      importFeedback.classList.toggle('is-success', tone === 'success');
+    }
+
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+        },
+      });
+      if (response.status === 401) {
+        notifyAuthExpired();
+        throw new Error(t('authExpired'));
+      }
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      let payload = null;
+      if (contentType.includes('application/json')) {
+        payload = await response.json();
+      } else {
+        payload = await response.text();
+      }
+      if (!response.ok) {
+        const detail = payload && typeof payload === 'object'
+          ? payload.detail || payload.message || JSON.stringify(payload)
+          : String(payload || `HTTP ${response.status}`);
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      return payload;
+    }
+
+    function cloneJson(value) {
+      if (value === undefined) return undefined;
+      if (value === null) return null;
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function prettyJson(value) {
+      return JSON.stringify(value || {}, null, 2);
+    }
+
+    function escapeAttr(value) {
+      return escHtml(value).replace(/'/g, '&#39;');
+    }
+
+    function pluginInspectUrl() {
+      const resolved = new URL(buildPluginRuntimeUrl('inspect'), window.location.origin);
+      resolved.searchParams.set('lang', getLang());
+      return resolved.toString();
+    }
+
+    function buildDefaultPluginDraft(pluginItem) {
+      const draft = {};
+      const fields = Array.isArray(pluginItem?.config_fields) ? pluginItem.config_fields : [];
+      fields.forEach((field) => {
+        if (field && field.has_default) {
+          draft[field.name] = cloneJson(field.default);
+        }
+      });
+      return draft;
+    }
+
+    function setConfigFeedback(message, tone) {
+      configFeedbackEl.textContent = String(message || '');
+      configFeedbackEl.classList.toggle('is-error', tone === 'error');
+      configFeedbackEl.classList.toggle('is-success', tone === 'success');
+    }
+
+    function setConfigBusy(nextBusy) {
+      configBusy = !!nextBusy;
+      configCloseButton.disabled = configBusy;
+      configCancelButton.disabled = configBusy;
+      configRestartButton.disabled = configBusy;
+      configDeleteButton.disabled = configBusy;
+      configSubmitButton.disabled = configBusy;
+      Array.from(configListEl.querySelectorAll('.plugin-config-tab')).forEach((button) => {
+        button.disabled = configBusy;
+      });
+      Array.from(configListEl.querySelectorAll('.plugin-config-input, .plugin-config-json')).forEach((input) => {
+        input.disabled = configBusy;
+      });
+    }
+
+    function resetConfigModalState() {
+      configModalState = {
+        mode: 'import',
+        path: '',
+        plugins: [],
+        drafts: {},
+        originalDrafts: {},
+        rawTextByKey: {},
+        jsonErrors: {},
+        activeTabByKey: {},
+      };
+      configListEl.innerHTML = '';
+      configSourceEl.textContent = '';
+      setConfigFeedback('', '');
+      setConfigBusy(false);
+    }
+
+    function controlKindForField(field) {
+      if (Array.isArray(field?.field_schema?.enum) && field.field_schema.enum.length) return 'enum';
+      if (field?.json_type === 'boolean') return 'boolean';
+      if (field?.json_type === 'integer') return 'integer';
+      if (field?.json_type === 'number') return 'number';
+      if (field?.json_type === 'object' || field?.json_type === 'array') return 'json';
+      return 'text';
+    }
+
+    function getDraftValue(pluginKey, field) {
+      const draft = configModalState.drafts[pluginKey] || {};
+      if (Object.prototype.hasOwnProperty.call(draft, field.name)) return draft[field.name];
+      if (field.has_default) return cloneJson(field.default);
+      if (field.json_type === 'boolean') return false;
+      return '';
+    }
+
+    function renderFieldControl(pluginKey, field) {
+      const value = getDraftValue(pluginKey, field);
+      const controlKind = controlKindForField(field);
+      if (controlKind === 'boolean') {
+        return `
+          <label class="plugin-config-boolean">
+            <input class="plugin-config-input" type="checkbox" data-plugin-key="${escapeAttr(pluginKey)}" data-field-name="${escapeAttr(field.name)}" data-control-kind="boolean" ${value ? 'checked' : ''} />
+            <span>${escHtml(field.title || field.name)}</span>
+          </label>
+        `;
+      }
+      if (controlKind === 'enum') {
+        const options = field.field_schema.enum.map((option) => {
+          const selected = option === value ? ' selected' : '';
+          return `<option value="${escapeAttr(option)}"${selected}>${escHtml(option)}</option>`;
+        }).join('');
+        return `<select class="plugin-config-input" data-plugin-key="${escapeAttr(pluginKey)}" data-field-name="${escapeAttr(field.name)}" data-control-kind="enum">${options}</select>`;
+      }
+      if (controlKind === 'json') {
+        return `<textarea class="plugin-config-input" data-plugin-key="${escapeAttr(pluginKey)}" data-field-name="${escapeAttr(field.name)}" data-control-kind="json">${escHtml(prettyJson(value || (field.json_type === 'array' ? [] : {})))}</textarea>`;
+      }
+      const inputType = controlKind === 'integer' || controlKind === 'number' ? 'number' : 'text';
+      const step = controlKind === 'integer' ? '1' : controlKind === 'number' ? 'any' : null;
+      const attrs = [
+        `type="${inputType}"`,
+        `data-plugin-key="${escapeAttr(pluginKey)}"`,
+        `data-field-name="${escapeAttr(field.name)}"`,
+        `data-control-kind="${escapeAttr(controlKind)}"`,
+        `value="${escapeAttr(value ?? '')}"`,
+      ];
+      if (step) attrs.push(`step="${step}"`);
+      return `<input class="plugin-config-input" ${attrs.join(' ')} />`;
+    }
+
+    function buildPluginConfigCard(pluginItem) {
+      const pluginKey = pluginItem.key;
+      const activeTab = configModalState.activeTabByKey[pluginKey] || (pluginItem.has_config ? 'fields' : 'json');
+      const fields = Array.isArray(pluginItem.config_fields) ? pluginItem.config_fields : [];
+      const jsonError = configModalState.jsonErrors[pluginKey] || '';
+      const rawText = configModalState.rawTextByKey[pluginKey] || prettyJson(configModalState.drafts[pluginKey] || {});
+      const platforms = Array.isArray(pluginItem.supported_platforms) && pluginItem.supported_platforms.length
+        ? `${t('configPlatformsPrefix')} · ${pluginItem.supported_platforms.join(', ')}`
+        : '';
+      const fieldsBody = pluginItem.has_config
+        ? fields.map((field) => `
+            <label class="plugin-config-field">
+              <span class="plugin-config-label">${escHtml(field.title || field.name)}${field.required ? '<em>*</em>' : ''}</span>
+              ${field.description ? `<span class="plugin-config-hint">${escHtml(field.description)}</span>` : ''}
+              ${renderFieldControl(pluginKey, field)}
+            </label>
+          `).join('')
+        : `<div class="plugin-config-hint">${escHtml(t('configNoTypedFields'))}</div>`;
+      return `
+        <section class="plugin-config-card" data-plugin-key="${escapeAttr(pluginKey)}">
+          <div class="plugin-config-card-header">
+            <div>
+              <h3 class="plugin-config-card-title">${escHtml(pluginItem.name || pluginKey)}</h3>
+              ${pluginItem.description ? `<p class="plugin-config-card-copy">${escHtml(pluginItem.description)}</p>` : ''}
+            </div>
+            <div class="plugin-config-card-meta">
+              <span class="plugin-badge">${escHtml(pluginItem.type || '')}</span>
+              ${platforms ? `<span class="plugin-config-platforms">${escHtml(platforms)}</span>` : ''}
+            </div>
+          </div>
+          ${pluginItem.has_config ? `
+            <div class="plugin-config-tabs">
+              <button class="plugin-config-tab${activeTab === 'fields' ? ' is-active' : ''}" type="button" data-plugin-key="${escapeAttr(pluginKey)}" data-config-tab="fields">${escHtml(t('configTabFields'))}</button>
+              <button class="plugin-config-tab${activeTab === 'json' ? ' is-active' : ''}" type="button" data-plugin-key="${escapeAttr(pluginKey)}" data-config-tab="json">${escHtml(t('configTabJson'))}</button>
+            </div>
+          ` : ''}
+          <div class="plugin-config-pane" data-plugin-key="${escapeAttr(pluginKey)}" data-pane="fields" ${pluginItem.has_config && activeTab === 'fields' ? '' : 'hidden'}>
+            <div class="plugin-config-form">${fieldsBody}</div>
+          </div>
+          <div class="plugin-config-pane" data-plugin-key="${escapeAttr(pluginKey)}" data-pane="json" ${activeTab === 'json' || !pluginItem.has_config ? '' : 'hidden'}>
+            <div class="plugin-config-hint">${escHtml(t('configJsonHint'))}</div>
+            <textarea class="plugin-config-json${jsonError ? ' is-invalid' : ''}" data-plugin-key="${escapeAttr(pluginKey)}">${escHtml(rawText)}</textarea>
+            <div class="plugin-config-json-status${jsonError ? ' is-error' : ''}" data-plugin-json-status="${escapeAttr(pluginKey)}">${escHtml(jsonError)}</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function getManagedPluginKey() {
+      return configModalState.plugins[0]?.key || '';
+    }
+
+    function hasManagedConfigChanges() {
+      const pluginKey = getManagedPluginKey();
+      if (!pluginKey) return false;
+      return prettyJson(configModalState.drafts[pluginKey] || {}) !== prettyJson(configModalState.originalDrafts[pluginKey] || {});
+    }
+
+    function revertManagedConfigChanges() {
+      const pluginKey = getManagedPluginKey();
+      if (!pluginKey) return;
+      const original = cloneJson(configModalState.originalDrafts[pluginKey] || {});
+      configModalState.drafts[pluginKey] = original || {};
+      configModalState.rawTextByKey[pluginKey] = prettyJson(original || {});
+      configModalState.jsonErrors[pluginKey] = '';
+      renderConfigModal();
+      setConfigBusy(false);
+    }
+
+    function renderConfigModal() {
+      const plugins = Array.isArray(configModalState.plugins) ? configModalState.plugins : [];
+      configSourceEl.textContent = `${t('configSourcePrefix')} · ${configModalState.path || ''}`;
+      configRestartButton.hidden = configModalState.mode !== 'manage';
+      configDeleteButton.hidden = configModalState.mode !== 'manage';
+      configListEl.innerHTML = plugins.map((pluginItem) => buildPluginConfigCard(pluginItem)).join('');
+      Array.from(configListEl.querySelectorAll('[data-config-tab]')).forEach((button) => {
+        button.addEventListener('click', () => {
+          configModalState.activeTabByKey[button.dataset.pluginKey || ''] = button.dataset.configTab || 'fields';
+          renderConfigModal();
+          setConfigBusy(configBusy);
+        });
+      });
+      Array.from(configListEl.querySelectorAll('.plugin-config-input')).forEach((input) => {
+        const applyValue = () => {
+          const pluginKey = input.dataset.pluginKey || '';
+          const fieldName = input.dataset.fieldName || '';
+          const controlKind = input.dataset.controlKind || 'text';
+          const draft = { ...(configModalState.drafts[pluginKey] || {}) };
+          let nextValue = null;
+          try {
+            if (controlKind === 'boolean') {
+              nextValue = !!input.checked;
+            } else if (controlKind === 'integer') {
+              if (String(input.value || '').trim() === '') {
+                delete draft[fieldName];
+                configModalState.drafts[pluginKey] = draft;
+                configModalState.rawTextByKey[pluginKey] = prettyJson(draft);
+                configModalState.jsonErrors[pluginKey] = '';
+                renderConfigModal();
+                setConfigBusy(configBusy);
+                return;
+              }
+              nextValue = parseInt(input.value, 10);
+            } else if (controlKind === 'number') {
+              if (String(input.value || '').trim() === '') {
+                delete draft[fieldName];
+                configModalState.drafts[pluginKey] = draft;
+                configModalState.rawTextByKey[pluginKey] = prettyJson(draft);
+                configModalState.jsonErrors[pluginKey] = '';
+                renderConfigModal();
+                setConfigBusy(configBusy);
+                return;
+              }
+              nextValue = parseFloat(input.value);
+            } else if (controlKind === 'json') {
+              nextValue = JSON.parse(String(input.value || '').trim() || '{}');
+            } else {
+              nextValue = input.value;
+            }
+          } catch (error) {
+            input.classList.add('is-invalid');
+            return;
+          }
+          input.classList.remove('is-invalid');
+          draft[fieldName] = nextValue;
+          configModalState.drafts[pluginKey] = draft;
+          configModalState.rawTextByKey[pluginKey] = prettyJson(draft);
+          configModalState.jsonErrors[pluginKey] = '';
+          const jsonTextarea = Array.from(configListEl.querySelectorAll('.plugin-config-json')).find((item) => item.dataset.pluginKey === pluginKey);
+          if (jsonTextarea) jsonTextarea.value = configModalState.rawTextByKey[pluginKey];
+          const jsonStatus = Array.from(configListEl.querySelectorAll('[data-plugin-json-status]')).find((item) => item.dataset.pluginJsonStatus === pluginKey);
+          if (jsonStatus) {
+            jsonStatus.textContent = '';
+            jsonStatus.classList.remove('is-error');
+          }
+        };
+        const eventName = input.dataset.controlKind === 'json' ? 'change' : 'input';
+        input.addEventListener(eventName, applyValue);
+      });
+      Array.from(configListEl.querySelectorAll('.plugin-config-json')).forEach((textarea) => {
+        textarea.addEventListener('input', () => {
+          configModalState.rawTextByKey[textarea.dataset.pluginKey || ''] = textarea.value;
+        });
+        textarea.addEventListener('change', () => {
+          const pluginKey = textarea.dataset.pluginKey || '';
+          try {
+            const parsed = JSON.parse(String(textarea.value || '').trim() || '{}');
+            if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('not-object');
+            configModalState.drafts[pluginKey] = parsed;
+            configModalState.rawTextByKey[pluginKey] = prettyJson(parsed);
+            configModalState.jsonErrors[pluginKey] = '';
+            renderConfigModal();
+            setConfigBusy(configBusy);
+          } catch (error) {
+            configModalState.jsonErrors[pluginKey] = t('configJsonInvalid');
+            renderConfigModal();
+            setConfigBusy(configBusy);
+          }
+        });
+      });
+    }
+
+    function openConfigModal(payload, options = {}) {
+      const plugins = Array.isArray(payload?.plugins) ? payload.plugins : [];
+      const mode = options.mode === 'manage' ? 'manage' : 'import';
+      configModalState.path = String(payload?.uploaded_path || payload?.path || '');
+      configModalState.mode = mode;
+      configModalState.plugins = plugins;
+      configModalState.drafts = {};
+      configModalState.originalDrafts = {};
+      configModalState.rawTextByKey = {};
+      configModalState.jsonErrors = {};
+      configModalState.activeTabByKey = {};
+      plugins.forEach((pluginItem) => {
+        const currentConfig = pluginItem && pluginItem.current_config && typeof pluginItem.current_config === 'object'
+          ? cloneJson(pluginItem.current_config)
+          : buildDefaultPluginDraft(pluginItem);
+        const draft = currentConfig || {};
+        configModalState.drafts[pluginItem.key] = draft;
+        configModalState.originalDrafts[pluginItem.key] = cloneJson(draft);
+        configModalState.rawTextByKey[pluginItem.key] = prettyJson(draft);
+        configModalState.activeTabByKey[pluginItem.key] = pluginItem.has_config ? 'fields' : 'json';
+      });
+      importModal.hidden = true;
+      configModal.hidden = false;
+      setConfigFeedback(plugins.length > 1 ? t('configMultiplePlugins') : '', '');
+      applyStaticText();
+      renderConfigModal();
+      setConfigBusy(false);
+      requestAnimationFrame(() => {
+        (configModalState.mode === 'manage' ? configRestartButton : configSubmitButton).focus();
+      });
+    }
+
+    function openManageModal(pluginKey) {
+      const item = pluginItems.find((entry) => entry.key === pluginKey);
+      if (!item) return;
+      lastFocusedElement = document.activeElement;
+      openConfigModal({ path: item.source_path || '', plugins: [item] }, { mode: 'manage' });
+    }
+
+    function closeConfigModal() {
+      if (configBusy) return;
+      configModal.hidden = true;
+      resetConfigModalState();
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+      }
+    }
+
+    async function inspectRemoteSelection(serverPath) {
+      setImportBusy(true);
+      setImportFeedback(t('configLoadBusy'));
+      try {
+        const payload = await requestJson(pluginInspectUrl(), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: serverPath }),
+        });
+        openConfigModal(payload);
+      } catch (error) {
+        setImportFeedback(String(error?.message || error || t('loadFailed')), 'error');
+      } finally {
+        setImportBusy(false);
+      }
+    }
+
+    async function submitPluginRegistration() {
+      if (!configModalState.path) return;
+      setConfigBusy(true);
+      setConfigFeedback(t('configRegisterBusy'));
+      try {
+        const payload = await requestJson(buildPluginRuntimeUrl('register'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            path: configModalState.path,
+            config: configModalState.drafts,
+          }),
+        });
+        const pluginKey = Array.isArray(payload?.plugin_keys) ? payload.plugin_keys[0] : '';
+        setConfigFeedback(t('importSuccess'), 'success');
+        await loadPlugins({ forceKey: pluginKey || undefined, forceReloadFrame: true });
+        closeConfigModal();
+        closeImportModal();
+        resetLocalSelection();
+      } catch (error) {
+        setConfigFeedback(String(error?.message || error || t('loadFailed')), 'error');
+      } finally {
+        setConfigBusy(false);
+      }
+    }
+
+    async function restartManagedPlugin(options = {}) {
+      const pluginKey = getManagedPluginKey();
+      if (!pluginKey) return;
+      const requireDirtyConfirm = options.requireDirtyConfirm !== false;
+      if (requireDirtyConfirm && hasManagedConfigChanges()) {
+        if (!window.confirm(t('manageConfirmRestartAfterEdit'))) {
+          revertManagedConfigChanges();
+          setConfigFeedback(t('manageReverted'), '');
+          return;
+        }
+      } else if (!hasManagedConfigChanges() && options.askRestartConfirm !== false) {
+        if (!window.confirm(t('manageConfirmRestart'))) return;
+      }
+      setConfigBusy(true);
+      setConfigFeedback(t('manageRestartBusy'));
+      try {
+        await requestJson(buildPluginRuntimeUrl('restart-item'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            plugin_key: pluginKey,
+            config: configModalState.drafts[pluginKey] || {},
+          }),
+        });
+        await loadPlugins({ preserveSelection: true, forceReloadFrame: true });
+        closeConfigModal();
+      } catch (error) {
+        setConfigFeedback(String(error?.message || error || t('loadFailed')), 'error');
+      } finally {
+        setConfigBusy(false);
+      }
+    }
+
+    async function deleteManagedPlugin() {
+      const pluginKey = getManagedPluginKey();
+      if (!pluginKey) return;
+      if (!window.confirm(t('manageConfirmDelete'))) return;
+      setConfigBusy(true);
+      setConfigFeedback(t('manageDeleteBusy'));
+      try {
+        await requestJson(buildPluginRuntimeUrl('delete-item'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ plugin_key: pluginKey }),
+        });
+        await loadPlugins({ preserveSelection: false, forceReloadFrame: true });
+        closeConfigModal();
+      } catch (error) {
+        setConfigFeedback(String(error?.message || error || t('loadFailed')), 'error');
+      } finally {
+        setConfigBusy(false);
+      }
+    }
+
+    function applyStaticText() {
+      document.title = t('title');
+      sidebarLabelEl.textContent = t('sidebarLabel');
+      kickerEl.textContent = t('title');
+      importKickerEl.textContent = t('title');
+      importOpenButton.setAttribute('title', t('importOpen'));
+      importOpenButton.setAttribute('aria-label', t('importOpen'));
+      importTitleEl.textContent = t('importTitle');
+      importSubtitleEl.textContent = t('importSubtitle');
+      importCloseButton.setAttribute('title', t('importClose'));
+      importCloseButton.setAttribute('aria-label', t('importClose'));
+      configKickerEl.textContent = t('title');
+      configTitleEl.textContent = configModalState.mode === 'manage' ? t('manageTitle') : t('configTitle');
+      configSubtitleEl.textContent = configModalState.mode === 'manage' ? t('manageSubtitle') : t('configSubtitle');
+      configCloseButton.setAttribute('title', t('importClose'));
+      configCloseButton.setAttribute('aria-label', t('importClose'));
+      configCancelButton.textContent = t('configCancel');
+      configRestartButton.textContent = t('manageRestart');
+      configDeleteButton.textContent = t('manageDelete');
+      configSubmitButton.textContent = configModalState.mode === 'manage' ? t('manageSave') : t('configSubmit');
+      localTitleEl.textContent = t('localTitle');
+      localCopyEl.textContent = t('localCopy');
+      localDropCopyEl.textContent = t('localDropCopy');
+      localPickerButton.textContent = t('localChoose');
+      remoteTitleEl.textContent = t('remoteTitle');
+      remoteCopyEl.textContent = t('remoteCopy');
+      remoteSubmitButton.textContent = t('remoteSubmit');
+      document.getElementById('plugin-import-tab-local').textContent = t('tabLocal');
+      document.getElementById('plugin-import-tab-remote').textContent = t('tabRemote');
+      remoteUpButton.setAttribute('title', t('remoteUp'));
+      remoteUpButton.setAttribute('aria-label', t('remoteUp'));
+      remoteRefreshButton.setAttribute('title', t('remoteRefresh'));
+      remoteRefreshButton.setAttribute('aria-label', t('remoteRefresh'));
+      if (!activePluginKey) {
+        titleEl.textContent = t('title');
+        descEl.textContent = t('defaultDesc');
+        badgeEl.textContent = tb('badge', 'none', 'Panel');
+      }
+      if (!pluginItems.length) {
+        navEmpty.textContent = t('noPlugins');
+        emptyTitleEl.textContent = t('emptyTitle');
+        emptyCopyEl.textContent = t('emptyCopy');
+      }
+      if (!localSelectionItems.length) {
+        setLocalStatus(t('localIdle'));
+        renderLocalSelection();
+      }
+      if (!remoteState.selectedPath) {
+        remoteSelection.textContent = t('remoteNoSelection');
+      }
+      applyImportTabs();
+      setSidebarCollapsed(localStorage.getItem(PLUGIN_SIDEBAR_KEY) === '1');
+    }
+
+    function syncPluginFrame() {
+      if (!frame || !frame.contentWindow || frame.hidden) return;
+      try {
+        frame.contentWindow.postMessage({ type: 'proj-sync', dark: getDark(), lang: getLang() }, '*');
+      } catch {}
+    }
+
+    function renderSidebar() {
+      if (!pluginItems.length) {
+        navRoot.innerHTML = '';
+        navEmpty.hidden = false;
+        return;
+      }
+      navEmpty.hidden = true;
+      navRoot.innerHTML = pluginItems.map((item) => {
+        const desc = item.description || t('hoverFallback');
+        const meta = item.has_panel ? tb('badge', item.type, item.type) : tb('badge', item.type, item.type) + ' · ' + t('noPanelMeta');
+        return `
+          <div class="plugin-nav-row">
+            <button
+              class="plugin-nav-item${item.key === activePluginKey ? ' is-active' : ''}${item.has_panel ? '' : ' is-disabled'}"
+              type="button"
+              data-plugin-key="${escHtml(item.key)}"
+              title="${escHtml(desc)}"
+            >
+              <div class="plugin-nav-title">${escHtml(item.name)}</div>
+              <div class="plugin-nav-meta">${escHtml(meta)}</div>
+            </button>
+            <button class="plugin-nav-gear" type="button" data-plugin-manage-key="${escHtml(item.key)}" title="${escHtml(t('manageOpen'))}" aria-label="${escHtml(t('manageOpen'))}">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M11.49 1.94a.75.75 0 00-1.48 0l-.17 1.19a6.54 6.54 0 00-1.73.72l-.96-.73a.75.75 0 00-1.05.1L4.36 4.83a.75.75 0 00.1 1.06l.92.7a6.6 6.6 0 00-.4 1.84l-1.16.18a.75.75 0 00-.64.74v1.3c0 .37.27.69.64.74l1.16.18c.07.64.21 1.26.4 1.84l-.92.7a.75.75 0 00-.1 1.06l1.74 1.61a.75.75 0 001.05.1l.96-.73c.54.31 1.11.55 1.73.72l.17 1.19a.75.75 0 001.48 0l.17-1.19a6.54 6.54 0 001.73-.72l.96.73a.75.75 0 001.05-.1l1.74-1.61a.75.75 0 00-.1-1.06l-.92-.7c.19-.58.33-1.2.4-1.84l1.16-.18a.75.75 0 00.64-.74v-1.3a.75.75 0 00-.64-.74l-1.16-.18a6.6 6.6 0 00-.4-1.84l.92-.7a.75.75 0 00.1-1.06l-1.74-1.61a.75.75 0 00-1.05-.1l-.96.73a6.54 6.54 0 00-1.73-.72l-.17-1.19zM10.75 7.25a2.75 2.75 0 110 5.5 2.75 2.75 0 010-5.5z"/></svg>
+            </button>
+          </div>
+        `;
+      }).join('');
+      navButtons = Array.from(navRoot.querySelectorAll('.plugin-nav-item[data-plugin-key]'));
+      navButtons.forEach((button) => {
+        button.addEventListener('click', () => activatePlugin(button.dataset.pluginKey || ''));
+      });
+      Array.from(navRoot.querySelectorAll('[data-plugin-manage-key]')).forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openManageModal(button.dataset.pluginManageKey || '');
+        });
+      });
+    }
+
+    function updateHero(item) {
+      if (!item) {
+        titleEl.textContent = t('title');
+        descEl.textContent = t('defaultDesc');
+        badgeEl.textContent = tb('badge', 'none', 'Panel');
+        return;
+      }
+      titleEl.textContent = item.name;
+      descEl.textContent = item.description || (item.has_panel ? t('hoverFallback') : t('noPanelDesc'));
+      badgeEl.textContent = tb('badge', item.type, item.type);
+    }
+
+    function setEmptyState(visible, title, copy) {
+      emptyState.classList.toggle('is-visible', !!visible);
+      frameShell.hidden = !!visible;
+      if (visible) {
+        emptyTitleEl.textContent = title || t('emptyTitle');
+        emptyCopyEl.textContent = copy || t('emptyCopy');
+      }
+    }
+
+    function activatePlugin(pluginKey, options = {}) {
+      const item = pluginItems.find((entry) => entry.key === pluginKey) || pluginItems[0] || null;
+      activePluginKey = item ? item.key : null;
+      renderSidebar();
+      updateHero(item);
+      if (!item) {
+        setEmptyState(true, t('emptyTitle'), t('emptyCopy'));
+        return;
+      }
+      setEmptyState(false);
+      frame.title = `${t('iframeTitle')} · ${item.name}`;
+      const targetUrl = buildPluginViewUrl(item.key);
+      if (frame.dataset.targetUrl !== targetUrl || options.forceReload) {
+        frame.dataset.targetUrl = targetUrl;
+        frame.src = targetUrl;
+      }
+      if (window.location.hash !== '#' + encodeURIComponent(item.key)) {
+        history.replaceState(null, '', '#' + encodeURIComponent(item.key));
+      }
+      syncPluginFrame();
+    }
+
+    async function loadPlugins(options = {}) {
+      navEmpty.hidden = false;
+      navEmpty.textContent = t('loading');
+      try {
+        const payload = await requestJson(buildPluginListUrl());
+        pluginItems = Array.isArray(payload?.plugins) ? payload.plugins : [];
+        renderSidebar();
+        applyStaticText();
+        if (!pluginItems.length) {
+          activePluginKey = null;
+          updateHero(null);
+          setEmptyState(true, t('emptyTitle'), t('emptyCopy'));
+          return;
+        }
+        const desiredKey = options.forceKey || (options.preserveSelection ? activePluginKey || pluginHashKey() : pluginHashKey());
+        activatePlugin(desiredKey || pluginItems[0].key, { forceReload: !!options.forceReloadFrame });
+      } catch (error) {
+        pluginItems = [];
+        activePluginKey = null;
+        navRoot.innerHTML = '';
+        navEmpty.hidden = false;
+        navEmpty.textContent = String(error?.message || error || t('loadFailed'));
+        updateHero(null);
+        setEmptyState(true, t('emptyTitle'), String(error?.message || error || t('loadFailed')));
+      }
+    }
+
+    function setLocalStatus(message, tone) {
+      localStatus.textContent = String(message || '');
+      localStatus.classList.toggle('is-error', tone === 'error');
+      localStatus.classList.toggle('is-success', tone === 'success');
+    }
+
+    function renderLocalSelection() {
+      if (!localSelectionItems.length) {
+        localSelection.classList.add('is-empty');
+        localSelection.innerHTML = escHtml(t('localEmptySelection'));
+        return;
+      }
+      localSelection.classList.remove('is-empty');
+      localSelection.innerHTML = localSelectionItems.map((item) => `
+        <div class="plugin-selection-item">
+          <div class="plugin-selection-item-path">${escHtml(item.relativePath)}</div>
+          <div class="plugin-selection-item-meta">${escHtml(formatBytes(item.file?.size || 0))}</div>
+        </div>
+      `).join('');
+    }
+
+    function summarizeLocalSelection(items) {
+      if (!items.length) return t('localIdle');
+      if (items.length === 1) return items[0].relativePath;
+      return `${items.length} items`;
+    }
+
+    function setLocalSelection(items) {
+      localSelectionItems = items.slice();
+      renderLocalSelection();
+      setLocalStatus(summarizeLocalSelection(localSelectionItems));
+    }
+
+    function resetLocalSelection() {
+      localSelectionItems = [];
+      if (localFileInput) localFileInput.value = '';
+      renderLocalSelection();
+      setLocalStatus(t('localIdle'));
+    }
+
+    function applyImportTabs() {
+      importTabs.forEach((button) => {
+        const tab = button.dataset.tab || 'local';
+        const visible = !(tab === 'remote' && isLocalhostAccess);
+        button.hidden = !visible;
+        button.classList.toggle('is-active', activeImportTab === tab && visible);
+      });
+      Object.entries(importPanels).forEach(([tab, panel]) => {
+        panel.hidden = activeImportTab !== tab || (tab === 'remote' && isLocalhostAccess);
+      });
+      if (isLocalhostAccess && activeImportTab === 'remote') {
+        activeImportTab = 'local';
+        applyImportTabs();
+        return;
+      }
+      setImportBusy(importBusy);
+    }
+
+    function setImportTab(tab) {
+      activeImportTab = (tab === 'remote' && !isLocalhostAccess) ? 'remote' : 'local';
+      applyImportTabs();
+      if (activeImportTab === 'remote' && importModal.hidden === false) {
+        void ensureRemoteBrowserReady();
+      }
+    }
+
+    function openImportModal() {
+      lastFocusedElement = document.activeElement;
+      importModal.hidden = false;
+      setImportFeedback('', '');
+      setImportTab(isLocalhostAccess ? 'local' : activeImportTab || 'local');
+      setImportBusy(false);
+      if (activeImportTab === 'remote') {
+        void ensureRemoteBrowserReady();
+      }
+      requestAnimationFrame(() => {
+        if (activeImportTab === 'local') {
+          localPickerButton.focus();
+        } else {
+          remoteRootSelect.focus();
+        }
+      });
+    }
+
+    function closeImportModal() {
+      if (importBusy) return;
+      importModal.hidden = true;
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+      }
+    }
+
+    function buildRelativeItemsFromFiles(files) {
+      return Array.from(files || []).map((file) => ({
+        file,
+        relativePath: normalizeBrowserRelativePath(file.webkitRelativePath || file.name) || file.name,
+      }));
+    }
+
+    async function readAllDirectoryEntries(reader) {
+      const entries = [];
+      while (true) {
+        const batch = await new Promise((resolve) => {
+          reader.readEntries(resolve, () => resolve([]));
+        });
+        if (!batch.length) break;
+        entries.push(...batch);
+      }
+      return entries;
+    }
+
+    async function traverseDroppedEntry(entry, prefix = '') {
+      if (!entry) return [];
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => {
+          entry.file(resolve, reject);
+        });
+        const relativePath = normalizeBrowserRelativePath(prefix + file.name) || file.name;
+        return [{ file, relativePath }];
+      }
+      if (!entry.isDirectory) {
+        return [];
+      }
+      const reader = entry.createReader();
+      const children = await readAllDirectoryEntries(reader);
+      const nextPrefix = prefix + entry.name + '/';
+      const nestedResults = await Promise.all(children.map((child) => traverseDroppedEntry(child, nextPrefix)));
+      return nestedResults.flat();
+    }
+
+    async function collectDroppedItems(dataTransfer) {
+      const items = Array.from(dataTransfer?.items || []);
+      if (items.length && typeof items[0]?.webkitGetAsEntry === 'function') {
+        const collected = [];
+        for (const item of items) {
+          const entry = item.webkitGetAsEntry?.();
+          if (!entry) continue;
+          collected.push(...await traverseDroppedEntry(entry));
+        }
+        if (collected.length) return collected;
+      }
+      return buildRelativeItemsFromFiles(dataTransfer?.files || []);
+    }
+
+    async function chooseLocalFiles() {
+      if (typeof window.showOpenFilePicker === 'function') {
+        try {
+          const handles = await window.showOpenFilePicker({
+            multiple: true,
+            types: [{
+              description: 'Plugin files',
+              accept: {
+                'text/x-python': ['.py'],
+                'application/zip': ['.zip'],
+                'application/gzip': ['.gz', '.tgz'],
+              },
+            }],
+          });
+          const files = await Promise.all(handles.map((handle) => handle.getFile()));
+          const items = buildRelativeItemsFromFiles(files);
+          if (items.length) {
+            setLocalSelection(items);
+            await uploadSelectedLocalItems(items);
+          }
+          return;
+        } catch (error) {
+          if (error && error.name === 'AbortError') return;
+        }
+      }
+      localFileInput.click();
+    }
+
+    async function uploadSelectedLocalItems(items) {
+      if (!items.length) return;
+      setLocalSelection(items);
+      setImportBusy(true);
+      setImportFeedback(t('configLoadBusy'));
+      setLocalStatus(t('localUploading'));
+      try {
+        const formData = new FormData();
+        formData.append('relative_paths_json', JSON.stringify(items.map((item) => item.relativePath)));
+        formData.append('lang', getLang());
+        items.forEach((item) => {
+          formData.append('files', item.file, item.file.name);
+        });
+        const payload = await requestJson(buildPluginRuntimeUrl('upload'), {
+          method: 'POST',
+          body: formData,
+        });
+        setLocalStatus(String(payload?.uploaded_path || t('configTitle')), 'success');
+        setImportFeedback(String(payload?.uploaded_path || ''), 'success');
+        openConfigModal(payload);
+      } catch (error) {
+        setLocalStatus(String(error?.message || error || t('loadFailed')), 'error');
+        setImportFeedback(String(error?.message || error || t('loadFailed')), 'error');
+      } finally {
+        setImportBusy(false);
+      }
+    }
+
+    function currentRemoteRootInfo() {
+      return remoteState.roots.find((item) => item.key === remoteState.root) || null;
+    }
+
+    function updateRemoteSelection(path) {
+      remoteState.selectedPath = String(path || '');
+      remoteSelection.textContent = remoteState.selectedPath
+        ? `${t('importPathPrefix')} · ${remoteState.selectedPath}`
+        : t('remoteNoSelection');
+      remoteSubmitButton.disabled = importBusy || !remoteState.selectedPath;
+    }
+
+    function renderRemoteBrowser(entries) {
+      if (!Array.isArray(entries) || !entries.length) {
+        remoteBrowser.innerHTML = `<div class="plugin-sidebar-empty">${escHtml(t('remoteEmpty'))}</div>`;
+        return;
+      }
+      remoteBrowser.innerHTML = entries.map((entry) => {
+        const relativePath = String(entry.relative_path || '');
+        const selectable = isImportablePluginPath(relativePath || entry.name, !!entry.is_dir);
+        const selected = remoteState.selectedPath === relativePath;
+        const metaParts = [];
+        metaParts.push(entry.is_dir ? 'DIR' : formatBytes(entry.size || 0));
+        if (entry.modified_at) metaParts.push(String(entry.modified_at));
+        if (!selectable) metaParts.push(t('remoteUnsupported'));
+        return `
+          <div class="plugin-remote-row${selected ? ' is-selected' : ''}" data-relative-path="${escHtml(relativePath)}">
+            <div class="plugin-remote-main">
+              <div class="plugin-remote-name">${escHtml(entry.name)}</div>
+              <div class="plugin-remote-meta">${escHtml(metaParts.join(' · '))}</div>
+            </div>
+            <div class="plugin-remote-actions">
+              ${entry.is_dir ? `<button class="plugin-remote-action" type="button" data-action="select" data-relative-path="${escHtml(relativePath)}">${escHtml(t('remotePickDir'))}</button><button class="plugin-remote-action is-muted" type="button" data-action="enter" data-relative-path="${escHtml(relativePath)}">${escHtml(t('remoteEnter'))}</button>` : selectable ? `<button class="plugin-remote-action is-primary" type="button" data-action="select" data-relative-path="${escHtml(relativePath)}">${escHtml(t('remotePick'))}</button>` : `<button class="plugin-remote-action is-muted" type="button" disabled>${escHtml(t('remoteUnsupported'))}</button>`}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      Array.from(remoteBrowser.querySelectorAll('[data-action="enter"]')).forEach((button) => {
+        button.addEventListener('click', () => {
+          void loadRemoteDirectory({ root: remoteState.root, path: button.dataset.relativePath || '' });
+        });
+      });
+      Array.from(remoteBrowser.querySelectorAll('[data-action="select"]')).forEach((button) => {
+        button.addEventListener('click', () => {
+          updateRemoteSelection(button.dataset.relativePath || '');
+          Array.from(remoteBrowser.querySelectorAll('.plugin-remote-row')).forEach((row) => {
+            row.classList.toggle('is-selected', row.dataset.relativePath === (button.dataset.relativePath || ''));
+          });
+        });
+      });
+    }
+
+    async function loadRemoteDirectory(options = {}) {
+      if (!remoteState.root) return;
+      setImportFeedback('', '');
+      setImportBusy(true);
+      remoteBrowser.innerHTML = `<div class="plugin-sidebar-empty">${escHtml(t('remoteLoading'))}</div>`;
+      try {
+        const payload = await requestJson(buildSystemFilesListUrl(options.root || remoteState.root, options.path || ''));
+        remoteState.root = String(payload?.root?.key || options.root || remoteState.root || '');
+        remoteState.path = String(payload?.current_path || '');
+        remoteState.parentPath = payload?.parent_path || null;
+        const rootInfo = currentRemoteRootInfo();
+        remotePath.textContent = rootInfo ? `${rootInfo.label} / ${remoteState.path || t('remotePathEmpty')}` : (remoteState.path || t('remotePathEmpty'));
+        updateRemoteSelection('');
+        renderRemoteBrowser(Array.isArray(payload?.entries) ? payload.entries : []);
+      } catch (error) {
+        remoteBrowser.innerHTML = `<div class="plugin-sidebar-empty">${escHtml(String(error?.message || error || t('loadFailed')))}</div>`;
+        setImportFeedback(String(error?.message || error || t('loadFailed')), 'error');
+      } finally {
+        setImportBusy(false);
+      }
+    }
+
+    async function ensureRemoteBrowserReady() {
+      if (isLocalhostAccess) return;
+      if (!remoteState.roots.length) {
+        setImportBusy(true);
+        remoteBrowser.innerHTML = `<div class="plugin-sidebar-empty">${escHtml(t('remoteRootLoading'))}</div>`;
+        try {
+          const payload = await requestJson(buildSystemToolsConfigUrl());
+          remoteState.roots = Array.isArray(payload?.roots) ? payload.roots : [];
+          remoteRootSelect.innerHTML = remoteState.roots.map((root) => {
+            return `<option value="${escHtml(root.key)}">${escHtml(root.label)}</option>`;
+          }).join('');
+          remoteState.root = String(payload?.default_root || remoteState.roots[0]?.key || '');
+          remoteRootSelect.value = remoteState.root;
+        } catch (error) {
+          remoteBrowser.innerHTML = `<div class="plugin-sidebar-empty">${escHtml(String(error?.message || error || t('loadFailed')))}</div>`;
+          setImportFeedback(String(error?.message || error || t('loadFailed')), 'error');
+          setImportBusy(false);
+          return;
+        }
+      }
+      remoteRootSelect.value = remoteState.root;
+      await loadRemoteDirectory({ root: remoteState.root, path: remoteState.path || '' });
+    }
+
+    async function registerRemoteSelection() {
+      if (!remoteState.selectedPath) return;
+      const rootInfo = currentRemoteRootInfo();
+      if (!rootInfo) return;
+      const separator = String(rootInfo.path || '').includes('\\') ? '\\' : '/';
+      const serverPath = String(rootInfo.path || '').replace(/[\\/]+$/, '') + (remoteState.selectedPath ? separator + remoteState.selectedPath.replace(/\//g, separator) : '');
+      await inspectRemoteSelection(serverPath);
+    }
+
+    sidebarToggle?.addEventListener('click', () => {
+      setSidebarCollapsed(!document.body.classList.contains('plugin-sidebar-collapsed'));
+    });
+
+    importOpenButton?.addEventListener('click', openImportModal);
+    importCloseButton?.addEventListener('click', closeImportModal);
+    importModal?.addEventListener('click', (event) => {
+      if (event.target && event.target.dataset && event.target.dataset.closePluginImport === 'true') {
+        closeImportModal();
+      }
+    });
+    configCloseButton?.addEventListener('click', closeConfigModal);
+    configCancelButton?.addEventListener('click', closeConfigModal);
+    configModal?.addEventListener('click', (event) => {
+      if (event.target && event.target.dataset && event.target.dataset.closePluginConfig === 'true') {
+        closeConfigModal();
+      }
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && configModal.hidden === false) {
+        closeConfigModal();
+      } else if (event.key === 'Escape' && importModal.hidden === false) {
+        closeImportModal();
+      }
+    });
+
+    importTabs.forEach((button) => {
+      button.addEventListener('click', () => setImportTab(button.dataset.tab || 'local'));
+    });
+
+    localPickerButton?.addEventListener('click', () => {
+      void chooseLocalFiles();
+    });
+    localFileInput?.addEventListener('change', () => {
+      const items = buildRelativeItemsFromFiles(localFileInput.files || []);
+      if (!items.length) return;
+      void uploadSelectedLocalItems(items);
+    });
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      localDropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        localDropzone.classList.add('is-dragover');
+        setLocalStatus(t('localDragOver'));
+      });
+    });
+    ['dragleave', 'dragend'].forEach((eventName) => {
+      localDropzone.addEventListener(eventName, () => {
+        localDropzone.classList.remove('is-dragover');
+        setLocalStatus(summarizeLocalSelection(localSelectionItems));
+      });
+    });
+    localDropzone.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      localDropzone.classList.remove('is-dragover');
+      const items = await collectDroppedItems(event.dataTransfer);
+      if (!items.length) {
+        setLocalStatus(t('localIdle'));
+        return;
+      }
+      await uploadSelectedLocalItems(items);
+    });
+
+    remoteRootSelect?.addEventListener('change', () => {
+      remoteState.root = remoteRootSelect.value || remoteState.root;
+      remoteState.path = '';
+      remoteState.parentPath = null;
+      updateRemoteSelection('');
+      void loadRemoteDirectory({ root: remoteState.root, path: '' });
+    });
+    remoteUpButton?.addEventListener('click', () => {
+      if (!remoteState.parentPath && remoteState.parentPath !== '') return;
+      void loadRemoteDirectory({ root: remoteState.root, path: remoteState.parentPath || '' });
+    });
+    remoteRefreshButton?.addEventListener('click', () => {
+      void loadRemoteDirectory({ root: remoteState.root, path: remoteState.path || '' });
+    });
+    remoteSubmitButton?.addEventListener('click', () => {
+      void registerRemoteSelection();
+    });
+    configSubmitButton?.addEventListener('click', () => {
+      if (configModalState.mode === 'manage') {
+        void restartManagedPlugin({ requireDirtyConfirm: true, askRestartConfirm: false });
+      } else {
+        void submitPluginRegistration();
+      }
+    });
+    configRestartButton?.addEventListener('click', () => {
+      void restartManagedPlugin({ requireDirtyConfirm: false, askRestartConfirm: true });
+    });
+    configDeleteButton?.addEventListener('click', () => {
+      void deleteManagedPlugin();
+    });
+
+    frame.addEventListener('load', syncPluginFrame);
+    window.addEventListener('hashchange', () => activatePlugin(pluginHashKey() || pluginItems[0]?.key || ''));
+    window.addEventListener('proj-theme-change', syncPluginFrame);
+    window.addEventListener('proj-language-change', () => {
+      applyStaticText();
+      void loadPlugins({ preserveSelection: true, forceReloadFrame: true });
+      if (importModal.hidden === false && activeImportTab === 'remote') {
+        void ensureRemoteBrowserReady();
+      }
+      if (configModal.hidden === false) {
+        renderConfigModal();
+        setConfigBusy(configBusy);
+      }
+    });
+    window.addEventListener('message', (event) => {
+      const data = event && event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'proj-sync' || data.type === 'proj-set-dark' || data.type === 'proj-set-lang') {
+        syncPluginFrame();
+      }
+    });
+
+    applyStaticText();
+    void loadPlugins();
+  </script>
+</body>
+</html>

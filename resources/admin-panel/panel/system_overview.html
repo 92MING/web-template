@@ -218,6 +218,8 @@
         </div>
         <div class="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-8 text-xs">
           <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">主机名</span><div id="hi-hostname" class="font-mono text-slate-100 truncate mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">内网 IP</span><div id="hi-local-ip" class="font-mono text-slate-100 truncate mt-1">—</div></div>
+          <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">公网 IP</span><div id="hi-global-ip" class="font-mono text-slate-100 truncate mt-1">—</div></div>
           <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">系统</span><div id="hi-os" class="text-slate-100 truncate mt-1">—</div></div>
           <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">架构</span><div id="hi-arch" class="text-slate-100 mt-1">—</div></div>
           <div class="chip rounded-xl px-3 py-2"><span class="text-slate-500">CPU 核心</span><div id="hi-cpu" class="text-slate-100 mt-1">—</div></div>
@@ -1015,6 +1017,8 @@
       try {
         const data = await fetchAdminJson('/admin/api/system/extended', { cache: 'no-store' });
         document.getElementById('hi-hostname').textContent = data.hostname || '—';
+        document.getElementById('hi-local-ip').textContent = data.local_ip || '—';
+        document.getElementById('hi-global-ip').textContent = data.global_ip || '—';
         document.getElementById('hi-os').textContent = (data.os || '') + (data.architecture ? ` (${data.architecture})` : '');
         document.getElementById('hi-python').textContent = data.python_version || '—';
         document.getElementById('hi-cpu').textContent = (data.cpu_count_logical || '—') + (data.cpu_count_physical ? ` / ${data.cpu_count_physical} 物理` : '');

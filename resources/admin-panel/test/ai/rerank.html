@@ -13,7 +13,7 @@
 <div class="ai-shell">
   <div class="ai-header">
     <div class="ai-header-main">
-      <a href="/admin/test/ai" class="ai-back-link">
+      <a href="../ai" class="ai-back-link">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
         <span>返回 AI 测试中心</span>
       </a>
@@ -21,7 +21,7 @@
       <p>基于 LLM 语义相关性对候选文本打分排序，适合验证检索召回后的二次筛选效果。</p>
     </div>
     <div class="ai-pills">
-      <span class="ai-pill">POST /ai/rerank</span>
+      <span class="ai-pill">POST /ai/embedding/{service|client}/{key}/rerank</span>
       <span class="ai-pill"><strong>0–10 打分</strong></span>
     </div>
   </div>
@@ -56,6 +56,14 @@
       <div class="ai-card-title"><h2>高级选项</h2></div>
       <div class="ai-grid-2">
         <div class="ai-field">
+          <label for="rerank-target">Service/Client</label>
+          <select id="rerank-target" class="ai-select"><option value="service">service</option></select>
+        </div>
+        <div class="ai-field">
+          <label for="rerank-instance">Key</label>
+          <select id="rerank-instance" class="ai-select"><option value="default">default</option></select>
+        </div>
+        <div class="ai-field">
           <label for="custom-prompt">自定义 Prompt</label>
           <input id="custom-prompt" type="text" class="ai-input" placeholder="Score each candidate 0-10 for relevance…"/>
         </div>
@@ -83,8 +91,15 @@
   </div>
 </div>
 
+<script src="/html-assets/js/ai-test-shared.js"></script>
 <script>
 'use strict';
+
+let rerankTargetController = null;
+
+function selectedRerankTargetPath() {
+  return rerankTargetController ? rerankTargetController.buildPath('rerank') : 'embedding/service/default/rerank';
+}
 
 // ── Samples ───────────────────────────────────────────────────────────────────
 const SAMPLES = {
@@ -206,7 +221,7 @@ async function doRerank() {
 
   try {
     const t0 = performance.now();
-    const resp = await fetch(window.projAiApiPath('/ai/rerank'), {
+    const resp = await fetch(window.projAiApiPath(`/ai/${selectedRerankTargetPath()}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -305,6 +320,7 @@ function escHtml(s) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+AITestShared.initServiceTargetControls('embedding', 'rerank-target', 'rerank-instance').then((controller) => { rerankTargetController = controller; });
 buildCandidateList([]);
 </script>
 </body>

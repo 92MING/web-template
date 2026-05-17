@@ -194,6 +194,52 @@ class FakeS2TService:
 
 class TestMultimodalTokenCounting(unittest.TestCase):
 
+    def test_completion_service_client_key_pins_specific_client(self):
+        async def _run() -> None:
+            client_a = DummyCompletionClient(key='client-a')
+            client_b = DummyCompletionClient(key='client-b')
+            service = CompletionService(client_a, client_b)
+
+            try:
+                result = await service.complete(
+                    messages=[{'role': 'user', 'content': 'Say hello'}],
+                    client_key=client_b.key,
+                )
+
+                self.assertEqual(result, 'ok')
+                self.assertIsNone(client_a.last_kwargs)
+                self.assertIsNotNone(client_b.last_kwargs)
+                self.assertNotIn('client_key', client_b.last_kwargs)
+            finally:
+                service.close()
+
+        asyncio.run(_run())
+
+    def test_embedding_service_client_key_pins_specific_client(self):
+        async def _run() -> None:
+            client_a = DummyEmbeddingClient(key='client-a')
+            client_b = DummyEmbeddingClient(key='client-b')
+            with patch.object(EmbeddingService, '_start_init_probe', lambda self: None):
+                service = EmbeddingService(client_a, client_b)
+
+            try:
+                result = await service.embedding(
+                    'hello world',
+                    client_key=client_b.key,
+                    use_cache=False,
+                    save_cache=False,
+                )
+
+                self.assertEqual(len(result), 2)
+                self.assertGreater(result[0], 0.0)
+                self.assertGreater(result[1], 0.0)
+                self.assertIsNone(client_a.last_inputs)
+                self.assertEqual(client_b.last_inputs, ['hello world'])
+            finally:
+                service.close()
+
+        asyncio.run(_run())
+
     def test_json_complete_reasoning_true_uses_prompt_schema_without_hard_json_schema(self):
         class _Resp(BaseModel):
             text: str
@@ -252,6 +298,40 @@ class TestMultimodalTokenCounting(unittest.TestCase):
                 last_message = client.last_messages[-1]
                 content = _message_text_content(last_message['content'])
                 self.assertIn('Return the valid json response only', content)
+                self.assertNotIn('First think carefully', content)
+            finally:
+                service.close()
+
+        asyncio.run(_run())
+
+    def test_json_complete_support_json_false_uses_prompt_schema_without_hard_json_schema(self):
+        class _Resp(BaseModel):
+            text: str
+
+        async def _run() -> None:
+            client = JsonResponseCompletionClient('```json\n{"text":"ok"}\n```', support_json=False)
+            service = CompletionService(client)
+
+            try:
+                result = await service.json_complete(
+                    'Return text ok.',
+                    return_type=_Resp,
+                    stream=False,
+                    reasoning=False,
+                )
+
+                self.assertEqual(result.text, 'ok')
+                self.assertIsNotNone(client.last_kwargs)
+                self.assertNotIn('json_schema', client.last_kwargs)
+                self.assertFalse(client.last_kwargs['reasoning'])
+
+                self.assertIsNotNone(client.last_messages)
+                last_message = client.last_messages[-1]
+                content = _message_text_content(last_message['content'])
+                self.assertIn('wrapped inside a ```json fenced block', content)
+                self.assertIn('A default example of the expected JSON shape is', content)
+                self.assertIn('```json', content)
+                self.assertIn('"text": "text"', content)
                 self.assertNotIn('First think carefully', content)
             finally:
                 service.close()

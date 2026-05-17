@@ -46,19 +46,6 @@
       <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.sys.ports">占用端口</span>
     </button>
   </div>
-  <button class="nav-item" id="nav-rooms" onclick="toggleRoomsGroup()">
-    <span class="icon"></span><span data-i18n="nav.rooms">RTC聊天室</span>
-    <svg id="rooms-arrow" class="ml-auto w-3.5 h-3.5 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-  </button>
-  <div id="rooms-sub-group" class="hidden pl-3.5 space-y-px">
-    <button class="nav-item text-xs" id="nav-rooms-manage" onclick="showRoomsSub('manage')">
-      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.rooms.manage">管理</span>
-    </button>
-    <button class="nav-item text-xs" id="nav-rooms-test" onclick="showRoomsSub('test')">
-      <span class="icon" style="width:5px;height:5px;"></span><span data-i18n="nav.rooms.test">测试</span>
-    </button>
-  </div>
-
   <!-- 日志 (expandable group) -->
   <button class="nav-item" id="nav-loglab" onclick="toggleLogGroup()">
     <span class="icon"></span><span data-i18n="nav.log">日志</span>
@@ -115,6 +102,10 @@
 
   <button class="nav-item" id="nav-api" onclick="showTab('api')">
     <span class="icon"></span><span data-i18n="nav.api">API 文档</span>
+  </button>
+
+  <button class="nav-item" id="nav-pluginlab" onclick="showTab('pluginlab')">
+    <span class="icon"></span><span data-i18n="nav.plugin">Plugin</span>
   </button>
 
   <button class="nav-item" id="nav-backendlab" onclick="toggleBackendGroup()">
@@ -284,22 +275,6 @@
     </div>
   </div>
 
-  <!-- ── ROOMS TAB ────────────────────────────────────────── -->
-  <div id="page-rooms" class="hidden flex-1 overflow-hidden">
-    <div class="iframe-shell h-full">
-      <iframe id="rooms-iframe" src="about:blank" class="iframe-panel"></iframe>
-      <div id="rooms-frame-state" class="iframe-fallback hidden">
-        <div>
-          <div class="text-sm font-semibold">RTC 房间管理载入中</div>
-          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接房间管理页面…</div>
-          <div class="iframe-actions">
-            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- ── LOG LAB TAB (iframe container for log sub-pages) ────── -->
   <div id="page-loglab" class="hidden flex-1 overflow-hidden">
     <div class="iframe-shell h-full">
@@ -356,6 +331,22 @@
         <div>
           <div class="text-sm font-semibold">API 文档载入中</div>
           <div class="text-xs mt-2 opacity-80" data-role="message">正在打开 Swagger 文档…</div>
+          <div class="iframe-actions">
+            <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PLUGIN TAB ───────────────────────────────────────── -->
+  <div id="page-pluginlab" class="hidden flex-1 overflow-hidden">
+    <div class="iframe-shell h-full">
+      <iframe id="pluginlab-iframe" src="about:blank" class="iframe-panel"></iframe>
+      <div id="pluginlab-frame-state" class="iframe-fallback hidden">
+        <div>
+          <div class="text-sm font-semibold">Plugin 页面载入中</div>
+          <div class="text-xs mt-2 opacity-80" data-role="message">正在连接 Plugin 工作台…</div>
           <div class="iframe-actions">
             <button class="iframe-btn" type="button" data-role="retry">重新加载</button>
           </div>
@@ -523,6 +514,7 @@ const PANEL_I18N = {
   'nav.test.ai':     { 'zh-cn':'AI 服务测试','zh-tw':'AI 服務測試',en:'AI Test' },
   'nav.storage':     { 'zh-cn':'存储','zh-tw':'存儲',en:'Storage' },
   'nav.api':         { 'zh-cn':'API 文档','zh-tw':'API 文檔',en:'API Docs' },
+  'nav.plugin':      { 'zh-cn':'Plugin','zh-tw':'Plugin',en:'Plugin' },
   'nav.backend':     { 'zh-cn':'后端','zh-tw':'後端',en:'Backend' },
   'nav.backend.overview': { 'zh-cn':'概览','zh-tw':'概覽',en:'Overview' },
   'nav.backend.settings': { 'zh-cn':'设置','zh-tw':'設置',en:'Settings' },
@@ -540,6 +532,7 @@ const PANEL_I18N = {
   'tab.loglab':      { 'zh-cn':'日志','zh-tw':'日誌',en:'Logs' },
   'tab.storagelab':  { 'zh-cn':'存储','zh-tw':'存儲',en:'Storage' },
   'tab.api':         { 'zh-cn':'API 文档','zh-tw':'API 文檔',en:'API Docs' },
+  'tab.pluginlab':   { 'zh-cn':'Plugin','zh-tw':'Plugin',en:'Plugin' },
   'tab.backendlab':  { 'zh-cn':'后端','zh-tw':'後端',en:'Backend' },
   'title.sys.overview':  { 'zh-cn':'系统 · 概览','zh-tw':'系統 · 概覽',en:'System · Overview' },
   'title.sys.cpu':       { 'zh-cn':'系统 · CPU','zh-tw':'系統 · CPU',en:'System · CPU' },
@@ -636,10 +629,8 @@ window.addEventListener('message', (e) => {
 });
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['system','rooms','loglab','ailab','storagelab','api','backendlab'];
+const TABS = ['system','loglab','ailab','storagelab','api','pluginlab','backendlab'];
 const SYSTEM_SUB_KEYS = ['overview', 'cpu', 'gpu', 'terminal', 'files', 'processes', 'ports'];
-const ROOMS_SUB_KEYS = ['manage','test'];
-const ROOMS_SUB_URLS = { manage:'/admin/rtc_room/manage', test:'/admin/test/chatroom' };
 const LOG_SUB_KEYS = ['overview','analysis','detail'];
 const AI_SUB_KEYS = ['overview','settings','test'];
 const AI_SUB_URLS = { overview:'/admin/panel/ai-services/overview', settings:'/admin/panel/ai-services/settings', test:'/admin/test/ai' };
@@ -648,8 +639,6 @@ const BACKEND_SUB_KEYS = ['overview','settings','distributed-nodes','distributed
 let activeTab = 'system';
 let activeSystemSub = 'overview';
 let systemGroupOpen = true;
-let activeRoomsSub = null;
-let roomsGroupOpen = false;
 let activeLogSub = null;
 let logGroupOpen = false;
 let activeAISub = null;
@@ -689,8 +678,6 @@ function savePanelState() {
     activeTab,
     activeSystemSub,
     systemGroupOpen,
-    activeRoomsSub,
-    roomsGroupOpen,
     activeLogSub,
     logGroupOpen,
     activeAISub,
@@ -1079,6 +1066,10 @@ function showTab(name, options = {}) {
       ensureIframeLoaded('api-iframe', 'api-frame-state', adminPath('/admin/panel/api'), t('tab.api'));
       activateIframeResource('api-iframe');
     }
+    else if (name==='pluginlab') {
+      ensureIframeLoaded('pluginlab-iframe', 'pluginlab-frame-state', adminPath('/admin/panel/plugins'), t('tab.pluginlab'));
+      activateIframeResource('pluginlab-iframe');
+    }
     if (!options.skipSave) savePanelState();
   };
   if (options.skipTerminalGuard) {
@@ -1086,37 +1077,6 @@ function showTab(name, options = {}) {
     return;
   }
   withTerminalLeaveGuard(name === 'system' && activeSystemSub === 'terminal', run);
-}
-
-function showRoomsRoot() {
-  showRoomsSub(ROOMS_SUB_KEYS[0] || 'manage');
-}
-
-function toggleRoomsGroup() {
-  roomsGroupOpen = !roomsGroupOpen;
-  document.getElementById('rooms-sub-group').classList.toggle('hidden', !roomsGroupOpen);
-  document.getElementById('rooms-arrow').style.transform = roomsGroupOpen ? 'rotate(180deg)' : '';
-  savePanelState();
-}
-
-function showRoomsSub(key) {
-  const run = () => {
-    activeRoomsSub = ROOMS_SUB_KEYS.includes(key) ? key : 'manage';
-    showTab('rooms', { skipSave: true, skipTerminalGuard: true });
-    document.getElementById('nav-rooms').classList.add('active');
-    ROOMS_SUB_KEYS.forEach(k => {
-      document.getElementById('nav-rooms-' + k)?.classList.toggle('active', k === activeRoomsSub);
-    });
-    if (!roomsGroupOpen) {
-      roomsGroupOpen = true;
-      document.getElementById('rooms-sub-group').classList.remove('hidden');
-      document.getElementById('rooms-arrow').style.transform = 'rotate(180deg)';
-    }
-    ensureIframeLoaded('rooms-iframe', 'rooms-frame-state', adminPath(ROOMS_SUB_URLS[activeRoomsSub]), t('title.rooms.' + activeRoomsSub));
-    activateIframeResource('rooms-iframe');
-    savePanelState();
-  };
-  withTerminalLeaveGuard(false, run);
 }
 
 function toggleLogGroup() {
@@ -1503,6 +1463,7 @@ bindIframeState('system-ports-iframe', 'system-ports-frame-state', '系统端口
 bindIframeState('loglab-iframe', 'loglab-frame-state', '日志页面');
 bindIframeState('storagelab-iframe', 'storagelab-frame-state', '存储页面');
 bindIframeState('api-iframe', 'api-frame-state', 'API 文档');
+bindIframeState('pluginlab-iframe', 'pluginlab-frame-state', 'Plugin 页面');
 bindIframeState('backendlab-iframe', 'backendlab-frame-state', '后端页面');
 bindIframeState('ailab-iframe', 'ailab-frame-state', 'AI 服务');
 bindIframeState('permissionlab-iframe', 'permissionlab-frame-state', '权限页面');
@@ -1510,14 +1471,6 @@ loadServerConfig();
 const restoredPanelState = restorePanelState();
 activeSystemSub = SYSTEM_SUB_KEYS.includes(restoredPanelState.activeSystemSub) ? restoredPanelState.activeSystemSub : 'overview';
 systemGroupOpen = restoredPanelState.systemGroupOpen !== false;
-activeRoomsSub = ROOMS_SUB_KEYS.includes(restoredPanelState.activeRoomsSub)
-  ? restoredPanelState.activeRoomsSub
-  : restoredPanelState.activeTestSub === 'chatroom'
-    ? 'test'
-    : null;
-roomsGroupOpen = restoredPanelState.roomsGroupOpen != null
-  ? !!restoredPanelState.roomsGroupOpen
-  : activeRoomsSub != null;
 logGroupOpen = !!restoredPanelState.logGroupOpen;
 storageGroupOpen = !!restoredPanelState.storageGroupOpen;
 activeLogSub = restoredPanelState.activeLogSub || null;
@@ -1532,8 +1485,6 @@ activeAISub = AI_SUB_KEYS.includes(restoredPanelState.activeAISub) ? restoredPan
 aiGroupOpen = !!restoredPanelState.aiGroupOpen;
 document.getElementById('system-sub-group').classList.toggle('hidden', !systemGroupOpen);
 document.getElementById('system-arrow').style.transform = systemGroupOpen ? 'rotate(180deg)' : '';
-document.getElementById('rooms-sub-group').classList.toggle('hidden', !roomsGroupOpen);
-document.getElementById('rooms-arrow').style.transform = roomsGroupOpen ? 'rotate(180deg)' : '';
 document.getElementById('log-sub-group').classList.toggle('hidden', !logGroupOpen);
 document.getElementById('log-arrow').style.transform = logGroupOpen ? 'rotate(180deg)' : '';
 document.getElementById('storage-sub-group').classList.toggle('hidden', !storageGroupOpen);
@@ -1546,7 +1497,6 @@ document.getElementById('backend-permission-sub-group').classList.toggle('hidden
 document.getElementById('backend-permission-arrow').style.transform = backendPermissionGroupOpen ? 'rotate(180deg)' : '';
 document.getElementById('ai-sub-group').classList.toggle('hidden', !aiGroupOpen);
 document.getElementById('ai-arrow').style.transform = aiGroupOpen ? 'rotate(180deg)' : '';
-if (activeRoomsSub) ROOMS_SUB_KEYS.forEach(k => document.getElementById('nav-rooms-'+k)?.classList.toggle('active', k===activeRoomsSub));
 if (activeLogSub) LOG_SUB_KEYS.forEach(k => document.getElementById('nav-log-'+k)?.classList.toggle('active', k===activeLogSub));
 if (activeStorageSub) STORAGE_SUB_KEYS.forEach(k => document.getElementById('nav-storage-'+k)?.classList.toggle('active', k===activeStorageSub));
 if (activeBackendSub) BACKEND_SUB_KEYS.forEach(k => document.getElementById('nav-backend-'+k)?.classList.toggle('active', k===activeBackendSub));
@@ -1555,13 +1505,12 @@ if (activeBackendSub) {
   document.getElementById('nav-backend-permission')?.classList.toggle('active', activeBackendSub.startsWith('permission-'));
 }
 if (activeAISub) AI_SUB_KEYS.forEach(k => document.getElementById('nav-ai-'+k)?.classList.toggle('active', k===activeAISub));
-const restoredActiveTab = restoredPanelState.activeTab === 'testlab'
-  ? 'rooms'
+const restoredActiveTab = restoredPanelState.activeTab === 'testlab' || restoredPanelState.activeTab === 'rooms'
+  ? 'pluginlab'
   : restoredPanelState.activeTab;
-const initialTab = TABS.includes(restoredActiveTab) ? restoredActiveTab : (activeRoomsSub ? 'rooms' : activeLogSub ? 'loglab' : activeAISub ? 'ailab' : activeStorageSub ? 'storagelab' : activeBackendSub ? 'backendlab' : 'system');
+const initialTab = TABS.includes(restoredActiveTab) ? restoredActiveTab : (activeLogSub ? 'loglab' : activeAISub ? 'ailab' : activeStorageSub ? 'storagelab' : activeBackendSub ? 'backendlab' : 'system');
 showTab(initialTab, { skipSave: true, skipTerminalGuard: true });
 if (initialTab === 'system') showSystemSub(activeSystemSub, { skipSave: true, skipTerminalGuard: true });
-if (initialTab === 'rooms') showRoomsSub(activeRoomsSub || 'manage');
 if (initialTab === 'loglab' && activeLogSub) showLogSub(activeLogSub);
 if (initialTab === 'storagelab' && activeStorageSub) showStorageSub(activeStorageSub);
 if (initialTab === 'backendlab') showBackendSub(activeBackendSub || 'overview');

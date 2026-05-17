@@ -78,7 +78,7 @@
 <header class="bg-white border-b border-gray-200 shadow-sm">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-4">
-            <a href="/admin/test/ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1 transition-colors">
+            <a href="../ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1 transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                 AI 测试
             </a>
@@ -88,32 +88,8 @@
                 Embedding 向量化
             </h1>
         </div>
-        <div class="flex items-center gap-3">
-            <button onclick="loadCacheStats()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-300 transition-colors flex items-center gap-1" title="查看缓存状态">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
-                缓存
-            </button>
-        </div>
     </div>
 </header>
-
-<!-- Cache Info Bar (hidden initially) -->
-<div id="cacheBar" class="hidden border-b border-sky-200">
-    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between cache-stat">
-        <div class="flex items-center gap-6 text-sm">
-            <span class="text-sky-700 font-medium">缓存状态</span>
-            <span class="text-gray-600">条目: <strong id="cacheCount" class="text-sky-700">-</strong></span>
-            <span class="text-gray-600">上限: <strong id="cacheMax" class="text-sky-700">-</strong></span>
-            <span class="text-gray-500 text-xs truncate max-w-xs" id="cacheDbPath" title=""></span>
-        </div>
-        <div class="flex items-center gap-2">
-            <button onclick="clearCache()" class="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-medium border border-red-200 transition-colors">清空缓存</button>
-            <button onclick="document.getElementById('cacheBar').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 p-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-        </div>
-    </div>
-</div>
 
 <!-- Tab Navigation -->
 <div class="max-w-6xl mx-auto px-6 pt-6">
@@ -130,7 +106,13 @@
     <section class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
         <div class="flex flex-wrap items-end gap-3">
             <div class="min-w-[200px] flex-1">
-                <label class="block text-xs font-medium text-gray-600 mb-1" for="serviceInstanceSelect">Service Instance</label>
+                <label class="block text-xs font-medium text-gray-600 mb-1" for="serviceTargetSelect">Service/Client</label>
+                <select id="serviceTargetSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
+                    <option value="service">service</option>
+                </select>
+            </div>
+            <div class="min-w-[200px] flex-1">
+                <label class="block text-xs font-medium text-gray-600 mb-1" for="serviceInstanceSelect">Key</label>
                 <select id="serviceInstanceSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
                     <option value="default">default</option>
                 </select>
@@ -444,9 +426,16 @@
 // ═══════════════════════════════════════════════════════════════════════════
 let texts = [], vectors = [];
 let chunkResults = [];
+const serviceTargetSelect = document.getElementById('serviceTargetSelect');
 const serviceInstanceSelect = document.getElementById('serviceInstanceSelect');
+let serviceTargetController = null;
 
-AITestShared.loadServiceInstances('embedding', serviceInstanceSelect);
+void AITestShared.initServiceTargetControls('embedding', serviceTargetSelect, serviceInstanceSelect)
+    .then((controller) => { serviceTargetController = controller; });
+
+function embeddingTargetPath(operation) {
+    return serviceTargetController ? serviceTargetController.buildPath(operation) : `embedding/service/${encodeURIComponent(serviceInstanceSelect.value || 'default')}/${operation}`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab management
@@ -459,36 +448,6 @@ function switchTab(name) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById(`tab-${name}`);
     if (panel) panel.classList.add('active');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Cache management
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadCacheStats() {
-    try {
-        const res = await fetch(window.projAiApiPath('/ai/embedding/cache-stats'));
-        const data = await res.json();
-        document.getElementById('cacheCount').textContent = data.count ?? '-';
-        document.getElementById('cacheMax').textContent = data.max_entries ?? '-';
-        const pathEl = document.getElementById('cacheDbPath');
-        pathEl.textContent = data.db_path || '';
-        pathEl.title = data.db_path || '';
-        document.getElementById('cacheBar').classList.remove('hidden');
-    } catch (e) {
-        alert('获取缓存状态失败: ' + e.message);
-    }
-}
-
-async function clearCache() {
-    if (!confirm('确定要清空所有嵌入缓存吗？')) return;
-    try {
-        const res = await fetch(window.projAiApiPath('/ai/embedding/cache-clear'), { method: 'POST' });
-        const data = await res.json();
-        alert(`已删除 ${data.deleted} 条缓存`);
-        loadCacheStats();
-    } catch (e) {
-        alert('清空缓存失败: ' + e.message);
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -539,9 +498,9 @@ async function embed() {
 
     try {
         const payload = texts.length === 1
-            ? { text: texts[0], use_cache: useCache, save_cache: saveCache, service_key: serviceInstanceSelect.value || 'default' }
-            : { texts, use_cache: useCache, save_cache: saveCache, service_key: serviceInstanceSelect.value || 'default' };
-        const res = await fetch(window.projAiApiPath('/ai/embedding'), {
+            ? { text: texts[0], use_cache: useCache, save_cache: saveCache }
+            : { texts, use_cache: useCache, save_cache: saveCache };
+        const res = await fetch(window.projAiApiPath(`/ai/${embeddingTargetPath('embedding')}`), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
@@ -763,9 +722,9 @@ async function doRerank() {
     setLoading('rerank', true);
 
     try {
-        const res = await fetch(window.projAiApiPath('/ai/embedding/rerank'), {
+        const res = await fetch(window.projAiApiPath(`/ai/${embeddingTargetPath('rerank')}`), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, candidates, service_key: serviceInstanceSelect.value || 'default' })
+            body: JSON.stringify({ query, candidates })
         });
         if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.detail || `HTTP ${res.status}`); }
         const data = await res.json();
@@ -852,9 +811,9 @@ async function doChunking() {
     setLoading('chunk', true);
 
     try {
-        const res = await fetch(window.projAiApiPath('/ai/embedding/chunking'), {
+        const res = await fetch(window.projAiApiPath(`/ai/${embeddingTargetPath('chunking')}`), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, max_word_count: maxWordCount, use_cache: useCache, save_cache: saveCache, service_key: serviceInstanceSelect.value || 'default' })
+            body: JSON.stringify({ content, max_word_count: maxWordCount, use_cache: useCache, save_cache: saveCache })
         });
         if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.detail || `HTTP ${res.status}`); }
         const data = await res.json();
@@ -957,8 +916,7 @@ async function doDiversity() {
     try {
         const body = { candidates };
         if (top_k) body.top_k = top_k;
-        body.service_key = serviceInstanceSelect.value || 'default';
-        const res = await fetch(window.projAiApiPath('/ai/embedding/diversity'), {
+        const res = await fetch(window.projAiApiPath(`/ai/${embeddingTargetPath('diversity')}`), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });

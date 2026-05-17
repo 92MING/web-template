@@ -41,7 +41,6 @@
       gap: 10px;
     }
 
-    body[data-proj-embedded="1"] #header a[href="/admin/test/ai"],
     body[data-proj-embedded="1"] #header > div[style*="width:1px;height:20px"] {
       display: none;
     }
@@ -717,14 +716,7 @@
     <!-- ═══════ Tab Bar ═══════ -->
     <div id="tab-bar">
       <button class="tab-btn active" data-tab="default" onclick="switchTab('default')">通用</button>
-      <button class="tab-btn" data-tab="thinkthinksyn" onclick="switchTab('thinkthinksyn')">
-        ThinkThinkSyn
-        <span class="tab-tooltip">缺少 API Key (TTS_APIKEY)</span>
-      </button>
-      <button class="tab-btn" data-tab="openrouter" onclick="switchTab('openrouter')">
-        OpenRouter
-        <span class="tab-tooltip">缺少 API Key (OPENROUTER_API_KEY)</span>
-      </button>
+      <button class="tab-btn" data-tab="openai" onclick="switchTab('openai')">OpenAI-compatible</button>
     </div>
 
     <!-- ═══════ Model Bar ═══════ -->
@@ -740,22 +732,35 @@
       </div>
       <div class="model-bar-group model-field">
         <label for="input-base-url">Base URL：</label>
-        <input type="text" id="input-base-url" placeholder="使用默认" oninput="onCredentialsChange()"/>
+        <input type="text" id="input-base-url" list="base-url-presets" value="https://openrouter.ai/api/v1" placeholder="https://openrouter.ai/api/v1" oninput="onCredentialsChange()"/>
+        <datalist id="base-url-presets">
+          <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+          <option value="https://api.openai.com/v1">OpenAI</option>
+          <option value="https://api.deepseek.com/v1">DeepSeek</option>
+          <option value="https://api.moonshot.cn/v1">Kimi / Moonshot</option>
+          <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">Qwen / DashScope</option>
+          <option value="https://api.siliconflow.cn/v1">SiliconFlow</option>
+        </datalist>
       </div>
       <div class="model-bar-group model-field">
         <label for="input-apikey">API Key：</label>
-        <input type="password" id="input-apikey" placeholder="输入临时 API Key" oninput="onCredentialsChange()"/>
+        <input type="password" id="input-apikey" placeholder="必须手动输入临时 API Key" oninput="onCredentialsChange()"/>
       </div>
       <div class="model-bar-group model-actions">
-        <button id="btn-apikey-mode" class="model-bar-inline-btn hidden" type="button" onclick="toggleApikeyMode()">默认</button>
         <button id="reload-models-btn" class="model-bar-inline-btn" type="button" onclick="reloadModelsForCurrentTab()">加载模型</button>
       </div>
     </div>
 
     <!-- ═══════ Control Bar ═══════ -->
     <div id="control-bar">
+      <div class="ctrl-group" id="completion-target-group">
+        <span class="ctrl-label">Service/Client</span>
+        <select id="completion-target-select" style="font-size:12px;line-height:26px;padding:0 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;min-width:132px;height:28px;box-sizing:border-box;">
+          <option value="service">service</option>
+        </select>
+      </div>
       <div class="ctrl-group" id="completion-service-group">
-        <span class="ctrl-label">Service</span>
+        <span class="ctrl-label">Key</span>
         <select id="completion-service-select" style="font-size:12px;line-height:26px;padding:0 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;min-width:96px;height:28px;box-sizing:border-box;">
           <option value="default">default</option>
         </select>
@@ -870,6 +875,7 @@
   <div id="drop-overlay"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg><span>拖放文件到此处</span></div>
 </div>
 
+<script src="/html-assets/js/ai-test-shared.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
 // Constants
@@ -879,19 +885,18 @@ const ACTIVE_KEY = 'proj_chat_active_id';
 const SIDEBAR_COLLAPSED_KEY = 'proj_ai_chat_history_sidebar_collapsed';
 const SIDEBAR_WIDTH_KEY = 'proj_ai_chat_history_sidebar_width';
 let _aiApiBase = '/ai';
-const DEFAULT_COMPLETION_API_URL = '/ai/complete';
+const DEFAULT_COMPLETION_API_URL = '/ai/completion/service/default/complete';
 const RENDER_HTML_API_URL = '/api/render/to_html';
 const RICH_COMPONENTS = new Set(['markdown', 'mermaid', 'latex', 'tikz']);
 const richRenderCache = new Map();
 const TAB_LABELS = {
   default: '对话',
-  thinkthinksyn: '对话(第三方api)',
-  openrouter: '对话(第三方api)',
+  'openai': '对话(OpenAI-compatible)',
 };
 
 function resolveRequestedChatTab() {
   const tab = (new URLSearchParams(window.location.search).get('tab') || '').trim();
-  return ['default', 'thinkthinksyn', 'openrouter'].includes(tab) ? tab : null;
+  return ['default', 'openai'].includes(tab) ? tab : null;
 }
 
 function updateChatTabChrome(tab) {
@@ -992,7 +997,6 @@ document.getElementById('s-stream').addEventListener('change', function() {
 let editingIndex = -1;
 let requestedInitialTab = resolveRequestedChatTab();
 let currentTab = requestedInitialTab || 'default';
-let tempClientEnvKeys = { thinkthinksyn: false, openrouter: false };
 let modelCache = {};
 let modelLoadingFor = null;
 const STATUS_CACHE_KEY = 'proj_ai_chat_completion_status_v1';
@@ -1021,36 +1025,33 @@ const $modelBar    = document.getElementById('model-bar');
 const $modelSelect = document.getElementById('model-select');
 const $modelLoading= document.getElementById('model-loading');
 const $historyList = document.getElementById('history-list');
+const $completionTargetSelect = document.getElementById('completion-target-select');
 const $completionServiceSelect = document.getElementById('completion-service-select');
 const $completionServiceDivider = document.getElementById('completion-service-divider');
+const $completionTargetGroup = document.getElementById('completion-target-group');
 const $completionServiceGroup = document.getElementById('completion-service-group');
 
+const COMPLETION_TARGET_KEY = 'proj_ai_chat_completion_target_key';
 const COMPLETION_SERVICE_KEY = 'proj_ai_chat_completion_service_key';
+let _completionTargetController = null;
 
 async function loadCompletionServiceOptions() {
-  let keys = [];
-  try {
-    const resp = await fetch(`${_aiApiBase}/services/completion`, { cache: 'no-store' });
-    if (resp.ok) {
-      const data = await resp.json();
-      const instances = data && typeof data.instances === 'object' ? Object.keys(data.instances) : [];
-      keys = instances.map((item) => String(item || '').trim()).filter(Boolean);
-    }
-  } catch {}
-  if (!keys.includes('default')) keys.unshift('default');
-  keys = Array.from(new Set(keys)).sort((a, b) => {
-    if (a === 'default') return -1;
-    if (b === 'default') return 1;
-    return a.localeCompare(b, 'zh-CN');
-  });
-  const selected = String(localStorage.getItem(COMPLETION_SERVICE_KEY) || 'default').trim() || 'default';
-  $completionServiceSelect.innerHTML = keys.map((key) => `<option value="${escapeHtml(key)}">${escapeHtml(key)}</option>`).join('');
-  $completionServiceSelect.value = keys.includes(selected) ? selected : (keys[0] || 'default');
+  const selectedTarget = String(localStorage.getItem(COMPLETION_TARGET_KEY) || 'service').trim() || 'service';
+  const selectedInstance = String(localStorage.getItem(COMPLETION_SERVICE_KEY) || 'default').trim() || 'default';
+  _completionTargetController = await window.AITestShared.initServiceTargetControls(
+    'completion',
+    $completionTargetSelect,
+    $completionServiceSelect,
+    {
+      selectedTargetValue: selectedTarget,
+      selectedKeyValue: selectedInstance,
+      onSelectionChange(selection) {
+        localStorage.setItem(COMPLETION_TARGET_KEY, selection.target_type || 'service');
+        localStorage.setItem(COMPLETION_SERVICE_KEY, selection.target_key || 'default');
+      },
+    },
+  );
 }
-
-$completionServiceSelect.addEventListener('change', () => {
-  localStorage.setItem(COMPLETION_SERVICE_KEY, $completionServiceSelect.value || 'default');
-});
 
 function getSettings() {
   const val = (id) => { const v = document.getElementById(id).value.trim(); return v === '' ? null : parseFloat(v); };
@@ -1246,77 +1247,43 @@ async function initAiApiBase() {
   } catch {}
 }
 
-async function checkTempClientEnv() {
-  const tabs = ['thinkthinksyn', 'openrouter'];
-  await Promise.all(tabs.map(async tab => {
-    try {
-      const r = await fetch(`${_aiApiBase}/clients/${tab}/has-env-key`);
-      if (r.ok) {
-        const data = await r.json();
-        tempClientEnvKeys[tab] = !!data.has_env_key;
-      } else {
-        tempClientEnvKeys[tab] = false;
-      }
-    } catch {
-      tempClientEnvKeys[tab] = false;
-    }
-  }));
-  updateTabState();
-  updateApikeyModeUI();
-}
-
-function updateTabState() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    const tab = btn.dataset.tab;
-    if (tab === 'default') return;
-    // 仅在环境 key 缺失且未手动填入时 disable。手动填入不依赖 env。
-    btn.disabled = false;
-  });
-}
-
-let apikeyMode = 'default'; // 'default' (使用 env) | 'manual' (手动输入)
-
-function updateApikeyModeUI() {
-  const $btn = document.getElementById('btn-apikey-mode');
-  const $apikeyInput = document.getElementById('input-apikey');
-  const tab = currentTab;
-  if (tab === 'default') {
-    $btn.classList.add('hidden');
-    return;
-  }
-  const hasEnv = !!tempClientEnvKeys[tab];
-  if (hasEnv) {
-    $btn.classList.remove('hidden');
-    $btn.textContent = apikeyMode === 'default' ? '默认' : '手动';
-    if (apikeyMode === 'default') {
-      $apikeyInput.value = '';
-      $apikeyInput.placeholder = '(使用环境变量)';
-      $apikeyInput.disabled = true;
-    } else {
-      $apikeyInput.placeholder = '输入临时 API Key';
-      $apikeyInput.disabled = false;
-    }
-  } else {
-    $btn.classList.add('hidden');
-    apikeyMode = 'manual';
-    $apikeyInput.placeholder = '输入临时 API Key (环境未配置)';
-    $apikeyInput.disabled = false;
-  }
-}
-
-function toggleApikeyMode() {
-  apikeyMode = apikeyMode === 'default' ? 'manual' : 'default';
-  updateApikeyModeUI();
-}
-
 function onCredentialsChange() {
   // 手动输入后不自动重拉模型，避免频繁请求；点击 “加载模型” 按钮手动重拉。
 }
 
+function normalizeOpenAILikedBaseUrl() {
+  return (document.getElementById('input-base-url').value || '').trim().replace(/\/+$/, '') || 'https://openrouter.ai/api/v1';
+}
+
 function getCompletionApiUrl() {
-  if (currentTab === 'thinkthinksyn') return `${_aiApiBase}/test_thinkthinksyn_complete`;
-  if (currentTab === 'openrouter') return `${_aiApiBase}/test_openrouter_complete`;
-  return typeof window.projAiApiPath === 'function' ? window.projAiApiPath(DEFAULT_COMPLETION_API_URL) : `${_aiApiBase}/complete`;
+  if (currentTab === 'openai') return `${normalizeOpenAILikedBaseUrl()}/chat/completions`;
+  const path = _completionTargetController ? _completionTargetController.buildPath('complete') : DEFAULT_COMPLETION_API_URL.replace(/^\/ai\//, '');
+  return typeof window.projAiApiPath === 'function' ? window.projAiApiPath(`/ai/${path}`) : `${_aiApiBase}/${path}`;
+}
+
+function getCompletionFetchOptions(body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (currentTab === 'openai') {
+    const apiKey = (document.getElementById('input-apikey').value || '').trim();
+    if (!apiKey) throw new Error('请填写 API Key');
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+  return {
+    method: 'POST', headers,
+    body: JSON.stringify(body), signal: abortController.signal,
+  };
+}
+
+function extractOpenAILikedMessage(data) {
+  const choice = data?.choices?.[0];
+  return choice?.message?.content || choice?.text || '';
+}
+
+function extractOpenAILikedDelta(data) {
+  const delta = data?.choices?.[0]?.delta || {};
+  const think = delta.reasoning_content || delta.reasoning || delta.thinking || '';
+  const text = delta.content || '';
+  return { text, think };
 }
 
 function reloadModelsForCurrentTab() {
@@ -1331,14 +1298,15 @@ function switchTab(tab, skipSave) {
   updateChatTabChrome(tab);
   if (tab === 'default') {
     $modelBar.classList.remove('visible');
+    $completionTargetGroup.style.display = '';
     $completionServiceGroup.style.display = '';
     $completionServiceDivider.style.display = '';
     void loadCompletionServiceOptions();
   } else {
     $modelBar.classList.add('visible');
+    $completionTargetGroup.style.display = 'none';
     $completionServiceGroup.style.display = 'none';
     $completionServiceDivider.style.display = 'none';
-    updateApikeyModeUI();
     loadModels(tab);
   }
   void refreshClientStatusPanel();
@@ -1351,11 +1319,14 @@ async function loadModels(tabKey) {
   $modelLoading.textContent = '正在读取模型列表';
   modelLoadingFor = tabKey;
   try {
-    const baseUrl = (document.getElementById('input-base-url').value || '').trim() || null;
-    const apikey = (apikeyMode === 'manual')
-      ? ((document.getElementById('input-apikey').value || '').trim() || null)
-      : null;
-    const r = await fetch(`${_aiApiBase}/clients/${tabKey}/list-models`, {
+    const baseUrl = (document.getElementById('input-base-url').value || '').trim() || 'https://openrouter.ai/api/v1';
+    const apikey = (document.getElementById('input-apikey').value || '').trim();
+    if (!apikey) {
+      $modelSelect.innerHTML = '<option value="">请先填写 API Key</option>';
+      $modelLoading.textContent = '加载模型需要手动输入 API Key';
+      return;
+    }
+    const r = await fetch(`${_aiApiBase}/clients/openai/list-models`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ base_url: baseUrl, apikey }),
@@ -1490,7 +1461,7 @@ async function checkStatus(force = false) {
 // ══════════════════════════════════════════════════════════════════════════════
 const CLIENT_STATUS_POLL_MS = 30000;
 let _clientStatusPollTimer = null;
-const TAB_TO_KIND = { default: 'completion', thinkthinksyn: 'completion', openrouter: 'completion' };
+const TAB_TO_KIND = { default: 'completion', 'openai': 'completion' };
 
 function _classifyClientState(client) {
   const now = Date.now() / 1000;
@@ -2245,22 +2216,13 @@ async function doSend() {
     frequency_penalty: settings.frequency_penalty,
   };
 
-  if (currentTab === 'default') {
-    body.service_key = $completionServiceSelect.value || 'default';
-  }
-
   if (currentTab !== 'default') {
     const model = $modelSelect.value;
     if (model) body.model = model;
-    const baseUrl = (document.getElementById('input-base-url').value || '').trim();
-    if (baseUrl) body.base_url = baseUrl;
-    if (apikeyMode === 'manual') {
-      const ak = (document.getElementById('input-apikey').value || '').trim();
-      if (!ak) {
-        showToast('请填写 API Key');
-        return;
-      }
-      if (ak) body.apikey = ak;
+    const ak = (document.getElementById('input-apikey').value || '').trim();
+    if (!ak) {
+      showToast('请填写 API Key');
+      return;
     }
   }
 
@@ -2298,17 +2260,14 @@ async function doNonStreamSend(body, clientStart, apiUrl) {
   }
 
   try {
-    const resp = await fetch(apiUrl, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body), signal: abortController.signal,
-    });
+    const resp = await fetch(apiUrl, getCompletionFetchOptions(body));
     if (!resp.ok) { const errText = await resp.text(); throw new Error(`HTTP ${resp.status}: ${errText}`); }
     const data = await resp.json();
     const clientMs = Math.round(performance.now() - clientStart);
     const msg = chatHistory[placeholderIdx];
-    msg.content = data.text || '';
+    msg.content = currentTab === 'openai' ? extractOpenAILikedMessage(data) : (data.text || '');
     msg.elapsed_ms = data.elapsed_ms;
-    msg.token_usage = data.token_usage;
+    msg.token_usage = currentTab === 'openai' ? data.usage : data.token_usage;
     msg._clientMs = clientMs;
     msg._streaming = false;
     renderAllMessages();
@@ -2360,10 +2319,7 @@ async function doStreamSend(body, clientStart, apiUrl) {
   }
 
   try {
-    const resp = await fetch(apiUrl, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body), signal: abortController.signal,
-    });
+    const resp = await fetch(apiUrl, getCompletionFetchOptions(body));
     if (!resp.ok) { const errText = await resp.text(); throw new Error(`HTTP ${resp.status}: ${errText}`); }
 
     const reader = resp.body.getReader();
@@ -2381,9 +2337,25 @@ async function doStreamSend(body, clientStart, apiUrl) {
         if (!line.startsWith('data: ')) continue;
         const jsonStr = line.slice(6).trim();
         if (!jsonStr) continue;
+        if (jsonStr === '[DONE]') { lastDoneData = lastDoneData || {}; continue; }
         try {
           const d = JSON.parse(jsonStr);
-          if (d.error) { fullText += '\n错误: ' + d.error; updateLiveContent(fullText); continue; }
+          if (d.error) { fullText += '\n错误: ' + (d.error.message || d.error); updateLiveContent(fullText); continue; }
+          if (currentTab === 'openai') {
+            const delta = extractOpenAILikedDelta(d);
+            if (delta.think) {
+              if (!isThinking) { isThinking = true; thinkStartTime = performance.now(); showLiveThink(true); }
+              thinkText += delta.think;
+              updateLiveThink(thinkText);
+            }
+            if (delta.text) {
+              if (isThinking) { isThinking = false; thinkEndTime = performance.now(); finalizeLiveThink(thinkText, thinkEndTime - thinkStartTime); }
+              fullText += delta.text;
+              updateLiveContent(fullText);
+            }
+            if (d.usage) lastDoneData = { token_usage: d.usage };
+            continue;
+          }
           if (d.done) { lastDoneData = d; continue; }
           if (d.type === 'think') {
             if (!isThinking) { isThinking = true; thinkStartTime = performance.now(); showLiveThink(true); }
@@ -2460,10 +2432,7 @@ $input.addEventListener('input', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 (async function init() {
   await initAiApiBase();
-  updateTabState();
   updateChatTabChrome(currentTab);
-  setInitBanner('正在检查特殊接口环境 Key…', true);
-  await checkTempClientEnv();
   setInitBanner('正在恢复本地会话…', true);
   await loadCompletionServiceOptions();
   loadConversations();

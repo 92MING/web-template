@@ -1023,7 +1023,7 @@ async def get_self_info() -> dict[str, Any]:
         "host": os.getenv("__HOST__", "127.0.0.1"),
         "port": int(os.getenv("__PORT__", "0")),
         "gsd_port": int(getattr(gsd, "_listen_port", 0) or 0),
-        "worker_count": len(sd.get_workers_snapshot()),
+        "worker_count": len(sd.workers),
         "control_supported": os.getenv("__SERVER_CONTROL_SUPPORTED__", "0").strip() in ("1", "true", "yes"),
         "metadata": _node_runtime_metadata(),
     }
@@ -1042,7 +1042,7 @@ async def distributed_health() -> dict[str, Any]:
         "name": cfg.name or sd.instance_uuid,
         "gsd_port": int(getattr(gsd, "_listen_port", 0) or 0),
         "status": "ok",
-        "worker_count": len(sd.get_workers_snapshot()),
+        "worker_count": len(sd.workers),
         "ready_workers": sd.count_ready_workers(),
         "metadata": _node_runtime_metadata(),
     }
@@ -1584,7 +1584,9 @@ async def forward_api_request(forward_path: str, request: Request) -> Response:
 # ── global shared dict sync ──────────────────────────────────────────────
 
 def _gsd_visible_items(namespace: str) -> list[dict[str, Any]]:
-    raw_ns = AppSharedData.Get().get_global_shared_dict_namespace(namespace)
+    from core.server.shared_dict import GlobalSharedDict
+    gsd = GlobalSharedDict.get_instance()
+    raw_ns = gsd._local_data.get(namespace, {})
     now = time.time()
     items: list[dict[str, Any]] = []
     for key, entry in raw_ns.items():
@@ -1606,11 +1608,12 @@ def _gsd_visible_items(namespace: str) -> list[dict[str, Any]]:
 
 @router.get("/gsd/namespaces")
 async def gsd_namespaces() -> dict[str, Any]:
-    namespaces = AppSharedData.Get().get_global_shared_dict_all_namespaces()
+    from core.server.shared_dict import GlobalSharedDict
+    gsd = GlobalSharedDict.get_instance()
     return {
         "namespaces": [
             {"namespace": namespace, "count": len(_gsd_visible_items(namespace))}
-            for namespace in sorted(namespaces)
+            for namespace in sorted(gsd._local_data)
         ]
     }
 
@@ -1751,7 +1754,9 @@ async def gsd_summary(
 
 @router.get("/gsd/item")
 async def gsd_item(key: str, namespace: str = "default") -> dict[str, Any]:
-    raw = AppSharedData.Get().get_global_shared_dict_entry(namespace, key)
+    from core.server.shared_dict import GlobalSharedDict
+    gsd = GlobalSharedDict.get_instance()
+    raw = gsd._local_data.get(namespace, {}).get(key)
     if raw is None or raw.get("deleted"):
         raise HTTPException(status_code=404, detail="Key not found")
     exp = raw.get("exp")
@@ -1801,7 +1806,7 @@ async def gsd_sync_request() -> dict[str, Any]:
     """Return the full GlobalSharedDict state for sync."""
     from core.server.shared_dict import GlobalSharedDict
     gsd = GlobalSharedDict.get_instance()
-    return {"node_id": gsd._node_id, "data": AppSharedData.Get().get_global_shared_dict_all_namespaces()}
+    return {"node_id": gsd._node_id, "data": dict(gsd._local_data)}
 
 
 # ── HTML page routes ─────────────────────────────────────────────────────
@@ -1818,3 +1823,4 @@ def register_distributed_html_routes(app):
     async def distributed_data_panel_html():
         path = get_resources("admin-panel", "panel", "distributed_data.html") or Path("distributed_data.html")
         return html_response_from_path(path, not_found_message="panel/distributed_data.html not found")
+

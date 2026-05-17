@@ -5,9 +5,11 @@
 import os
 import time
 import json
+import io
 import asyncio
 import inspect
 import logging
+from collections.abc import Mapping as MappingABC, MutableMapping as MutableMappingABC
 from pathlib import Path
 from typing import Literal, TypedDict, cast
 
@@ -17,17 +19,17 @@ from pydantic import ConfigDict, Field
 
 from core.utils.type_utils import AdvancedBaseModel
 from core.ai import (
-    clear_runtime_services,
     get_predefined_service_kinds,
-    preload_default_services,
+    reconcile_runtime_services,
 )
-from core.ai.shared import AIServiceKind, ConcurrentPool
+from core.ai.shared import AIServiceKind
 from core.ai.base import (
     ServiceClient,
     ServiceClientBase,
+    ProbeInterval,
     set_service_runtime_reloading,
 )
-from core.ai.config import AIServicesConfig
+from core.ai.config import AI_SERVICES_CONFIG_SOURCE_ENV, AIServicesConfig, _load_config_file
 from core.constants import PROJECT_DIR
 
 from ._client_view import build_client_info as build_ai_service_client_info
@@ -45,6 +47,7 @@ from ...shared import (
 
 logger = logging.getLogger(__name__)
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient", "testserver"}
+_synced_runtime_config_version: int | None = None
 type AIServiceConfigSource = Literal["shared-runtime", "process-env", "defaults"]
 
 
@@ -52,6 +55,7 @@ class AIServiceSyncInfo(TypedDict):
     config: AIServicesConfig | None
     version: int
     source: AIServiceConfigSource
+    raw_config: dict[str, object] | None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Response models
@@ -68,6 +72,7 @@ class ClientStatusInfo(AdvancedBaseModel):
     last_error: str | None = None
     speed_ewma: float = 0.0
     last_success_at: float = 0.0
+    last_probe_at: float = 0.0
     priority: float = 0.0
     strategy_lvl: int = 0
     max_concurrent: int | None = None
@@ -81,7 +86,7 @@ class ServiceInstanceInfo(AdvancedBaseModel):
     service_type: str
     key: str
     fail_cooldown: float = 10.0
-    recovery_interval: float | None = None
+    recovery_interval: ProbeInterval | float | None = None
     client_count: int = 0
     clients: list[ClientStatusInfo] = Field(default_factory=list)
 
@@ -122,7 +127,9 @@ class AIServicesSettingsResponse(AdvancedBaseModel):
     config_source: str
     config_version: int
     config: AIServicesConfig
+    raw_config: dict[str, object] | None = None
     client_types: list[str] = Field(default_factory=list)
+    client_types_by_kind: dict[str, list[str]] = Field(default_factory=dict)
     service_kinds: list[AIServiceKind] = Field(default_factory=list)
     workers: list[AIServiceWorkerInfo] = Field(default_factory=list)
     reload_state: list[AIServiceReloadStateInfo] = Field(default_factory=list)
@@ -151,14 +158,21 @@ class AIServiceProbeResponse(AdvancedBaseModel):
 
 
 class AIServicesSettingsApplyRequest(AdvancedBaseModel):
-    config: AIServicesConfig
+    config: dict[str, object]
     wait_for_reload: bool = True
 
 
 class AIServiceRuntimeClientUpdateRequest(AdvancedBaseModel):
-    max_concurrent: int | None = None
-    priority: float | None = None
-    strategy_lvl: int | None = None
+    model_config = ConfigDict(extra='allow')
+
+    values: dict[str, object] = Field(default_factory=dict)
+
+    def update_values(self) -> dict[str, object]:
+        values = dict(self.values)
+        extra = getattr(self, 'model_extra', None)
+        if isinstance(extra, dict):
+            values.update(cast(dict[str, object], extra))
+        return values
 
 
 def _probe_error_from_result(client: ServiceClientBase, result: object | None, exc: Exception | None = None) -> str | None:
@@ -242,6 +256,7 @@ def _build_client_status(client: ServiceClientBase | ServiceClient[ServiceClient
         last_error=info.last_error,
         speed_ewma=info.speed_ewma,
         last_success_at=info.last_success_at,
+        last_probe_at=info.last_probe_at,
         priority=info.priority,
         strategy_lvl=info.strategy_lvl,
         max_concurrent=info.max_concurrent,
@@ -303,43 +318,48 @@ def _find_runtime_service_client(
     return None
 
 
-def _set_runtime_client_max_concurrent(client: ServiceClientBase, value: int | None) -> None:
-    if value is None:
-        client.max_concurrent = None
-        return
-    next_value = max(1, int(value))
-    pool = getattr(client, 'max_concurrent', None)
-    if isinstance(pool, ConcurrentPool):
-        pool.max_concurrent = next_value
-        return
-    client.max_concurrent = ConcurrentPool(getattr(client, 'key', None), next_value)
-
-
 async def apply_ai_service_client_value_update(
     *,
     service_type: str,
     service_key: str,
     client_key: str,
-    update_max_concurrent: bool = False,
-    max_concurrent: int | None = None,
-    update_priority: bool = False,
-    priority: float | None = None,
-    update_strategy_lvl: bool = False,
-    strategy_lvl: int | None = None,
+    values: MappingABC[str, object] | None = None,
 ) -> ClientStatusInfo:
     found = _find_runtime_service_client(service_type, service_key, client_key)
     if found is None:
         raise KeyError(f'AI service client {service_type}:{service_key}:{client_key} not found.')
     instance, binding = found
-    if update_max_concurrent:
-        _set_runtime_client_max_concurrent(binding.client, max_concurrent)
-    if update_priority:
-        await instance.set_client_priority(client_key, priority)  # type: ignore[attr-defined]
-    if update_strategy_lvl:
-        await instance.set_client_strategy_lvl(client_key, strategy_lvl)  # type: ignore[attr-defined]
+    runtime_values = dict(values or {})
+    client_values = dict(runtime_values)
+    if 'priority' in runtime_values:
+        await instance.set_client_priority(client_key, runtime_values['priority'])  # type: ignore[attr-defined]
+        client_values.pop('priority', None)
+    if 'strategy_lvl' in runtime_values:
+        await instance.set_client_strategy_lvl(client_key, runtime_values['strategy_lvl'])  # type: ignore[attr-defined]
+        client_values.pop('strategy_lvl', None)
+    if client_values and not binding.client.update(**client_values):
+        raise ValueError(f'AI service client {service_type}:{service_key}:{client_key} cannot update values: {sorted(client_values)}')
     sync_info = sync_ai_services_config_from_shared()
     _get_shared().invalidate_cache('ai-services:')
     return _build_client_status(binding, sync_info['config'])
+
+
+async def apply_ai_service_client_value_updates_from_shared(version: int = 0) -> int:
+    applied_version = int(version or 0)
+    for update in _get_shared().get_ai_service_client_value_updates_since(applied_version):
+        update_version = int(update.get('version') or 0)
+        try:
+            await apply_ai_service_client_value_update(
+                service_type=str(update.get('service_type') or ''),
+                service_key=str(update.get('service_key') or ''),
+                client_key=str(update.get('client_key') or ''),
+                values=cast(dict[str, object], update.get('values') if isinstance(update.get('values'), dict) else {}),
+            )
+        except Exception:
+            pass
+        finally:
+            applied_version = max(applied_version, update_version)
+    return applied_version
 
 
 def _get_shared() -> AppSharedData:
@@ -352,17 +372,209 @@ def _serialize_ai_services_config(cfg: AIServicesConfig | None) -> str | None:
     return cfg.to_serialized_env()
 
 
+def _serialize_raw_ai_services_config(data: dict[str, object] | None) -> str | None:
+    if data is None:
+        return None
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _raw_config_from_serialized(serialized: object) -> dict[str, object] | None:
+    if not serialized:
+        return None
+    try:
+        data = json.loads(str(serialized))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _raw_config_from_source(cfg: AIServicesConfig | None) -> dict[str, object] | None:
+    if cfg is None:
+        return None
+    env_raw = _raw_config_from_serialized(os.environ.get('__AI_SERVICES_CONFIG__'))
+    if env_raw is not None:
+        return env_raw
+    source_path = cfg.source_path()
+    if source_path is None or not source_path.is_file():
+        return None
+    try:
+        data = _load_config_file(source_path)
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _default_ai_services_config_path() -> Path:
     return PROJECT_DIR / 'config' / 'ai_services.yaml'
 
 
-def _write_ai_services_config_file(cfg: AIServicesConfig) -> Path:
-    import yaml  # type: ignore[import-untyped]
-    path = _default_ai_services_config_path()
+def _ai_services_config_source_path(*configs: AIServicesConfig | None) -> Path | None:
+    for cfg in configs:
+        if cfg is None:
+            continue
+        source_path = cfg.source_path()
+        if source_path is not None:
+            return source_path
+    env_source = os.environ.get(AI_SERVICES_CONFIG_SOURCE_ENV)
+    return Path(env_source) if env_source else None
+
+
+def _ai_services_config_write_path(*configs: AIServicesConfig | None) -> Path:
+    source_path = _ai_services_config_source_path(*configs)
+    if source_path is None:
+        return _default_ai_services_config_path()
+    if source_path.suffix.lower() not in {'.yaml', '.yml', '.json', '.toml'}:
+        return _default_ai_services_config_path()
+    return source_path
+
+
+def _drop_toml_none(value: object) -> object:
+    if isinstance(value, MappingABC):
+        return {str(k): _drop_toml_none(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_drop_toml_none(item) for item in value if item is not None]
+    return value
+
+
+def _toml_key(key: str) -> str:
+    if key and all(ch.isalnum() or ch in {'_', '-'} for ch in key):
+        return key
+    return json.dumps(key, ensure_ascii=False)
+
+
+def _toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return '[' + ', '.join(_toml_value(item) for item in value) + ']'
+    if isinstance(value, MappingABC):
+        items = [f'{_toml_key(str(k))} = {_toml_value(v)}' for k, v in value.items()]
+        return '{ ' + ', '.join(items) + ' }'
+    raise ValueError(f'Unsupported TOML value type: {type(value).__name__}')
+
+
+def _dump_toml_table(lines: list[str], path: tuple[str, ...], data: MappingABC[str, object]) -> None:
+    scalar_items: list[tuple[str, object]] = []
+    table_items: list[tuple[str, MappingABC[str, object]]] = []
+    for key, value in data.items():
+        if isinstance(value, MappingABC):
+            table_items.append((str(key), value))
+        else:
+            scalar_items.append((str(key), value))
+
+    if path:
+        if lines and lines[-1] != '':
+            lines.append('')
+        lines.append(f'[{".".join(_toml_key(part) for part in path)}]')
+    for key, value in scalar_items:
+        lines.append(f'{_toml_key(key)} = {_toml_value(value)}')
+    for key, value in table_items:
+        _dump_toml_table(lines, (*path, key), value)
+
+
+def _dump_toml(data: MappingABC[str, object]) -> str:
+    lines: list[str] = []
+    _dump_toml_table(lines, (), data)
+    return '\n'.join(lines).rstrip() + '\n'
+
+
+def _update_comment_preserving_mapping(target: MutableMappingABC[object, object], source: MappingABC[str, object]) -> None:
+    for key in list(target.keys()):
+        if str(key) not in source:
+            del target[key]
+    for key, value in source.items():
+        existing = target.get(key)
+        if isinstance(existing, MutableMappingABC) and isinstance(value, MappingABC):
+            _update_comment_preserving_mapping(existing, value)
+        else:
+            target[key] = value
+
+
+def _dump_toml_preserving_comments(path: Path, data: MappingABC[str, object]) -> str:
+    toml_data = cast(MappingABC[str, object], _drop_toml_none(data))
+    try:
+        import tomlkit  # type: ignore[import-untyped]
+    except Exception:
+        return _dump_toml(toml_data)
+
+    existing: object = None
+    if path.is_file():
+        existing = tomlkit.parse(path.read_text(encoding='utf-8'))
+    if isinstance(existing, MutableMappingABC):
+        _update_comment_preserving_mapping(existing, toml_data)
+        return tomlkit.dumps(existing)
+    return tomlkit.dumps(dict(toml_data))
+
+
+def _extract_yaml_comments(path: Path) -> str:
+    if not path.is_file():
+        return ''
+    comments: list[str] = []
+    seen: set[str] = set()
+    for line in path.read_text(encoding='utf-8').splitlines():
+        if line.strip().startswith('#') and line not in seen:
+            comments.append(line)
+            seen.add(line)
+    return '\n'.join(comments).rstrip() + '\n' if comments else ''
+
+
+def _dump_yaml_preserving_comments(path: Path, data: MappingABC[str, object]) -> str:
+    try:
+        from ruamel.yaml import YAML  # type: ignore[import-untyped]
+    except Exception:
+        import yaml  # type: ignore[import-untyped]
+        dumped = yaml.safe_dump(dict(data), allow_unicode=True, sort_keys=False)
+        return _extract_yaml_comments(path) + dumped
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    yaml.default_flow_style = False
+    existing: object = None
+    if path.is_file():
+        existing = yaml.load(path.read_text(encoding='utf-8'))
+    if isinstance(existing, MutableMappingABC):
+        _update_comment_preserving_mapping(existing, data)
+        dump_data: object = existing
+    else:
+        dump_data = dict(data)
+    stream = io.StringIO()
+    yaml.dump(dump_data, stream)
+    return stream.getvalue()
+
+
+def _serialize_ai_services_config_for_file(
+    cfg: AIServicesConfig,
+    path: Path,
+    raw_data: dict[str, object] | None = None,
+) -> str:
+    suffix = path.suffix.lower()
+    data = raw_data if raw_data is not None else cfg.model_dump(mode='json')
+    if suffix == '.json':
+        return json.dumps(data, ensure_ascii=False, indent=2) + '\n'
+    if suffix == '.toml':
+        return _dump_toml_preserving_comments(path, data)
+    if suffix in {'.yaml', '.yml'}:
+        return _dump_yaml_preserving_comments(path, data)
+    raise ValueError(f'Unsupported AI services config write format: {path.suffix}')
+
+
+def _write_ai_services_config_file(
+    cfg: AIServicesConfig,
+    source_cfg: AIServicesConfig | None = None,
+    raw_data: dict[str, object] | None = None,
+) -> Path:
+    path = _ai_services_config_write_path(source_cfg, cfg)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = cfg.model_dump(mode='json')
-    text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    text = _serialize_ai_services_config_for_file(cfg, path, raw_data=raw_data)
     path.write_text(text, encoding='utf-8')
+    cfg.set_source_path(path)
+    os.environ[AI_SERVICES_CONFIG_SOURCE_ENV] = str(path)
     return path
 
 
@@ -379,25 +591,40 @@ def _config_source(shared_snapshot: AIServiceConfigSnapshot, cfg: AIServicesConf
 
 
 def sync_ai_services_config_from_shared() -> AIServiceSyncInfo:
+    global _synced_runtime_config_version
     shared_snapshot = _get_shared().get_ai_services_config()
     serialized = shared_snapshot.get('serialized_config')
+    version = int(shared_snapshot.get('version') or 0)
     if serialized:
         try:
+            raw_config = _raw_config_from_serialized(serialized)
+            previous_cfg = AIServicesConfig.Global()
             os.environ['__AI_SERVICES_CONFIG__'] = str(serialized)
-            cfg = AIServicesConfig.model_validate(json.loads(str(serialized)))
+            cfg = AIServicesConfig.model_validate(raw_config or json.loads(str(serialized)))
+            source_path = os.environ.get(AI_SERVICES_CONFIG_SOURCE_ENV)
+            if source_path:
+                cfg.set_source_path(source_path)
             AIServicesConfig.SetGlobal(cfg)
+            if _synced_runtime_config_version != version:
+                from .api import reset_ai_service_route_caches
+
+                reset_ai_service_route_caches(get_predefined_service_kinds())
+                reconcile_runtime_services(previous_cfg, cfg)
+                _synced_runtime_config_version = version
             return {
                 'config': cfg,
-                'version': int(shared_snapshot.get('version') or 0),
+                'version': version,
                 'source': 'shared-runtime',
+                'raw_config': raw_config,
             }
         except Exception as exc:
             logger.warning('Failed to sync AI services config from shared state: %s', exc)
     cfg = _current_process_ai_config()
     return {
         'config': cfg,
-        'version': int(shared_snapshot.get('version') or 0),
+        'version': version,
         'source': _config_source(shared_snapshot, cfg),
+        'raw_config': _raw_config_from_source(cfg),
     }
 
 
@@ -409,17 +636,25 @@ def _build_settings_payload() -> AIServicesSettingsResponse:
     sync_info = sync_ai_services_config_from_shared()
     cfg = sync_info['config']
     shared = _get_shared()
-    try:
-        preload_default_services(background=True, probe_predefined_clients=False)
-    except Exception as exc:
-        logger.debug('AI service preload skipped while building settings payload: %s', exc)
+    service_kinds = list(get_predefined_service_kinds())
+    client_types_by_kind = {
+        str(service_kind): ServiceClientBase.RegisteredClientTypes(service_kind=service_kind)
+        for service_kind in service_kinds
+    }
+    client_types = sorted({
+        client_type
+        for type_list in client_types_by_kind.values()
+        for client_type in type_list
+    })
     return AIServicesSettingsResponse(
         config_loaded=cfg is not None,
         config_source=sync_info['source'],
         config_version=int(sync_info['version']),
         config=cfg if cfg is not None else _empty_ai_config_payload(),
-        client_types=ServiceClientBase.RegisteredClientTypes(),
-        service_kinds=list(get_predefined_service_kinds()),
+        raw_config=sync_info.get('raw_config'),
+        client_types=client_types,
+        client_types_by_kind=client_types_by_kind,
+        service_kinds=service_kinds,
         workers=[AIServiceWorkerInfo.model_validate(row) for row in shared.get_workers_snapshot()],
         reload_state=[AIServiceReloadStateInfo.model_validate(row) for row in shared.get_ai_services_reload_state()],
         services=_collect_all_services(cfg),
@@ -436,6 +671,9 @@ def _infer_affected_service_kinds(
     prev_dump = previous_cfg.model_dump(mode='json')
     next_dump = next_cfg.model_dump(mode='json')
 
+    if prev_dump.get('kwargs') != next_dump.get('kwargs'):
+        return predefined_kinds
+
     affected: list[AIServiceKind] = []
     for service_kind in predefined_kinds:
         if prev_dump.get(service_kind) != next_dump.get(service_kind):
@@ -450,6 +688,7 @@ def apply_ai_services_runtime_update(
     version: int,
     reason: str | None = None,
 ) -> AIServiceRuntimeUpdateResult:
+    global _synced_runtime_config_version
     affected_kinds = list(service_kinds or get_predefined_service_kinds())
     shared = _get_shared()
     pid = os.getpid()
@@ -469,9 +708,13 @@ def apply_ai_services_runtime_update(
     )
 
     try:
+        previous_cfg = AIServicesConfig.Global()
         if serialized_config:
             os.environ['__AI_SERVICES_CONFIG__'] = serialized_config
             cfg = AIServicesConfig.model_validate(json.loads(serialized_config))
+            source_path = os.environ.get(AI_SERVICES_CONFIG_SOURCE_ENV)
+            if source_path:
+                cfg.set_source_path(source_path)
         else:
             os.environ.pop('__AI_SERVICES_CONFIG__', None)
             cfg = None
@@ -481,12 +724,8 @@ def apply_ai_services_runtime_update(
         from .api import reset_ai_service_route_caches
 
         reset_ai_service_route_caches(affected_kinds)
-        clear_runtime_services(service_kinds=affected_kinds)
-        preload_default_services(
-            background=False,
-            probe_predefined_clients=False,
-            service_kinds=affected_kinds,
-        )
+        reconcile_runtime_services(previous_cfg, cfg, affected_kinds)
+        _synced_runtime_config_version = version
         shared.invalidate_cache('ai-services:')
         shared.update_ai_services_reload_state(
             pid=pid,
@@ -601,13 +840,9 @@ def register_ai_services_panel_routes(app: FastAPI):
     async def api_ai_services_overview() -> AIServicesOverviewResponse:
         """Return registered AI service instances and their client health status."""
         shared = _get_shared()
-        cache_key = "ai-services:overview"
-        cached = shared.get_cache(cache_key)
-        if cached is not None:
-            return AIServicesOverviewResponse.model_validate(cached)
         sync_info = sync_ai_services_config_from_shared()
         cfg = sync_info['config']
-        payload = AIServicesOverviewResponse(
+        return AIServicesOverviewResponse(
             services=_collect_all_services(cfg),
             config_loaded=cfg is not None,
             config_source=str(sync_info['source']),
@@ -615,8 +850,6 @@ def register_ai_services_panel_routes(app: FastAPI):
             reload_state=[AIServiceReloadStateInfo.model_validate(row) for row in shared.get_ai_services_reload_state()],
             timestamp=time.time(),
         )
-        shared.set_cache(cache_key, payload.model_dump(mode="python"), ttl_seconds=5)
-        return payload
 
     @app.get(admin_path('api/ai-services/settings'), response_model=AIServicesSettingsResponse, include_in_schema=False)
     @app.get(admin_path('ai-services/settings'), response_model=AIServicesSettingsResponse)
@@ -631,22 +864,39 @@ def register_ai_services_panel_routes(app: FastAPI):
     ) -> AIServicesSettingsApplyResponse:
         _ensure_local_request(request)
 
-        current_cfg = sync_ai_services_config_from_shared()['config']
-        next_cfg = payload.config
+        current_sync_info = sync_ai_services_config_from_shared()
+        current_cfg = current_sync_info['config']
+        raw_next_config = payload.config
+        next_cfg = AIServicesConfig.model_validate(raw_next_config)
+        new_serialized = _serialize_raw_ai_services_config(raw_next_config)
+        previous_serialized = _serialize_raw_ai_services_config(current_sync_info.get('raw_config')) or _serialize_ai_services_config(current_cfg)
         affected_kinds = _infer_affected_service_kinds(current_cfg, next_cfg)
         if not affected_kinds:
-            _get_shared().invalidate_cache('ai-services:')
+            shared = _get_shared()
+            if new_serialized != previous_serialized:
+                version = int(time.time() * 1000)
+                written_path = _write_ai_services_config_file(next_cfg, source_cfg=current_cfg, raw_data=raw_next_config)
+                shared.set_ai_services_config(new_serialized, version=version)
+                shared.invalidate_cache('ai-services:')
+                return AIServicesSettingsApplyResponse(
+                    saved=True,
+                    reloaded=False,
+                    config_version=version,
+                    service_kinds=[],
+                    message=f'AI 服务配置已写入 {written_path}。运行时参数未变化，无需重载 worker。',
+                    workers=[AIServiceWorkerInfo.model_validate(row) for row in shared.get_workers_snapshot()],
+                    reload_results=[],
+                )
+            shared.invalidate_cache('ai-services:')
             return AIServicesSettingsApplyResponse(
                 saved=True,
                 reloaded=False,
                 service_kinds=[],
                 message='配置未发生变更。',
-                workers=[AIServiceWorkerInfo.model_validate(row) for row in _get_shared().get_workers_snapshot()],
+                workers=[AIServiceWorkerInfo.model_validate(row) for row in shared.get_workers_snapshot()],
                 reload_results=[],
             )
 
-        new_serialized = next_cfg.to_serialized_env()
-        previous_serialized = _serialize_ai_services_config(current_cfg)
         shared = _get_shared()
         shared.clear_ai_services_reload_state()
         version = int(time.time() * 1000)
@@ -679,7 +929,7 @@ def register_ai_services_panel_routes(app: FastAPI):
             )
 
         try:
-            written_path = _write_ai_services_config_file(next_cfg)
+            written_path = _write_ai_services_config_file(next_cfg, source_cfg=current_cfg, raw_data=raw_next_config)
         except Exception as exc:
             rollback_version = version + 1
             shared.clear_ai_services_reload_state()
@@ -693,7 +943,7 @@ def register_ai_services_panel_routes(app: FastAPI):
             raise HTTPException(
                 500,
                 {
-                    'message': f'AI 服务配置已下发但写入 {_default_ai_services_config_path()} 失败，已尝试回滚。',
+                    'message': f'AI 服务配置已下发但写入 {_ai_services_config_write_path(current_cfg, next_cfg)} 失败，已尝试回滚。',
                     'error': str(exc),
                     'service_kinds': affected_kinds,
                     'reload_results': reload_results,
@@ -723,18 +973,13 @@ def register_ai_services_panel_routes(app: FastAPI):
         request: Request,
     ) -> ClientStatusInfo:
         _ensure_local_request(request)
-        fields_set = getattr(payload, 'model_fields_set', set())
+        values = payload.update_values()
         try:
             local_status = await apply_ai_service_client_value_update(
                 service_type=service_type,
                 service_key=service_key,
                 client_key=client_key,
-                update_max_concurrent='max_concurrent' in fields_set,
-                max_concurrent=payload.max_concurrent,
-                update_priority='priority' in fields_set,
-                priority=payload.priority,
-                update_strategy_lvl='strategy_lvl' in fields_set,
-                strategy_lvl=payload.strategy_lvl,
+                values=values,
             )
         except KeyError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -742,6 +987,12 @@ def register_ai_services_panel_routes(app: FastAPI):
             raise HTTPException(400, str(exc)) from exc
 
         shared = _get_shared()
+        shared.record_ai_service_client_value_update(
+            service_type=service_type,
+            service_key=service_key,
+            client_key=client_key,
+            values=values,
+        )
         worker_ids = [row['pid'] for row in shared.get_workers_snapshot() if row['pid'] and row['pid'] != os.getpid()]
         if worker_ids:
             msg_kwargs = dict(
@@ -749,12 +1000,7 @@ def register_ai_services_panel_routes(app: FastAPI):
                 service_type=service_type,
                 service_key=service_key,
                 client_key=client_key,
-                update_max_concurrent='max_concurrent' in fields_set,
-                max_concurrent=payload.max_concurrent,
-                update_priority='priority' in fields_set,
-                priority=payload.priority,
-                update_strategy_lvl='strategy_lvl' in fields_set,
-                strategy_lvl=payload.strategy_lvl,
+                values=values,
             )
             await asyncio.gather(*(
                 send_message_to_worker(pid, WorkerAIServiceClientValueMessage(**msg_kwargs))

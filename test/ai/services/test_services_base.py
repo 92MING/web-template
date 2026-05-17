@@ -3,6 +3,7 @@ import sys
 import time
 import asyncio
 import unittest
+import aiohttp
 from typing import Awaitable, Callable
 from pathlib import Path
 
@@ -11,6 +12,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from core.ai.base import (
+    ProbeInterval,
     ServiceBase,
     ServiceClientBase,
     StrategyLevel,
@@ -28,7 +30,9 @@ class _FakeAsyncProbeClient(ServiceClientBase[None]):
         return None
 
     def __init__(self, *, healthy: bool = True, probe_log: list[float] | None = None):
-        super().__init__(key=f'probe-{time.time_ns()}')
+        unique_key = f'probe-{time.time_ns()}'
+        super().__init__(key=unique_key)
+        self.unique_key = unique_key
         self.healthy = healthy
         self.probe_log = probe_log if probe_log is not None else []
 
@@ -44,8 +48,8 @@ class _FakeAsyncProbeClient(ServiceClientBase[None]):
 
 class _FakeAsyncProbeService(ServiceBase):
 
-    def __init__(self, *clients: _FakeAsyncProbeClient, recovery_interval: float | None = None):
-        super().__init__(*clients, fail_cooldown=1.0, recovery_interval=recovery_interval)
+    def __init__(self, *clients: _FakeAsyncProbeClient, recovery_interval: float | None = None, **kwargs):
+        super().__init__(*clients, fail_cooldown=1.0, recovery_interval=recovery_interval, **kwargs)
 
     @classmethod
     def Default(cls) -> '_FakeAsyncProbeService':
@@ -117,8 +121,8 @@ class _ReloadableFailoverService(ServiceBase):
 
 class _SessionCachingClient(ServiceClientBase[None]):
 
-    def __init__(self, *, key: str):
-        super().__init__(key=key)
+    def __init__(self, *, key: str, **kwargs):
+        super().__init__(key=key, **kwargs)
 
     @classmethod
     def TestingInput(cls) -> None:
@@ -163,6 +167,24 @@ class _CachedDefaultService(ServiceBase):
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 class TestServiceBaseAsyncProbe(unittest.IsolatedAsyncioTestCase):
+
+
+    def test_default_probe_interval_caps_at_24_hours(self):
+        policy = ServiceBase._normalize_probe_interval_value(ServiceBase.DefaultProbeInterval)
+
+        self.assertIsInstance(policy, ProbeInterval)
+        self.assertEqual(policy.max_interval, 86400.0)
+
+
+    def test_effective_probe_interval_decays_for_idle_clients(self):
+        client = _FakeAsyncProbeClient()
+        service = _FakeAsyncProbeService(client, recovery_interval=1.0)
+        self.addCleanup(service.close)
+
+        service._recovery_interval = ProbeInterval(interval=10.0, decay=2.0, max_interval=60.0)
+        client._state_created_at = time.time() - 25.0
+
+        self.assertEqual(service._effective_probe_interval(client, now=time.time()), 40.0)
 
     async def test_probe_client_min_health_awaits_async_client_probe(self):
         probe_log: list[float] = []
@@ -319,6 +341,52 @@ class TestServiceBaseAsyncProbe(unittest.IsolatedAsyncioTestCase):
         asyncio.create_task(_stop_soon())
         stopped = await service._wait_recovery_interval()
         self.assertTrue(stopped)
+
+    async def test_registered_probe_skips_recent_success_and_probes_stale_client(self):
+        probe_log: list[float] = []
+        client = _FakeAsyncProbeClient(healthy=True, probe_log=probe_log)
+        service = _FakeAsyncProbeService(client, recovery_interval=10.0, key='registered-probe-test')
+        self.addCleanup(service.close)
+        service._load_client_status_from_shared = lambda *_args, **_kwargs: False  # type: ignore[method-assign]
+
+        client._state_last_success_at = time.time()
+        skipped = await service._probe_client_if_due(client, interval=10.0)
+
+        self.assertIsNone(skipped)
+        self.assertFalse(probe_log)
+
+        client._state_last_success_at = time.time() - 20.0
+        probed = await service._probe_client_if_due(client, interval=10.0)
+
+        self.assertTrue(probed)
+        self.assertTrue(probe_log)
+
+    async def test_registered_probe_skips_recent_failed_probe_attempt(self):
+        probe_log: list[float] = []
+        client = _FakeAsyncProbeClient(healthy=False, probe_log=probe_log)
+        service = _FakeAsyncProbeService(client, recovery_interval=10.0, key='registered-probe-failure-interval-test')
+        self.addCleanup(service.close)
+
+        first = await ServiceBase.ProbeRegisteredClientsOnce()
+        second = await ServiceBase.ProbeRegisteredClientsOnce()
+
+        self.assertEqual(first['probed'], 1)
+        self.assertEqual(first['unhealthy'], 1)
+        self.assertEqual(second['probed'], 0)
+        self.assertEqual(len(probe_log), 1)
+
+    async def test_registered_probe_skips_services_with_disabled_probe_interval(self):
+        probe_log: list[float] = []
+        client = _FakeAsyncProbeClient(healthy=True, probe_log=probe_log)
+        service = _FakeAsyncProbeService(client, recovery_interval=10.0, key='registered-probe-disabled-test')
+        service._recovery_interval = None
+        self.addCleanup(service.close)
+
+        result = await ServiceBase.ProbeRegisteredClientsOnce()
+
+        self.assertEqual(result['checked'], 0)
+        self.assertEqual(result['probed'], 0)
+        self.assertFalse(probe_log)
 
 
 class TestServiceBaseOnSuccessOnFail(unittest.IsolatedAsyncioTestCase):
@@ -598,7 +666,7 @@ class TestRuntimeReloadRetirement(unittest.IsolatedAsyncioTestCase):
         ServiceBase.ServiceInstances.clear()
         ServiceBase.ServiceInstances.update(self._saved_instances)
 
-    async def test_clear_instances_retires_cached_default_service_and_client(self):
+    async def test_clear_instances_retires_cached_default_service_without_closing_client(self):
         first = _ReloadableFailoverService.Default()
         first_client = first.clients[0]
 
@@ -606,13 +674,69 @@ class TestRuntimeReloadRetirement(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(removed, 1)
         self.assertTrue(first._closed)
-        self.assertTrue(first_client._closed)
+        self.assertFalse(first_client._closed)
         with self.assertRaisesRegex(RuntimeError, 'retired'):
             await first.call()
 
         second = _ReloadableFailoverService.Default()
         self.assertIsNot(first, second)
         self.assertEqual(_ReloadableFailoverService.default_call_count, 2)
+
+    async def test_clear_client_cache_can_drop_key_without_closing_shared_client(self):
+        first = _SessionCachingClient(key='shared-reload-client')
+
+        removed = ServiceClientBase.ClearClientCache(keys={'shared-reload-client'}, close=False)
+        second = _SessionCachingClient(key='shared-reload-client')
+
+        self.assertEqual(removed, 1)
+        self.assertIsNot(first, second)
+        self.assertFalse(first._closed)
+        self.assertFalse(second._closed)
+
+    async def test_main_process_shared_client_value_sync_updates_probe_service(self):
+        import core.ai as ai_runtime
+        from core.server.shared import AppSharedData
+
+        shared = AppSharedData.Get()
+        saved_instances = dict(ServiceBase.ServiceInstances)
+        saved_update_version = ai_runtime._main_process_client_value_version
+        saved_updates = dict(getattr(shared, 'ai_service_client_value_updates', {}))
+        saved_shared_update_version = int(getattr(shared, 'ai_service_client_value_version', 0))
+        service = None
+        client = None
+        try:
+            ServiceBase.ServiceInstances.clear()
+            client = _SessionCachingClient(key='main-sync-client')
+            service = _FakeAsyncProbeService(client, key='main-sync-service')
+            update = shared.record_ai_service_client_value_update(
+                service_type=type(service).__name__,
+                service_key='main-sync-service',
+                client_key=client.key,
+                values={
+                    'max_concurrent': 7,
+                    'priority': 2.5,
+                    'strategy_lvl': int(StrategyLevel.ON_ERROR),
+                },
+            )
+            ai_runtime._main_process_client_value_version = int(update['version']) - 1
+
+            ai_runtime.sync_main_process_probe_runtime_from_shared([])
+
+            self.assertIsNotNone(client.max_concurrent)
+            assert client.max_concurrent is not None
+            self.assertEqual(client.max_concurrent.max_concurrent, 7)
+            self.assertEqual(service._clients[0].priority, 2.5)
+            self.assertEqual(service._clients[0].strategy_lvl, StrategyLevel.ON_ERROR)
+        finally:
+            ai_runtime._main_process_client_value_version = saved_update_version
+            shared.ai_service_client_value_updates = saved_updates
+            shared.ai_service_client_value_version = saved_shared_update_version
+            if service is not None:
+                service.close()
+            if client is not None:
+                client.close(reason='test cleanup')
+            ServiceBase.ServiceInstances.clear()
+            ServiceBase.ServiceInstances.update(saved_instances)
 
     async def test_clear_client_cache_retires_cached_client_session(self):
         client = _SessionCachingClient(key='session-client')
@@ -659,3 +783,23 @@ class TestRuntimeReloadRetirement(unittest.IsolatedAsyncioTestCase):
         assert client._cached_session is not None
         self.assertFalse(client._cached_session.closed)
         client.close(reason='test cleanup')
+
+    async def test_injected_session_is_reused_and_not_closed_by_client(self):
+        session = aiohttp.ClientSession()
+        try:
+            client = _SessionCachingClient(key='session-injected', aiohttp_session=session)
+
+            reused = await client._get_session()
+
+            self.assertIs(reused, session)
+            client.close(reason='test cleanup')
+            self.assertFalse(session.closed)
+        finally:
+            await session.close()
+
+    async def test_closed_injected_session_raises_on_get_session(self):
+        session = aiohttp.ClientSession()
+        await session.close()
+
+        with self.assertRaisesRegex(RuntimeError, 'closed aiohttp_session'):
+            _SessionCachingClient(key='session-injected-closed', aiohttp_session=session)

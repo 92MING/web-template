@@ -57,7 +57,7 @@ body[data-proj-embedded="1"] .max-w-3xl.mx-auto {
 
   <!-- Header -->
   <div class="mb-8">
-    <a href="/admin/test/ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">← AI 测试</a>
+    <a href="../ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">← AI 测试</a>
     <h1 class="text-2xl font-bold text-gray-900 mt-2">语音识别测试 (LLM-ASR)</h1>
   </div>
 
@@ -80,6 +80,14 @@ body[data-proj-embedded="1"] .max-w-3xl.mx-auto {
   <!-- Common Options -->
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Service/Client</label>
+        <select id="service-target" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"><option value="service">service</option></select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Key</label>
+        <select id="service-instance" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"><option value="default">default</option></select>
+      </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">预期语言</label>
         <input id="expectedLangs" list="expectedLangOptions" type="text" placeholder="输入语言代码（逗号分隔），如 zh-tw,en,ja" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
@@ -197,7 +205,14 @@ body[data-proj-embedded="1"] .max-w-3xl.mx-auto {
 
 </div>
 
+<script src="/html-assets/js/ai-test-shared.js"></script>
 <script>
+let targetController = null;
+
+function selectedTargetPath(operation) {
+  return targetController ? targetController.buildPath(operation) : `completion/service/default/${operation}`;
+}
+
 // State
 let currentMode = 'asr';
 let currentFile = null;
@@ -217,6 +232,7 @@ const audioPlayer = document.getElementById('audioPlayer');
 const btnSubmit = document.getElementById('btnSubmit');
 
 // Init
+AITestShared.initServiceTargetControls('completion', 'service-target', 'service-instance').then((controller) => { targetController = controller; });
 renderHistory();
 loadLanguageSuggestions();
 
@@ -396,7 +412,7 @@ async function submitAudio() {
       const asrPrompt = document.getElementById('asrPrompt').value.trim();
       if (expectedLangs) formData.append('expected_languages', expectedLangs);
       if (asrPrompt) formData.append('prompt', asrPrompt);
-      const res = await fetch(window.projAiApiPath('/ai/asr'), { method: 'POST', body: formData });
+      const res = await fetch(window.projAiApiPath(`/ai/${selectedTargetPath('asr')}`), { method: 'POST', body: formData });
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();
@@ -411,7 +427,7 @@ async function submitAudio() {
       if (roles) formData.append('roles', roles);
       if (expectedLangs) formData.append('expected_languages', expectedLangs);
       if (asrPrompt) formData.append('prompt', asrPrompt);
-      const res = await fetch(window.projAiApiPath('/ai/transcript'), { method: 'POST', body: formData });
+      const res = await fetch(window.projAiApiPath(`/ai/${selectedTargetPath('transcript')}`), { method: 'POST', body: formData });
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();

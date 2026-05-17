@@ -24,10 +24,15 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from core.utils.network_utils.ssh_tunnel import (
     SSHTunnelConfig,
+    _build_openssh_forward_command,
     _find_ssh_config,
     _get_default_ssh_config,
+    _build_proxyjump_proxy_command,
+    _lookup_ssh_host_settings,
+    _start_ssh_tunnel_server,
     get_remote_forward_tunnel,
 )
+from core.utils.network_utils.helper_funcs import is_own_ip
 from core.storage.config import (
     _rewrite_url_with_tunnel,
     _rewrite_endpoint_with_tunnel,
@@ -118,6 +123,67 @@ class TestSSHConfigFileLookup(unittest.TestCase):
         # paramiko lookup returns a dict with only 'hostname' for unknown hosts
         # _find_ssh_config checks len==1 and returns None
         self.assertIsNone(result)
+
+    def test_lookup_includes_hostname_and_proxyjump(self):
+        settings = _lookup_ssh_host_settings("tts-server10")
+        if settings is None:
+            self.skipTest("tts-server10 not found in SSH config")
+        self.assertEqual(settings["hostname"], "localhost")
+        self.assertEqual(settings["proxyjump"], "tts-server12")
+
+
+class TestProxyJumpSupport(unittest.TestCase):
+
+    def test_proxyjump_command_uses_ssh_config_and_target(self):
+        command = _build_proxyjump_proxy_command("localhost", 25620, "tts-server12")
+        self.assertIn("ssh", command.lower())
+        self.assertIn("-W", command)
+        self.assertIn("localhost:25620", command)
+        self.assertIn("tts-server12", command)
+
+    def test_openssh_forward_command_disables_host_key_prompt(self):
+        command_parts = _build_openssh_forward_command(
+            ssh_host="tts-server10",
+            ssh_remote_ip="127.0.0.1",
+            ssh_remote_port=9198,
+            local_port=40123,
+        )
+        self.assertIn("StrictHostKeyChecking=no", command_parts)
+
+    def test_start_tunnel_uses_resolved_hostname_and_proxyjump(self):
+        fake_tunnel = MagicMock()
+        fake_tunnel.local_bind_port = 40123
+        settings = {
+            "hostname": "localhost",
+            "port": 25620,
+            "username": "server10",
+            "key_path": "C:/Users/yashi/.ssh/max_key",
+            "proxyjump": "tts-server12",
+            "proxycommand": None,
+        }
+
+        with (
+            patch("core.utils.network_utils.ssh_tunnel._lookup_ssh_host_settings", return_value=settings),
+            patch("core.utils.network_utils.ssh_tunnel._start_openssh_forward_tunnel", return_value=fake_tunnel) as mock_start,
+        ):
+            local_port = _start_ssh_tunnel_server("tts-server10", 9198, local_port=40123)
+
+        self.assertEqual(local_port, 40123)
+        _, kwargs = mock_start.call_args
+        self.assertEqual(kwargs["ssh_host"], "tts-server10")
+        self.assertEqual(kwargs["ssh_remote_port"], 9198)
+        self.assertEqual(kwargs["ssh_remote_ip"], "127.0.0.1")
+        self.assertEqual(kwargs["local_port"], 40123)
+        self.assertEqual(kwargs["ssh_port"], 25620)
+        self.assertEqual(kwargs["ssh_user"], "server10")
+        self.assertEqual(kwargs["ssh_key_path"], "C:/Users/yashi/.ssh/max_key")
+
+
+class TestOwnIpDetection(unittest.TestCase):
+
+    def test_hostname_alias_does_not_trigger_global_ip_lookup(self):
+        with patch("core.utils.network_utils.helper_funcs.get_global_IP", side_effect=AssertionError("should not call")):
+            self.assertFalse(is_own_ip("tts-server10"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

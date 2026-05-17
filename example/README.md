@@ -38,6 +38,22 @@ Features:
 - Chat room (`GET/POST /api/classroom/{class_id}/chat`)
 - Courses (`GET /api/classroom/{class_id}/courses`, `GET /api/classroom/{class_id}/courses/{course_id}`)
 
+## WebRTC Room
+
+A minimal Zoom-style meeting demo built on top of the built-in webrtc-chatroom plugin.
+
+```bash
+cd webrtc-room
+python run.py
+```
+
+Features:
+
+- Extremely simple landing page with `Create Room` / `Join Room`
+- Create flow jumps directly into the meeting view
+- Room page auto-generates a shareable join URL after connection
+- Guests can join by direct URL or by room number + password
+
 ## How Examples Work
 
 Both examples use `create_app(config=config)` to inject their own directories:
@@ -46,7 +62,7 @@ Both examples use `create_app(config=config)` to inject their own directories:
 config = Config()
 config.server_config.extra_app_paths = [str(HERE)]
 config.server_config.extra_public_paths = [str(HERE / "public")]
-config.server_config.enable_rtc_chatroom = True  # e-class enables this
+config.plugin_configs["webrtc-chatroom"] = {"enabled": True}  # e-class enables this
 app = create_app(config=config)
 uvicorn.run(app, host="127.0.0.1", port=8000, workers=2)
 ```

@@ -173,8 +173,8 @@ class GlobalSharedDict:
         self._listen_port = listen_port
         self._fanout = max(1, broadcast_fanout)
         self._node_id = node_id or shared_data.instance_uuid
-        self._use_stable_port = node_id is None and listen_port <= 0
         self._peers: dict[str, _GSDPeer] = {}
+        self._local_data: dict[str, dict[str, Any]] = {}  # {namespace: {key: {v, ts, exp}}}
         self._server: asyncio.Server | None = None
         self._server_task: asyncio.Task[Any] | None = None
         self._health_task: asyncio.Task[Any] | None = None
@@ -194,19 +194,9 @@ class GlobalSharedDict:
         """Start the internal asyncio TCP server. Returns (host, port)."""
         if self._running:
             return self._listen_host, self._listen_port
-        if self._listen_port <= 0 and self._use_stable_port:
-            self._listen_port = self._shared.get_global_shared_dict_port()
-        try:
-            self._server = await asyncio.start_server(
-                self._handle_client, self._listen_host, self._listen_port
-            )
-        except OSError as exc:
-            _logger.debug(
-                "GlobalSharedDict server port %s is already owned by another worker: %s",
-                self._listen_port,
-                exc,
-            )
-            return self._listen_host, self._listen_port
+        self._server = await asyncio.start_server(
+            self._handle_client, self._listen_host, self._listen_port
+        )
         self._running = True
         addr = self._server.sockets[0].getsockname()
         self._listen_host = addr[0]
@@ -298,17 +288,14 @@ class GlobalSharedDict:
     # ── data operations (local + broadcast) ────────────────────────────────
 
     async def get(self, key: str, namespace: str = "default") -> Any | None:
-        entry = self._shared.get_global_shared_dict_entry(namespace, key)
+        ns = self._local_data.get(namespace, {})
+        entry = ns.get(key)
         if entry is None:
             return None
         if entry.get("deleted"):
             return None
         if entry.get("exp") and entry["exp"] <= time.time():
-            self._shared.delete_global_shared_dict_entry(
-                namespace,
-                key,
-                {"v": None, "ts": time.time(), "exp": None, "deleted": True},
-            )
+            ns.pop(key, None)
             return None
         return entry.get("v")
 
@@ -322,18 +309,16 @@ class GlobalSharedDict:
         ts = time.time()
         entry = {"v": value, "ts": ts, "exp": ts + expire if expire else None}
         async with self._lock:
-            self._shared.set_global_shared_dict_entry(namespace, key, entry)
+            self._local_data.setdefault(namespace, {})[key] = entry
         await self._broadcast("set", {"ns": namespace, "key": key, "entry": entry})
         return value
 
     async def delete(self, key: str, namespace: str = "default") -> Any | None:
         ts = time.time()
         async with self._lock:
-            old = self._shared.delete_global_shared_dict_entry(
-                namespace,
-                key,
-                {"v": None, "ts": ts, "exp": None, "deleted": True},
-            )
+            local_ns = self._local_data.setdefault(namespace, {})
+            old = local_ns.get(key)
+            local_ns[key] = {"v": None, "ts": ts, "exp": None, "deleted": True}
         await self._broadcast("delete", {
             "ns": namespace,
             "key": key,
@@ -342,7 +327,7 @@ class GlobalSharedDict:
         return old.get("v") if old and not old.get("deleted") else None
 
     def all(self, namespace: str = "default") -> dict[str, Any]:
-        ns = self._shared.get_global_shared_dict_namespace(namespace)
+        ns = self._local_data.get(namespace, {})
         out: dict[str, Any] = {}
         now = time.time()
         for k, entry in ns.items():
@@ -384,7 +369,7 @@ class GlobalSharedDict:
             await writer.drain()
         elif cmd == "sync_request":
             # Another node wants our full state
-            data = self._shared.get_global_shared_dict_all_namespaces()
+            data = dict(self._local_data)
             writer.write(
                 json.dumps({"cmd": "sync_response", "node_id": self._node_id, "data": data}).encode("utf-8")
                 + b"\n"
@@ -394,7 +379,12 @@ class GlobalSharedDict:
             # Merge remote state (last-write-wins by timestamp)
             remote_data: dict[str, dict[str, Any]] = payload.get("data", {})
             async with self._lock:
-                self._shared.merge_global_shared_dict_state(remote_data)
+                for ns, keys in remote_data.items():
+                    local_ns = self._local_data.setdefault(ns, {})
+                    for k, entry in keys.items():
+                        local_entry = local_ns.get(k)
+                        if local_entry is None or entry.get("ts", 0) > local_entry.get("ts", 0):
+                            local_ns[k] = entry
         elif cmd == "set":
             ns = payload.get("ns", "default")
             key = payload["key"]
@@ -402,7 +392,11 @@ class GlobalSharedDict:
             seen = payload.get("seen", [])
             accepted = False
             async with self._lock:
-                accepted = self._shared.merge_global_shared_dict_entry(str(ns), str(key), entry)
+                local_ns = self._local_data.setdefault(ns, {})
+                local_entry = local_ns.get(key)
+                if local_entry is None or entry.get("ts", 0) > local_entry.get("ts", 0):
+                    local_ns[key] = entry
+                    accepted = True
             # Gossip forward
             if accepted:
                 await self._broadcast("set", {"ns": ns, "key": key, "entry": entry}, exclude=seen)
@@ -416,7 +410,11 @@ class GlobalSharedDict:
             seen = payload.get("seen", [])
             accepted = False
             async with self._lock:
-                accepted = self._shared.merge_global_shared_dict_entry(str(ns), str(key), entry)
+                local_ns = self._local_data.setdefault(ns, {})
+                local_entry = local_ns.get(key)
+                if local_entry is None or entry.get("ts", 0) > local_entry.get("ts", 0):
+                    local_ns[key] = entry
+                    accepted = True
             if accepted:
                 await self._broadcast("delete", {"ns": ns, "key": key, "entry": entry}, exclude=seen)
 
@@ -427,6 +425,8 @@ class GlobalSharedDict:
         exclude: list[str] | None = None,
     ) -> None:
         """Send to N nearest peers that are not in ``exclude``."""
+        if not self._running:
+            return
         exclude_set = set(exclude or [])
         exclude_set.add(self._node_id)
         targets = [p for p in self.get_nearest_peers() if p.node_id not in exclude_set]

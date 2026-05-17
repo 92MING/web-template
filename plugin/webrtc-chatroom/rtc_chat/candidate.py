@@ -21,9 +21,9 @@ from av import AudioFrame, VideoFrame
 from aiortc import (RTCPeerConnection, RTCDataChannel, RTCSessionDescription)
 from aiortc.rtcrtpreceiver import RemoteStreamTrack
 
-from ..utils.data_structs.files import Video
-from ..utils.type_utils import getattr_raw
-from ..utils.concurrent_utils import run_any_func, is_async_callable
+from core.utils.data_structs.files import Video
+from core.utils.type_utils import getattr_raw
+from core.utils.concurrent_utils import run_any_func, is_async_callable
 from .config import _AutoDocstringModel, ChatRoomConfig
 
 if TYPE_CHECKING:

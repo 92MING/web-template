@@ -62,19 +62,47 @@ body[data-proj-embedded="1"] .max-w-3xl.mx-auto {
 
   <!-- Header -->
   <div class="mb-8">
-    <a href="/admin/test/ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">← AI 测试</a>
+    <a href="../ai" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">← AI 测试</a>
     <h1 class="text-2xl font-bold text-gray-900 mt-2">S2T 语音转文字</h1>
     <p class="text-gray-500 text-sm mt-1">独立语音转文字服务 (非 LLM)，支持与 LLM-ASR 对比</p>
   </div>
 
   <!-- Upload Area -->
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-    <div class="mb-4 flex flex-wrap items-end gap-3">
-      <div class="min-w-[180px] flex-1">
-        <label for="serviceInstanceSelect" class="block text-xs font-medium text-gray-600 mb-1">Service Instance</label>
-        <select id="serviceInstanceSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
-          <option value="default">default</option>
-        </select>
+    <div class="mb-4 grid gap-3 md:grid-cols-2">
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <div class="mb-2 text-xs font-semibold text-gray-500">S2T 目标</div>
+        <div class="flex flex-wrap items-end gap-3">
+          <div class="min-w-[160px] flex-1">
+            <label for="serviceTargetSelect" class="block text-xs font-medium text-gray-600 mb-1">Service/Client</label>
+            <select id="serviceTargetSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
+              <option value="service">service</option>
+            </select>
+          </div>
+          <div class="min-w-[160px] flex-1">
+            <label for="serviceInstanceSelect" class="block text-xs font-medium text-gray-600 mb-1">Key</label>
+            <select id="serviceInstanceSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
+              <option value="default">default</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <div class="mb-2 text-xs font-semibold text-gray-500">LLM-ASR 对比目标</div>
+        <div class="flex flex-wrap items-end gap-3">
+          <div class="min-w-[160px] flex-1">
+            <label for="asrTargetSelect" class="block text-xs font-medium text-gray-600 mb-1">Service/Client</label>
+            <select id="asrTargetSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
+              <option value="service">service</option>
+            </select>
+          </div>
+          <div class="min-w-[160px] flex-1">
+            <label for="asrInstanceSelect" class="block text-xs font-medium text-gray-600 mb-1">Key</label>
+            <select id="asrInstanceSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white">
+              <option value="default">default</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
     <!-- Drop Zone -->
@@ -215,9 +243,17 @@ const fileInfo = document.getElementById('fileInfo');
 const audioPlayer = document.getElementById('audioPlayer');
 const btnSubmit = document.getElementById('btnSubmit');
 const btnCompare = document.getElementById('btnCompare');
+const serviceTargetSelect = document.getElementById('serviceTargetSelect');
 const serviceInstanceSelect = document.getElementById('serviceInstanceSelect');
+const asrTargetSelect = document.getElementById('asrTargetSelect');
+const asrInstanceSelect = document.getElementById('asrInstanceSelect');
+let serviceTargetController = null;
+let asrTargetController = null;
 
-AITestShared.loadServiceInstances('s2t', serviceInstanceSelect);
+void AITestShared.initServiceTargetControls('s2t', serviceTargetSelect, serviceInstanceSelect)
+  .then((controller) => { serviceTargetController = controller; });
+void AITestShared.initServiceTargetControls('completion', asrTargetSelect, asrInstanceSelect)
+  .then((controller) => { asrTargetController = controller; });
 
 // Drag & drop
 dropZone.addEventListener('click', () => fileInput.click());
@@ -300,6 +336,14 @@ function updateRecordTimer() {
   document.getElementById('recordTimer').textContent = formatDuration(elapsed);
 }
 
+function selectedTargetPath(operation) {
+  return serviceTargetController ? serviceTargetController.buildPath(operation) : `s2t/service/${encodeURIComponent(serviceInstanceSelect.value || 'default')}/${operation}`;
+}
+
+function selectedAsrTargetPath() {
+  return asrTargetController ? asrTargetController.buildPath('asr') : `completion/service/${encodeURIComponent(asrInstanceSelect.value || 'default')}/asr`;
+}
+
 // S2T only
 async function runS2T() {
   if (!currentFile) return;
@@ -308,11 +352,10 @@ async function runS2T() {
 
   const formData = new FormData();
   formData.append('file', currentFile);
-  formData.append('service_key', serviceInstanceSelect.value || 'default');
   const startTime = performance.now();
 
   try {
-    const res = await fetch(window.projAiApiPath('/ai/s2t'), { method: 'POST', body: formData });
+    const res = await fetch(window.projAiApiPath(`/ai/${selectedTargetPath('s2t')}`), { method: 'POST', body: formData });
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     const data = await res.json();
@@ -357,13 +400,12 @@ async function runCompare() {
   // Run both in parallel
   const formS2T = new FormData();
   formS2T.append('file', currentFile);
-  formS2T.append('service_key', serviceInstanceSelect.value || 'default');
   const formASR = new FormData();
   formASR.append('file', currentFile);
 
   const t0 = performance.now();
 
-  const s2tPromise = fetch(window.projAiApiPath('/ai/s2t'), { method: 'POST', body: formS2T })
+  const s2tPromise = fetch(window.projAiApiPath(`/ai/${selectedTargetPath('s2t')}`), { method: 'POST', body: formS2T })
     .then(async res => {
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`S2T HTTP ${res.status}`);
@@ -377,7 +419,7 @@ async function runCompare() {
       document.getElementById('cmpS2tLoading').classList.add('hidden');
     });
 
-  const asrPromise = fetch(window.projAiApiPath('/ai/asr'), { method: 'POST', body: formASR })
+  const asrPromise = fetch(window.projAiApiPath(`/ai/${selectedAsrTargetPath()}`), { method: 'POST', body: formASR })
     .then(async res => {
       const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
       if (!res.ok) throw new Error(`ASR HTTP ${res.status}`);

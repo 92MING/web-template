@@ -108,6 +108,28 @@ def _refresh_server_instance_env() -> str:
     os.environ["__SERVER_INSTANCE_ID__"] = instance_id
     return instance_id
 
+
+def _resolve_windows_pythonw_executable() -> str | None:
+    if os.name != "nt":
+        return None
+    current = Path(sys.executable)
+    if current.name.lower() == "pythonw.exe":
+        return str(current)
+    pythonw_path = current.with_name("pythonw.exe")
+    return str(pythonw_path) if pythonw_path.exists() else None
+
+
+def _configure_windows_spawn_executable() -> None:
+    if os.name != "nt":
+        return
+    try:
+        import multiprocessing
+
+        multiprocessing.set_executable(sys.executable)
+    except Exception:
+        pass
+
+
 def _detect_cli_mode(argv: list[str]) -> str:
     return "prod" if "--production" in argv else "dev"
 
@@ -151,7 +173,6 @@ if _in_fastapi:
 
     config = Config.model_validate_json(config_json)
     Config.SetConfig(config)
-    config.rtc_room_config.apply()
     config.log_config.init_root_logger(_root_logger)
     log_lvl = config.log_config.get_int_log_level()
     if log_lvl > logging.INFO:
@@ -173,6 +194,8 @@ if _in_main:
     import webbrowser
     import threading
     from datetime import datetime, timedelta, timezone
+
+    _configure_windows_spawn_executable()
 
     hk_tz = timezone(timedelta(hours=8), name="Asia/Hong_Kong")
     os.environ["__SERVER_START_TIME__"] = datetime.now(tz=hk_tz).isoformat()
@@ -199,7 +222,8 @@ if _in_main:
 
     prod = getattr(_args, "production", False)
     mode = _load_server_env("prod" if prod else "dev")
-    config = Config.CreateConfigFromArgs(_args)
+    config = Config.CreateConfigFromArgs(_args, set_global=False)
+    Config.SetConfig(config)
     storage_config = StorageConfig.Global()
     runtime_config_info = Config.DescribeRuntimeConfigPath(getattr(_args, "config", None), prefer_mode_specific=True)
     if runtime_config_info.get("source_path"):
@@ -216,7 +240,6 @@ if _in_main:
         os.environ.pop("__PT_ORM_PREFLIGHT__", None)
         os.environ.pop("__PT_VECTOR_PREFLIGHT__", None)
         _root_logger.warning("Main process storage preflight failed: %s", exc, exc_info=True)
-    config.rtc_room_config.apply()
     config.log_config.init_root_logger(_root_logger, default_mode=mode) # type: ignore
     log_lvl = config.log_config.get_int_log_level(default_mode=mode)    # type: ignore
     if log_lvl > logging.INFO:
@@ -255,8 +278,7 @@ if _in_main:
     try:
         from core.server.shared import AppSharedData
 
-        if os.getenv('__AI_SERVICES_CONFIG__'):
-            AppSharedData.Get().set_ai_services_config(os.getenv('__AI_SERVICES_CONFIG__'), version=1)
+        AppSharedData.Get().set_ai_services_config(os.getenv('__AI_SERVICES_CONFIG__') or None, version=1)
     except Exception as exc:
         _root_logger.debug('Failed to publish initial AI services config to shared state: %s', exc)
 
@@ -334,10 +356,15 @@ if _in_main:
     import time as _shutdown_trace_time
     _shutdown_trace_t0 = _shutdown_trace_time.monotonic()
     def _shutdown_trace(message: str) -> None:
+        stream = sys.stderr
+        if stream is None or not hasattr(stream, "write"):
+            return
         try:
             elapsed = _shutdown_trace_time.monotonic() - _shutdown_trace_t0
-            sys.stderr.write(f"[shutdown +{elapsed:6.2f}s] {message}\n")
-            sys.stderr.flush()
+            stream.write(f"[shutdown +{elapsed:6.2f}s] {message}\n")
+            flush = getattr(stream, "flush", None)
+            if callable(flush):
+                flush()
         except Exception:
             pass
 
@@ -588,6 +615,12 @@ if _in_main:
             env_values["__SERVER_CONTROL_PORT__"] = os.getenv("__SERVER_CONTROL_PORT__") or ""
         if os.getenv("__SERVER_CONTROL_TOKEN__"):
             env_values["__SERVER_CONTROL_TOKEN__"] = os.getenv("__SERVER_CONTROL_TOKEN__") or ""
+        if os.getenv("__SERVER_PLUGIN_CONTROL_HOST__"):
+            env_values["__SERVER_PLUGIN_CONTROL_HOST__"] = os.getenv("__SERVER_PLUGIN_CONTROL_HOST__") or ""
+        if os.getenv("__SERVER_PLUGIN_CONTROL_PORT__"):
+            env_values["__SERVER_PLUGIN_CONTROL_PORT__"] = os.getenv("__SERVER_PLUGIN_CONTROL_PORT__") or ""
+        if os.getenv("__SERVER_PLUGIN_CONTROL_TOKEN__"):
+            env_values["__SERVER_PLUGIN_CONTROL_TOKEN__"] = os.getenv("__SERVER_PLUGIN_CONTROL_TOKEN__") or ""
         if os.getenv("__AI_SERVICES_CONFIG__"):
             env_values["__AI_SERVICES_CONFIG__"] = os.getenv("__AI_SERVICES_CONFIG__") or ""
         if os.getenv("__PT_ORM_PREFLIGHT__"):
@@ -697,15 +730,21 @@ if _in_main:
     _install_main_process_signal_handlers()
 
     _import_main_process_runtime_modules()
+    from core.ai import start_main_process_probe_loop, stop_main_process_probe_loop
     from core.server.events import start_main_process_events, stop_main_process_events
     from core.server.scheduler import start_scheduler, stop_scheduler
 
     _main_process_runtime_started = False
     try:
         start_main_process_events()
+        start_main_process_probe_loop()
         start_scheduler("main_process")
         _main_process_runtime_started = True
     except Exception:
+        try:
+            stop_main_process_probe_loop()
+        except Exception:
+            pass
         try:
             stop_scheduler("main_process")
         except Exception:
@@ -772,6 +811,10 @@ if _in_main:
     finally:
         _shutdown_trace("supervisor cleanup: stopping background refresh threads")
         if _main_process_runtime_started:
+            try:
+                stop_main_process_probe_loop()
+            except Exception:
+                _root_logger.exception("Failed to stop AI main process probe loop.")
             try:
                 stop_scheduler("main_process")
             except Exception:

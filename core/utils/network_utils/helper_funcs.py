@@ -315,15 +315,20 @@ _LOCALHOST_NAMES = frozenset(('localhost', '127.0.0.1', '::1'))
 
 def is_own_ip(ip: str) -> bool:
     """Return *True* if *ip* resolves to this machine (localhost, LAN IP, or public IP)."""
-    if ip in _LOCALHOST_NAMES or ip.startswith('127.'):
+    normalized_ip = ip.strip().lower()
+    if normalized_ip in _LOCALHOST_NAMES or normalized_ip.startswith('127.'):
         return True
+    extracted = extract_ip(ip)
+    if extracted is None:
+        return False
+    resolved_ip, _ = extracted
     try:
-        if ip == get_local_ip():
+        if resolved_ip == get_local_ip():
             return True
     except Exception:
         pass
     try:
-        if ip == get_global_IP():
+        if resolved_ip == get_global_IP():
             return True
     except Exception:
         pass

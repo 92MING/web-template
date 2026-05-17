@@ -46,6 +46,7 @@ def on_main_process_starts_event[F: MainProcessEventHandler](func: F) -> F:
 
 def on_main_process_stops_event[F: MainProcessEventHandler](func: F | None = None):
     """Register a sync or async callback invoked after uvicorn stops."""
+
     def decorator(target: F) -> F:
         _main_process_stops_event_handlers.append(target)
         return target
@@ -101,17 +102,14 @@ def stop_main_process_events() -> None:
 
 
 __all__ = [
-    # app events
-    "on_before_app_created",
+    "MainProcessContextManager",
     "on_app_created",
     "on_app_shutdown",
-    "on_uvicorn_close",
-
-    # main process events
-    "MainProcessContextManager",
-    "register_main_process_context_manager",
+    "on_before_app_created",
     "on_main_process_starts_event",
     "on_main_process_stops_event",
+    "on_uvicorn_close",
+    "register_main_process_context_manager",
     "start_main_process_events",
     "stop_main_process_events",
 ]

@@ -183,10 +183,17 @@ body[data-proj-embedded="1"] .container{
 <!-- Header -->
 <div class="header">
   <h1 style="display:flex;align-items:center;gap:.55rem"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path><path d="M9 9h2"></path></svg>OCR 图片文字识别</h1>
-  <a href="/admin/test/ai">← AI 测试</a>
+  <a href="../ai">← AI 测试</a>
 </div>
 
 <div class="container">
+  <div class="toolbar" style="display:flex">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:.75rem;width:100%;max-width:520px">
+      <label style="font-size:.82rem;font-weight:700;color:var(--ocr-text-soft)">Service/Client<select id="service-target" class="btn btn-secondary" style="width:100%;margin-top:.35rem"><option value="service">service</option></select></label>
+      <label style="font-size:.82rem;font-weight:700;color:var(--ocr-text-soft)">Key<select id="service-instance" class="btn btn-secondary" style="width:100%;margin-top:.35rem"><option value="default">default</option></select></label>
+    </div>
+  </div>
+
   <!-- Drop Zone -->
   <div class="drop-zone" id="dropZone">
     <div class="drop-zone-icon"><svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></div>
@@ -259,7 +266,14 @@ body[data-proj-embedded="1"] .container{
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<script src="/html-assets/js/ai-test-shared.js"></script>
 <script>
+let targetController = null;
+
+function selectedTargetPath(operation) {
+  return targetController ? targetController.buildPath(operation) : `completion/service/default/${operation}`;
+}
+
 // ── State ──
 let images = []; // { id, file, name, size, dataUrl, resultText, processingTime, processing }
 let nextId = 1;
@@ -392,7 +406,7 @@ async function ocrSingle(imgObj) {
   fd.append('file', imgObj.file);
   const t0 = performance.now();
   try {
-    const resp = await fetch(window.projAiApiPath('/ai/ocr'), { method: 'POST', body: fd });
+    const resp = await fetch(window.projAiApiPath(`/ai/${selectedTargetPath('ocr')}`), { method: 'POST', body: fd });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     imgObj.resultText = data.text || '(空结果)';
@@ -563,6 +577,7 @@ function esc(s) {
 }
 
 // Initial render
+AITestShared.initServiceTargetControls('completion', 'service-target', 'service-instance').then((controller) => { targetController = controller; });
 renderList();
 </script>
 </body>

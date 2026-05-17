@@ -11,9 +11,15 @@
   <style>
     .ai-services-settings-page .panel-page {
       padding: 4px;
+      min-height: 100dvh;
+      display: flex;
     }
 
     .ai-services-settings-page .panel-page-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
       gap: 5px;
     }
 
@@ -180,11 +186,14 @@
     .ai-instance-shell {
       --ai-kind-pane-width: 216px;
       --ai-kind-pane-size: var(--ai-kind-pane-width);
+      --ai-kind-splitter-size: 12px;
       --ai-detail-pane-width: 320px;
       --ai-detail-pane-size: 0px;
+      --ai-detail-splitter-size: 12px;
       display: grid;
-      grid-template-columns: var(--ai-kind-pane-size) 12px minmax(0, 1fr) 12px var(--ai-detail-pane-size);
-      min-height: 430px;
+      grid-template-columns: var(--ai-kind-pane-size) var(--ai-kind-splitter-size) minmax(0, 1fr) var(--ai-detail-splitter-size) var(--ai-detail-pane-size);
+      min-height: 0;
+      height: 100%;
       border: 1px solid var(--proj-page-border, var(--panel-border-soft));
       border-radius: var(--proj-radius-lg);
       overflow: hidden;
@@ -520,6 +529,13 @@
       flex-wrap: wrap;
     }
 
+    .ai-instance-tabsets {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .ai-instance-tabs {
       display: inline-flex;
       gap: 4px;
@@ -552,6 +568,10 @@
       background: rgba(37, 99, 235, 0.10);
       border-color: rgba(37, 99, 235, 0.22);
       color: #1d4ed8;
+    }
+
+    .ai-instance-tabgroup[hidden] {
+      display: none !important;
     }
 
     .ai-instance-tab-actions {
@@ -595,13 +615,15 @@
     }
 
     .ai-service-config-card,
-    .ai-client-instance-card {
+    .ai-client-instance-card,
+    .ai-kwargs-preset-card {
       cursor: pointer;
       transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
     }
 
     .ai-service-config-card.is-selected,
-    .ai-client-instance-card.is-selected {
+    .ai-client-instance-card.is-selected,
+    .ai-kwargs-preset-card.is-selected {
       border-color: rgba(37, 99, 235, 0.3);
       box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
       background: color-mix(in srgb, rgba(37, 99, 235, 0.08) 45%, var(--proj-page-surface) 55%);
@@ -670,6 +692,127 @@
     .ai-service-binding-list {
       display: grid;
       gap: 8px;
+    }
+
+    .ai-client-field-board,
+    .ai-client-preset-board,
+    .ai-client-health-strip,
+    .ai-service-client-tags {
+      display: grid;
+      gap: 6px;
+    }
+
+    .ai-client-field-board {
+      padding: 7px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+    }
+
+    .ai-client-field-head,
+    .ai-client-field-row,
+    .ai-client-preset-add-row {
+      display: grid;
+      grid-template-columns: minmax(110px, .65fr) minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .ai-client-field-head {
+      grid-template-columns: minmax(110px, .65fr) minmax(0, 1fr) auto;
+      color: var(--proj-page-muted);
+      font-size: 9px;
+      font-weight: 850;
+      letter-spacing: .10em;
+      text-transform: uppercase;
+    }
+
+    .ai-client-field-row input,
+    .ai-client-field-row select,
+    .ai-client-preset-add-row input,
+    .ai-client-preset-add-row select {
+      width: 100%;
+      min-height: 28px;
+      padding: 4px 7px;
+      border-radius: 8px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 97%, transparent);
+      color: var(--proj-page-text);
+      font-size: 11px;
+    }
+
+    .ai-client-field-name[readonly] {
+      color: var(--proj-page-muted);
+      background: color-mix(in srgb, var(--proj-page-surface) 90%, transparent);
+    }
+
+    .ai-client-field-error,
+    .ai-modal-validation-list {
+      color: #b91c1c;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .ai-modal-validation-list {
+      display: grid;
+      gap: 3px;
+      padding: 7px 9px;
+      border: 1px solid rgba(239, 68, 68, .24);
+      border-radius: 9px;
+      background: rgba(239, 68, 68, .08);
+    }
+
+    .ai-client-preset-tags,
+    .ai-client-health-strip,
+    .ai-service-client-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .ai-client-preset-tag,
+    .ai-client-health-chip,
+    .ai-service-client-tag {
+      min-height: 21px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+      color: var(--proj-page-text);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      max-width: 100%;
+    }
+
+    .ai-client-health-chip.ok { color: #047857; border-color: rgba(16, 185, 129, .22); background: rgba(16, 185, 129, .10); }
+    .ai-client-health-chip.warn { color: #b45309; border-color: rgba(245, 158, 11, .24); background: rgba(245, 158, 11, .10); }
+    .ai-client-health-chip.err { color: #b91c1c; border-color: rgba(239, 68, 68, .24); background: rgba(239, 68, 68, .10); }
+
+    .ai-client-preset-tag button {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .ai-client-preset-tag button:hover {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    .ai-client-final-preview {
+      max-height: 190px;
     }
 
     .ai-service-binding-row {
@@ -889,6 +1032,136 @@
       overflow: hidden;
     }
 
+    .ai-picker-modal {
+      width: min(960px, 100%);
+      max-height: min(760px, calc(100vh - 48px));
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-radius: 10px;
+      background: var(--proj-page-surface, var(--proj-surface-elevated));
+      box-shadow: 0 22px 70px rgba(2, 6, 23, .28);
+      overflow: hidden;
+    }
+
+    .ai-picker-toolbar,
+    .ai-picker-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      flex-wrap: wrap;
+    }
+
+    .ai-picker-foot {
+      border-top: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      border-bottom: none;
+      justify-content: flex-end;
+    }
+
+    .ai-picker-toolbar-copy,
+    .ai-picker-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .ai-picker-toolbar-copy {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .ai-picker-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.2;
+      color: var(--proj-page-text);
+    }
+
+    .ai-picker-subtitle,
+    .ai-picker-selection {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-picker-location {
+      min-height: 34px;
+      padding: 0 11px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 94%, transparent);
+      font-size: 11px;
+      color: var(--proj-page-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ai-picker-browser {
+      min-height: 0;
+      overflow: auto;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .ai-picker-browser-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--proj-page-border, var(--panel-border-soft));
+      background: color-mix(in srgb, var(--proj-page-surface) 96%, transparent);
+    }
+
+    .ai-picker-browser-row.is-selected {
+      border-color: rgba(37, 99, 235, 0.28);
+      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+      background: color-mix(in srgb, rgba(37, 99, 235, 0.08) 48%, var(--proj-page-surface) 52%);
+    }
+
+    .ai-picker-browser-main {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .ai-picker-browser-name {
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+      color: var(--proj-page-text);
+      overflow-wrap: anywhere;
+    }
+
+    .ai-picker-browser-meta {
+      font-size: 10px;
+      line-height: 1.5;
+      color: var(--proj-page-muted);
+    }
+
+    .ai-picker-browser-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .ai-picker-browser-root {
+      min-width: min(240px, 100%);
+    }
+
     .ai-instance-modal-head,
     .ai-instance-modal-foot {
       display: flex;
@@ -1055,7 +1328,7 @@
         <div class="ai-instance-main">
           <div class="ai-instance-main-head">
             <div>
-              <div class="panel-card-kicker">Current Kind</div>
+              <div id="instance-kind-kicker" class="panel-card-kicker">Current Kind</div>
               <h3 id="instance-kind-title" class="ai-instance-main-title">completion</h3>
               <div id="instance-kind-note" class="ai-instance-main-note"></div>
             </div>
@@ -1063,13 +1336,20 @@
           </div>
 
           <div class="ai-instance-tabbar">
-            <div class="ai-instance-tabs">
-              <button type="button" class="ai-instance-tab is-active" data-instance-tab="services">服务实例</button>
-              <button type="button" class="ai-instance-tab" data-instance-tab="clients">客户端实例</button>
+            <div class="ai-instance-tabsets">
+              <div class="ai-instance-tabs">
+                <button type="button" class="ai-instance-tab is-active" data-instance-category="service">服务</button>
+                <button type="button" class="ai-instance-tab" data-instance-category="kwargs">Kwargs 预设</button>
+              </div>
+              <div id="instance-service-tab-group" class="ai-instance-tabs ai-instance-tabgroup">
+                <button type="button" class="ai-instance-tab is-active" data-instance-tab="services">服务实例</button>
+                <button type="button" class="ai-instance-tab" data-instance-tab="clients">客户端实例</button>
+              </div>
             </div>
             <div class="ai-instance-tab-actions">
               <button id="add-service-btn" type="button" class="panel-btn panel-btn-primary">新增 Service 实例</button>
               <button id="add-client-btn" type="button" class="panel-btn" hidden>新增 Client 实例</button>
+              <button id="add-kwargs-preset-btn" type="button" class="panel-btn" hidden>新增 Kwargs 预设</button>
             </div>
           </div>
 
@@ -1082,6 +1362,11 @@
             <section class="ai-instance-pane" data-instance-pane="clients">
               <div id="client-library" class="ai-instance-grid">
                 <div class="ai-services-empty is-compact">正在载入 client 实例…</div>
+              </div>
+            </section>
+            <section class="ai-instance-pane" data-instance-pane="kwargs">
+              <div id="kwargs-preset-library" class="ai-instance-grid">
+                <div class="ai-services-empty is-compact">正在载入 kwargs 预设…</div>
               </div>
             </section>
           </div>
@@ -1097,41 +1382,11 @@
             <h3 id="instance-detail-title" class="ai-detail-pane-title">实例详情</h3>
           </div>
           <div id="instance-detail-body" class="ai-detail-pane-body">
-            <div class="ai-detail-empty">点击左侧 service/client 实例后，会在这里展示详细配置和运行态信息。</div>
+            <div class="ai-detail-empty">点击左侧 service/client 实例或 kwargs 预设后，会在这里展示详细配置和运行态信息。</div>
           </div>
         </aside>
       </div>
 
-      <section class="ai-runtime-grid">
-        <section class="panel-card">
-          <div class="panel-card-header">
-            <div class="ai-runtime-section-head">
-              <div>
-                <div class="panel-card-kicker">Runtime Snapshot</div>
-                <h2 class="panel-card-title">当前运行态</h2>
-              </div>
-              <div id="runtime-snapshot-meta" class="ai-runtime-head-meta"></div>
-            </div>
-          </div>
-          <div id="runtime-snapshot" class="panel-card-body ai-runtime-panel-body">
-            <div class="ai-services-empty is-compact">正在整理当前 AI 服务实例状态…</div>
-          </div>
-        </section>
-
-        <section class="panel-card">
-          <div class="panel-card-header">
-            <div>
-              <div class="panel-card-kicker">Reload Workers</div>
-              <h2 class="panel-card-title">最近一次重载结果</h2>
-            </div>
-          </div>
-          <div class="panel-card-body">
-            <div id="reload-workers" class="ai-reload-worker-list">
-              <div class="ai-services-empty is-compact">等待配置下发…</div>
-            </div>
-          </div>
-        </section>
-      </section>
     </div>
   </main>
 
@@ -1149,6 +1404,32 @@
     </section>
   </div>
 
+  <div id="adapter-browser-backdrop" class="ai-modal-backdrop" aria-hidden="true">
+    <section class="ai-picker-modal" role="dialog" aria-modal="true" aria-labelledby="adapter-browser-title">
+      <header class="ai-picker-toolbar">
+        <div class="ai-picker-toolbar-copy">
+          <h2 id="adapter-browser-title" class="ai-picker-title">选择远端 Adapter 文件</h2>
+          <div class="ai-picker-subtitle">浏览服务器允许访问的目录，选择一个 .py / .pyw 文件作为 custom adapter 源。</div>
+        </div>
+        <div class="ai-picker-toolbar-actions">
+          <select id="adapter-browser-root" class="panel-select ai-picker-browser-root" aria-label="远端根目录"></select>
+          <button id="adapter-browser-up" type="button" class="panel-btn">上一级</button>
+          <button id="adapter-browser-refresh" type="button" class="panel-btn">刷新</button>
+          <button id="adapter-browser-close" type="button" class="panel-btn">关闭</button>
+        </div>
+      </header>
+      <div id="adapter-browser-location" class="ai-picker-location">正在载入远端目录…</div>
+      <div id="adapter-browser-list" class="ai-picker-browser">
+        <div class="ai-services-empty is-compact">正在载入远端目录…</div>
+      </div>
+      <footer class="ai-picker-foot">
+        <div id="adapter-browser-selection" class="ai-picker-selection">尚未选择远端文件。</div>
+        <button id="adapter-browser-cancel" type="button" class="panel-btn">取消</button>
+        <button id="adapter-browser-confirm" type="button" class="panel-btn panel-btn-primary" disabled>使用该路径</button>
+      </footer>
+    </section>
+  </div>
+
   <script id="__AI_SERVICES_CONFIG__" type="application/json">{}</script>
 
   <script>
@@ -1160,6 +1441,8 @@
     }
 
     const DEFAULT_SERVICE_KINDS = ['completion', 'embedding', 's2t', 't2s'];
+    const INSTANCE_CATEGORIES = ['service', 'kwargs'];
+    const INSTANCE_TABS = ['services', 'clients'];
     const STRATEGY_OPTIONS = [
       { value: 0, label: 'LOAD_BALANCE' },
       { value: 1, label: 'ON_RATELIMIT' },
@@ -1167,6 +1450,7 @@
     ];
     const UI_STORAGE_KEYS = {
       activeServiceKind: 'proj-ai-services-active-kind',
+      activeInstanceCategory: 'proj-ai-services-instance-category',
       activeInstanceTab: 'proj-ai-services-instance-tab',
       kindNavCollapsed: 'proj-ai-services-kind-pane-collapsed',
       kindNavWidth: 'proj-ai-services-kind-pane-width',
@@ -1197,6 +1481,20 @@
       }
     }
 
+    function normalizeInstanceCategory(value) {
+      return INSTANCE_CATEGORIES.includes(value) ? value : 'service';
+    }
+
+    function normalizeInstanceTab(value) {
+      return INSTANCE_TABS.includes(value) ? value : 'services';
+    }
+
+    const storedInstanceTab = readStoredText(UI_STORAGE_KEYS.activeInstanceTab, 'services');
+    const storedInstanceCategory = readStoredText(
+      UI_STORAGE_KEYS.activeInstanceCategory,
+      storedInstanceTab === 'kwargs' ? 'kwargs' : 'service',
+    );
+
     const state = {
       loading: false,
       applying: false,
@@ -1205,6 +1503,7 @@
       pendingRuntimeClientUpdates: {},
       config: null,
       clientTypes: [],
+      clientTypesByKind: {},
       serviceKinds: DEFAULT_SERVICE_KINDS.slice(),
       workers: [],
       reloadState: [],
@@ -1213,7 +1512,8 @@
       configLoaded: false,
       configVersion: 0,
       activeServiceKind: readStoredText(UI_STORAGE_KEYS.activeServiceKind, DEFAULT_SERVICE_KINDS[0]),
-      activeInstanceTab: readStoredText(UI_STORAGE_KEYS.activeInstanceTab, 'services') === 'clients' ? 'clients' : 'services',
+      activeInstanceCategory: normalizeInstanceCategory(storedInstanceCategory),
+      activeInstanceTab: normalizeInstanceTab(storedInstanceTab),
       kindNavCollapsed: readStoredText(UI_STORAGE_KEYS.kindNavCollapsed, '0') === '1',
       kindNavWidth: readStoredNumber(UI_STORAGE_KEYS.kindNavWidth, 216),
       detailCollapsed: readStoredText(UI_STORAGE_KEYS.detailPaneCollapsed, '1') !== '0',
@@ -1230,6 +1530,25 @@
       draftKey: '',
       draftConfig: null,
       isDefault: false,
+      adapterSourceMode: null,
+      remoteAdapterSelection: null,
+    };
+
+    const adapterBrowserState = {
+      open: false,
+      roots: [],
+      root: '',
+      path: '',
+      parentPath: null,
+      selectedRelativePath: '',
+      selectedName: '',
+    };
+
+    const DEFAULT_CLIENT_TYPES_BY_KIND = {
+      completion: ['openai', 'thinkthinksyn', 'custom'],
+      embedding: ['openai', 'thinkthinksyn', 'custom'],
+      s2t: ['openai', 'completion', 'custom'],
+      t2s: ['openai', 'thinkthinksyn', 'custom'],
     };
 
     function clone(value) {
@@ -1251,6 +1570,31 @@
       return date.toLocaleString('zh-CN', { hour12: false });
     }
 
+    function formatEpochSeconds(value, fallback = '—') {
+      const num = Number(value || 0);
+      if (!Number.isFinite(num) || num <= 0) return fallback;
+      return new Date(num * 1000).toLocaleString('zh-CN', { hour12: false });
+    }
+
+    function formatRecoveryInterval(value, fallback = '—') {
+      if (value == null || value === '') return fallback;
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'object') {
+        const interval = Number(value.interval);
+        const decay = Number(value.decay ?? 1);
+        const maxInterval = value.max_interval == null ? '—' : `${value.max_interval}s`;
+        return `${Number.isFinite(interval) ? interval : '—'}s · x${Number.isFinite(decay) ? decay : 1} · <= ${maxInterval}`;
+      }
+      return String(value);
+    }
+
+    function recoveryIntervalInputValue(value) {
+      if (value == null || value === '') return '';
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'object') return JSON.stringify(value);
+      return String(value);
+    }
+
     function present(value, fallback = '—') {
       return value == null || value === '' ? fallback : String(value);
     }
@@ -1264,12 +1608,298 @@
       return JSON.stringify(value || {}, null, 2);
     }
 
+    function formatJsonEditorValue(value, fallback = {}) {
+      const data = value === undefined ? fallback : value;
+      return JSON.stringify(data, null, 2);
+    }
+
+    function isPlainObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function parseJsonInput(text, label) {
       try {
         return JSON.parse(text || '{}');
       } catch (error) {
         throw new Error(`${label} JSON 解析失败: ${error.message || error}`);
       }
+    }
+
+    function parseJsonObjectInput(text, label) {
+      const value = parseJsonInput(text || '{}', label);
+      if (!isPlainObject(value)) {
+        throw new Error(`${label} 必须是 JSON object。`);
+      }
+      return value;
+    }
+
+    function parseRecoveryIntervalInput(raw) {
+      const text = String(raw ?? '').trim();
+      if (!text) return null;
+      if (/^[\[{]/.test(text)) return parseJsonObjectInput(text, 'recovery interval');
+      const value = Number(text);
+      if (!Number.isFinite(value)) throw new Error('Recovery Interval 必须是数字、JSON 对象或留空。');
+      return value;
+    }
+
+    function parseClientKwargsInput(text) {
+      const value = parseJsonInput(text || '{}', 'client kwargs');
+      if (typeof value === 'string' || Array.isArray(value) || isPlainObject(value)) {
+        return value;
+      }
+      throw new Error('client kwargs 必须是 JSON object、preset 名称字符串，或 preset 名称数组。');
+    }
+
+    const CLIENT_CORE_FIELDS = new Set(['type', 'adapter', 'key', 'max_concurrent', 'priority', 'strategy_lvl', 'kwargs']);
+    const CLIENT_FIELD_DEFS = {
+      common: [
+        { key: 'base_url', label: 'base_url', type: 'text', requiredFor: ['openai', 'openrouter', 'thinkthinksyn'] },
+        { key: 'apikey', label: 'apikey', type: 'text' },
+        { key: 'model', label: 'model', type: 'text' },
+        { key: 'timeout', label: 'timeout', type: 'number' },
+        { key: 'extra_headers', label: 'extra_headers', type: 'json' },
+      ],
+      completion: [
+        { key: 'max_tokens', label: 'max_tokens', type: 'number' },
+        { key: 'max_images', label: 'max_images', type: 'number' },
+        { key: 'max_audios', label: 'max_audios', type: 'number' },
+        { key: 'max_videos', label: 'max_videos', type: 'number' },
+        { key: 's2t_service', label: 's2t_service', type: 'text' },
+      ],
+      embedding: [
+        { key: 'max_tokens', label: 'max_tokens', type: 'number' },
+        { key: 'support_image', label: 'support_image', type: 'boolean' },
+        { key: 'support_audio', label: 'support_audio', type: 'boolean' },
+        { key: 'support_video', label: 'support_video', type: 'boolean' },
+      ],
+      s2t: [
+        { key: 'language', label: 'language', type: 'text' },
+        { key: 'services', label: 'services', type: 'json' },
+        { key: 'clients', label: 'clients', type: 'json' },
+      ],
+      t2s: [
+        { key: 'voice', label: 'voice', type: 'text' },
+        { key: 'response_format', label: 'response_format', type: 'text' },
+      ],
+    };
+
+    function clientFieldDefs(serviceKind, clientType) {
+      const seen = new Set();
+      const result = [];
+      for (const def of [...CLIENT_FIELD_DEFS.common, ...(CLIENT_FIELD_DEFS[serviceKind] || [])]) {
+        if (seen.has(def.key)) continue;
+        seen.add(def.key);
+        result.push(def);
+      }
+      if (clientType === 'custom') {
+        return result.filter(def => def.key !== 'base_url' && def.key !== 'apikey');
+      }
+      return result;
+    }
+
+    function normalizePresetRefs(value) {
+      if (typeof value === 'string' && value.trim()) return [value.trim()];
+      if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean);
+      return [];
+    }
+
+    function serializePresetRefs(refs) {
+      const uniqueRefs = Array.from(new Set((refs || []).map(item => String(item || '').trim()).filter(Boolean)));
+      if (!uniqueRefs.length) return {};
+      return uniqueRefs.length === 1 ? uniqueRefs[0] : uniqueRefs;
+    }
+
+    function clientEditableFieldValues(client, { includeEmpty = false } = {}) {
+      const fields = {};
+      for (const [key, value] of Object.entries(client || {})) {
+        if (!CLIENT_CORE_FIELDS.has(key) && (includeEmpty || (value !== undefined && value !== null && value !== ''))) fields[key] = value;
+      }
+      if (isPlainObject(client?.kwargs)) {
+        Object.assign(fields, client.kwargs);
+      }
+      return fields;
+    }
+
+    function mergePresetRefs(refs) {
+      const presets = getSharedKwargsPresets();
+      const merged = {};
+      for (const ref of refs || []) {
+        const value = presets[ref];
+        if (isPlainObject(value)) Object.assign(merged, clone(value));
+      }
+      return merged;
+    }
+
+    function clientFinalInitParams(client, serviceKind = activeServiceKind(), clientKey = '') {
+      const params = {};
+      const refs = normalizePresetRefs(client?.kwargs);
+      Object.assign(params, mergePresetRefs(refs));
+      Object.assign(params, clientEditableFieldValues(client));
+      if (client?.adapter) params.adapter = client.adapter;
+      if (client?.max_concurrent != null) params.max_concurrent = client.max_concurrent;
+      if (client?.priority != null) params.priority = client.priority;
+      if (client?.strategy_lvl != null) params.strategy_lvl = client.strategy_lvl;
+      if (clientKey) params.key = `${serviceKind}:${clientKey}`;
+      return params;
+    }
+
+    function clientHealthTone(client) {
+      if (!client) return 'warn';
+      if (client.last_error) return 'err';
+      if (Number(client.cooldown_until || 0) * 1000 > Date.now()) return 'warn';
+      if (Number(client.score ?? 1) < 0.5) return 'warn';
+      return 'ok';
+    }
+
+    function renderHealthChips(runtime) {
+      if (!runtime) return '<span class="ai-client-health-chip warn">未运行</span>';
+      const tone = clientHealthTone(runtime);
+      const score = Number(runtime.score ?? 1);
+      return `
+        <span class="ai-client-health-chip ${tone}">score ${Number.isFinite(score) ? score.toFixed(2) : '—'}</span>
+        <span class="ai-client-health-chip">ok ${escHtml(runtime.success_count ?? 0)}</span>
+        <span class="ai-client-health-chip">fail ${escHtml(runtime.fail_count ?? 0)}</span>
+        <span class="ai-client-health-chip">inflight ${escHtml(runtime.inflight ?? 0)}</span>
+        <span class="ai-client-health-chip">speed ${escHtml(runtime.speed_ewma ?? 0)}</span>
+        <span class="ai-client-health-chip">health ${escHtml(formatEpochSeconds(runtime.last_probe_at || runtime.last_success_at))}</span>
+      `;
+    }
+
+    function collectKwargsPresetReferences() {
+      const refs = new Map();
+      const addRef = (presetKey, usage) => {
+        const key = String(presetKey || '').trim();
+        if (!key) return;
+        if (!refs.has(key)) refs.set(key, []);
+        refs.get(key).push(usage);
+      };
+      for (const [presetKey, value] of Object.entries(getSharedKwargsPresets())) {
+        for (const ref of normalizePresetRefs(value?.kwargs)) addRef(ref, `kwargs.${presetKey}`);
+      }
+      for (const serviceKind of state.serviceKinds) {
+        const clients = getServiceBucket(serviceKind).clients || {};
+        for (const [clientKey, client] of Object.entries(clients)) {
+          for (const ref of normalizePresetRefs(client?.kwargs)) addRef(ref, `${serviceKind}.clients.${clientKey}`);
+        }
+      }
+      return refs;
+    }
+
+    function renameKwargsPresetReferences(oldKey, newKey) {
+      const replaceRefs = value => {
+        if (typeof value === 'string') return value === oldKey ? newKey : value;
+        if (Array.isArray(value)) return value.map(item => String(item) === oldKey ? newKey : item);
+        return value;
+      };
+      for (const preset of Object.values(getSharedKwargsPresets())) {
+        if (preset && Object.prototype.hasOwnProperty.call(preset, 'kwargs')) preset.kwargs = replaceRefs(preset.kwargs);
+      }
+      for (const serviceKind of state.serviceKinds) {
+        const clients = getServiceBucket(serviceKind).clients || {};
+        for (const client of Object.values(clients)) {
+          if (client && Object.prototype.hasOwnProperty.call(client, 'kwargs')) client.kwargs = replaceRefs(client.kwargs);
+        }
+      }
+    }
+
+    function parseFieldValue(raw, type, fieldName) {
+      const text = String(raw ?? '').trim();
+      if (!text) return undefined;
+      if (type === 'number') {
+        const value = Number(text);
+        if (!Number.isFinite(value)) throw new Error(`${fieldName} 必须是有效数字。`);
+        return value;
+      }
+      if (type === 'boolean') return text === 'true';
+      if (type === 'json') return parseJsonInput(text, fieldName);
+      if (text === 'true') return true;
+      if (text === 'false') return false;
+      if (text === 'null') return null;
+      if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
+      if (/^[\[{]/.test(text)) return parseJsonInput(text, fieldName);
+      return text;
+    }
+
+    function validateClientDraft(draft, serviceKind, clientKey) {
+      const errors = [];
+      const type = String(draft.type || '').trim();
+      if (!type) errors.push('Client type 不能为空。');
+      if (type === 'custom' && !draft.adapter) errors.push('Custom client 必须提供 adapter。');
+      if (draft.max_concurrent != null && (!Number.isFinite(Number(draft.max_concurrent)) || Number(draft.max_concurrent) < 1)) errors.push('Max Concurrent 必须为空或大于 0。');
+      if (!Number.isFinite(Number(draft.priority ?? 0))) errors.push('Priority 必须是有效数字。');
+      if (!Number.isInteger(Number(draft.strategy_lvl ?? 0))) errors.push('Strategy 必须是整数。');
+      return errors;
+    }
+
+    function renderJsonEditorField({ id, label, value, rows = 6, placeholder = '' }) {
+      return `<label class="ai-editor-field"><span>${escHtml(label)}</span><textarea id="${escHtml(id)}" rows="${escHtml(rows)}" placeholder="${escHtml(placeholder)}">${escHtml(formatJsonEditorValue(value))}</textarea></label>`;
+    }
+
+    function formatAdapterSourceValue(value) {
+      if (!value) return '';
+      return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+
+    function parseAdapterSourceInput(text) {
+      const trimmed = String(text || '').trim();
+      if (!trimmed) return null;
+      if (trimmed.startsWith('{')) {
+        return parseJsonInput(trimmed, 'adapter source');
+      }
+      return trimmed;
+    }
+
+    function isAdapterScriptPath(path) {
+      return /\.pyw?$/i.test(String(path || '').trim());
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value || 0);
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, '')} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`;
+    }
+
+    function buildSystemToolsConfigUrl() {
+      return '/admin/api/system/tools/config';
+    }
+
+    function buildSystemFilesListUrl(rootKey, path) {
+      const params = new URLSearchParams();
+      if (rootKey) params.set('root', rootKey);
+      params.set('path', path || '');
+      return `/admin/api/system/files/list?${params.toString()}`;
+    }
+
+    function buildSystemFileRawUrl(rootKey, path) {
+      const params = new URLSearchParams();
+      if (rootKey) params.set('root', rootKey);
+      params.set('path', path || '');
+      return `/admin/api/system/files/raw?${params.toString()}`;
+    }
+
+    function currentAdapterBrowserRootInfo() {
+      return adapterBrowserState.roots.find(root => root.key === adapterBrowserState.root) || null;
+    }
+
+    function buildAdapterServerPath(rootInfo, relativePath) {
+      const basePath = String(rootInfo?.path || '');
+      if (!basePath) return String(relativePath || '');
+      const separator = basePath.includes('\\') ? '\\' : '/';
+      const cleanedBase = basePath.replace(/[\\/]+$/, '');
+      const cleanedRelative = String(relativePath || '').replace(/^\/+/, '').replace(/\//g, separator);
+      return cleanedRelative ? `${cleanedBase}${separator}${cleanedRelative}` : cleanedBase;
+    }
+
+    function setClientAdapterStatus(text) {
+      const status = document.getElementById('modal-client-upload-adapter-status');
+      if (status) status.textContent = text;
+    }
+
+    function syncClientAdapterControls() {
+      const uploadBtn = document.getElementById('modal-client-upload-adapter-btn');
+      if (uploadBtn) uploadBtn.hidden = !(modalState.adapterSourceMode === 'remote' && modalState.remoteAdapterSelection);
     }
 
     function setStatus(kind, text) {
@@ -1284,6 +1914,11 @@
         state.activeServiceKind = fallback;
       }
       return state.activeServiceKind;
+    }
+
+    function activeInstanceCategory() {
+      state.activeInstanceCategory = normalizeInstanceCategory(state.activeInstanceCategory);
+      return state.activeInstanceCategory;
     }
 
     function markDirty(flag = true) {
@@ -1317,24 +1952,46 @@
 
     function ensureConfigShape(input, serviceKinds) {
       const cfg = clone(input || {});
+      if (!isPlainObject(cfg.kwargs)) {
+        cfg.kwargs = {};
+      }
       const kinds = Array.isArray(serviceKinds) && serviceKinds.length
         ? serviceKinds
         : (state.serviceKinds.length ? state.serviceKinds : DEFAULT_SERVICE_KINDS);
       for (const serviceKind of kinds) {
         const bucket = cfg[serviceKind];
         if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) {
-          cfg[serviceKind] = { clients: {}, default: null, extras: {} };
+          cfg[serviceKind] = { clients: {}, service: {} };
           continue;
         }
         if (!bucket.clients || typeof bucket.clients !== 'object' || Array.isArray(bucket.clients)) {
           bucket.clients = {};
         }
-        if (!('default' in bucket)) bucket.default = null;
-        if (!bucket.extras || typeof bucket.extras !== 'object' || Array.isArray(bucket.extras)) {
-          bucket.extras = {};
+        if (!bucket.service || typeof bucket.service !== 'object' || Array.isArray(bucket.service)) {
+          bucket.service = {};
         }
+        delete bucket.default;
+        delete bucket.extras;
       }
       return cfg;
+    }
+
+    function getSharedKwargsPresets() {
+      if (!state.config || typeof state.config !== 'object') {
+        state.config = ensureConfigShape({}, state.serviceKinds);
+      }
+      if (!isPlainObject(state.config.kwargs)) {
+        state.config.kwargs = {};
+      }
+      return state.config.kwargs;
+    }
+
+    function kwargsPresetKeys() {
+      return Object.keys(getSharedKwargsPresets()).sort((left, right) => left.localeCompare(right, 'zh-CN'));
+    }
+
+    function createEmptyKwargsPreset() {
+      return {};
     }
 
     function getServiceBucket(serviceKind) {
@@ -1342,23 +1999,38 @@
         state.config = ensureConfigShape({}, state.serviceKinds);
       }
       if (!state.config[serviceKind] || typeof state.config[serviceKind] !== 'object' || Array.isArray(state.config[serviceKind])) {
-        state.config[serviceKind] = { clients: {}, default: null, extras: {} };
+        state.config[serviceKind] = { clients: {}, service: {} };
       }
       const bucket = state.config[serviceKind];
       if (!bucket.clients || typeof bucket.clients !== 'object' || Array.isArray(bucket.clients)) {
         bucket.clients = {};
       }
-      if (!('default' in bucket)) bucket.default = null;
-      if (!bucket.extras || typeof bucket.extras !== 'object' || Array.isArray(bucket.extras)) {
-        bucket.extras = {};
+      if (!bucket.service || typeof bucket.service !== 'object' || Array.isArray(bucket.service)) {
+        bucket.service = {};
       }
+      delete bucket.default;
+      delete bucket.extras;
       return bucket;
     }
 
-    function createEmptyClient() {
+    function clientTypesForKind(serviceKind) {
+      const kind = serviceKind || activeServiceKind();
+      const byKind = state.clientTypesByKind && typeof state.clientTypesByKind === 'object'
+        ? state.clientTypesByKind[kind]
+        : null;
+      if (Array.isArray(byKind) && byKind.length) return byKind;
+      const fallback = DEFAULT_CLIENT_TYPES_BY_KIND[kind];
+      if (Array.isArray(fallback) && fallback.length) return fallback;
+      if (Array.isArray(state.clientTypes) && state.clientTypes.length) return state.clientTypes;
+      return ['custom'];
+    }
+
+    function createEmptyClient(serviceKind = activeServiceKind()) {
+      const clientTypes = clientTypesForKind(serviceKind);
       return {
-        type: state.clientTypes[0] || 'openai-completion',
+        type: clientTypes[0] || 'custom',
         key: '',
+        adapter: null,
         max_concurrent: null,
         priority: 0,
         strategy_lvl: 0,
@@ -1479,34 +2151,37 @@
     function totalServiceCount() {
       let total = 0;
       for (const serviceKind of state.serviceKinds) {
-        const bucket = state.config?.[serviceKind] || { default: null, extras: {} };
+        const bucket = state.config?.[serviceKind] || { service: {} };
+        const services = bucket.service || {};
         const runtimeKeys = new Set(runtimeServicesForKind(serviceKind).map(row => String(row.key || '').trim()).filter(Boolean));
-        if (bucket.default) total += 1;
-        total += Object.keys(bucket.extras || {}).length;
-        if (!bucket.default && runtimeKeys.has('default')) total += 1;
+        if (services.default) total += 1;
+        total += Object.keys(services).filter(key => key !== 'default').length;
+        if (!services.default && runtimeKeys.has('default')) total += 1;
         for (const key of runtimeKeys) {
-          if (key !== 'default' && !bucket.extras?.[key]) total += 1;
+          if (key !== 'default' && !services[key]) total += 1;
         }
       }
       return total;
     }
 
+    function totalKwargsPresetCount() {
+      return kwargsPresetKeys().length;
+    }
+
     function ensureServiceConfig(serviceKind, serviceKey) {
       const bucket = getServiceBucket(serviceKind);
       if (serviceKey === 'default') {
-        if (!bucket.default) bucket.default = createEmptyService();
-        return bucket.default;
+        if (!bucket.service.default) bucket.service.default = createEmptyService();
+        return bucket.service.default;
       }
-      if (!bucket.extras[serviceKey]) bucket.extras[serviceKey] = createEmptyService();
-      return bucket.extras[serviceKey];
+      if (!bucket.service[serviceKey]) bucket.service[serviceKey] = createEmptyService();
+      return bucket.service[serviceKey];
     }
 
     function removeClientEverywhere(clientKey, targetServiceKind = activeServiceKind()) {
       for (const serviceKind of [targetServiceKind]) {
         const bucket = getServiceBucket(serviceKind);
-        const entries = [];
-        if (bucket.default) entries.push(bucket.default);
-        entries.push(...Object.values(bucket.extras || {}));
+        const entries = Object.values(bucket.service || {});
         for (const service of entries) {
           service.clients = (service.clients || []).filter(binding => {
             if (typeof binding === 'string') return binding !== clientKey;
@@ -1520,8 +2195,8 @@
     function removeServiceInstance(serviceKind, serviceKey) {
       if (serviceKey === 'default') return false;
       const bucket = getServiceBucket(serviceKind);
-      if (bucket.extras && Object.prototype.hasOwnProperty.call(bucket.extras, serviceKey)) {
-        delete bucket.extras[serviceKey];
+      if (bucket.service && Object.prototype.hasOwnProperty.call(bucket.service, serviceKey)) {
+        delete bucket.service[serviceKey];
       }
       return true;
     }
@@ -1566,6 +2241,15 @@
       return row ? { serviceKind: detail.serviceKind, row } : null;
     }
 
+    function currentKwargsPresetDetailEntry() {
+      const detail = state.selectedDetail;
+      if (!detail || detail.entity !== 'kwargs-preset') return null;
+      const presets = getSharedKwargsPresets();
+      return Object.prototype.hasOwnProperty.call(presets, detail.key)
+        ? { key: detail.key, value: presets[detail.key] }
+        : null;
+    }
+
     function detailSourceLabel(configPart, runtimePart) {
       if (configPart && runtimePart) return '配置 + 运行时';
       if (configPart) return '仅配置';
@@ -1577,6 +2261,12 @@
       const data = value && typeof value === 'object' ? value : null;
       if (!data || !Object.keys(data).length) return `<div class="ai-detail-empty">${escHtml(emptyText)}</div>`;
       return `<pre class="ai-detail-code">${escHtml(formatJsonSnapshot(data))}</pre>`;
+    }
+
+    function detailValueBlock(value, emptyText = '无') {
+      if (value == null || value === '') return `<div class="ai-detail-empty">${escHtml(emptyText)}</div>`;
+      if (typeof value === 'object') return detailJsonBlock(value, emptyText);
+      return `<pre class="ai-detail-code">${escHtml(String(value))}</pre>`;
     }
 
     function renderServiceDetailPane(serviceKind, entry) {
@@ -1599,7 +2289,7 @@
             <div class="ai-detail-kv-item"><span>Clients</span><strong>${bindings.length}</strong></div>
             <div class="ai-detail-kv-item"><span>Runtime Key</span><strong>${escHtml(present(runtime?.key || instanceName))}</strong></div>
             <div class="ai-detail-kv-item"><span>Cooldown</span><strong>${escHtml(serviceConfig?.fail_cooldown ?? runtime?.fail_cooldown ?? 10)}</strong></div>
-            <div class="ai-detail-kv-item"><span>Recovery</span><strong>${escHtml(present(serviceConfig?.recovery_interval ?? runtime?.recovery_interval))}</strong></div>
+            <div class="ai-detail-kv-item"><span>Recovery</span><strong>${escHtml(formatRecoveryInterval(serviceConfig?.recovery_interval ?? runtime?.recovery_interval))}</strong></div>
           </div>
         </section>
         <section class="ai-detail-section">
@@ -1616,6 +2306,11 @@
     function renderClientDetailPane(serviceKind, row) {
       const client = row.config || row.runtime || {};
       const kwargs = row.config?.kwargs || row.runtime?.init_snapshot?.kwargs || {};
+      const adapterSource = row.config?.adapter ?? row.runtime?.init_snapshot?.adapter ?? null;
+      const presetRefs = normalizePresetRefs(row.config?.kwargs);
+      const finalParams = row.config
+        ? clientFinalInitParams(row.config, serviceKind, row.key)
+        : (row.runtime?.init_snapshot || {});
       document.getElementById('instance-detail-title').textContent = row.key;
       document.getElementById('instance-detail-body').innerHTML = `
         <section class="ai-detail-section">
@@ -1632,12 +2327,52 @@
           </div>
         </section>
         <section class="ai-detail-section">
-          <div class="ai-detail-section-title">Client Kwargs</div>
-          ${detailJsonBlock(kwargs, '当前没有额外 kwargs。')}
+          <div class="ai-detail-section-title">健康与统计</div>
+          <div class="ai-client-health-strip">${renderHealthChips(row.runtime)}</div>
+          ${row.runtime?.last_error ? `<div class="ai-client-error">${escHtml(row.runtime.last_error)}</div>` : ''}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Preset Tags</div>
+          ${presetRefs.length ? `<div class="ai-client-preset-tags">${presetRefs.map(ref => `<span class="ai-client-preset-tag">${escHtml(ref)}</span>`).join('')}</div>` : '<div class="ai-detail-empty">当前 client 未绑定 shared kwargs preset。</div>'}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Editable Fields</div>
+          ${detailValueBlock(kwargs, '当前没有额外 kwargs。')}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Final Init Params</div>
+          ${detailJsonBlock(finalParams, '当前没有可展示的最终 init params。')}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Adapter Source</div>
+          ${detailValueBlock(adapterSource, '当前 client 未配置 custom adapter。')}
         </section>
         <section class="ai-detail-section">
           <div class="ai-detail-section-title">Init Snapshot</div>
           ${detailJsonBlock(row.runtime?.init_snapshot || {}, '当前没有 runtime snapshot。')}
+        </section>
+      `;
+    }
+
+    function renderKwargsPresetDetailPane(entry) {
+      const refs = collectKwargsPresetReferences().get(entry.key) || [];
+      document.getElementById('instance-detail-title').textContent = entry.key;
+      document.getElementById('instance-detail-body').innerHTML = `
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">概览</div>
+          <div class="ai-detail-kv-grid">
+            <div class="ai-detail-kv-item"><span>Scope</span><strong>shared</strong></div>
+            <div class="ai-detail-kv-item"><span>Fields</span><strong>${Object.keys(entry.value || {}).length}</strong></div>
+            <div class="ai-detail-kv-item"><span>Used By</span><strong>${refs.length}</strong></div>
+          </div>
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">引用位置</div>
+          ${refs.length ? `<ul class="ai-detail-list">${refs.map(ref => `<li>${escHtml(ref)}</li>`).join('')}</ul>` : '<div class="ai-detail-empty">当前没有 client 引用它，可以删除。</div>'}
+        </section>
+        <section class="ai-detail-section">
+          <div class="ai-detail-section-title">Preset Kwargs</div>
+          ${detailJsonBlock(entry.value || {}, '当前 preset 为空。')}
         </section>
       `;
     }
@@ -1647,6 +2382,7 @@
       const body = document.getElementById('instance-detail-body');
       const serviceDetail = currentServiceDetailEntry();
       const clientDetail = currentClientDetailRow();
+      const kwargsPresetDetail = currentKwargsPresetDetailEntry();
       if (serviceDetail) {
         renderServiceDetailPane(serviceDetail.serviceKind, serviceDetail.entry);
         return;
@@ -1655,9 +2391,13 @@
         renderClientDetailPane(clientDetail.serviceKind, clientDetail.row);
         return;
       }
+      if (kwargsPresetDetail) {
+        renderKwargsPresetDetailPane(kwargsPresetDetail);
+        return;
+      }
       state.selectedDetail = null;
       title.textContent = '实例详情';
-      body.innerHTML = '<div class="ai-detail-empty">点击左侧 service/client 实例后，会在这里展示详细配置和运行态信息。</div>';
+      body.innerHTML = '<div class="ai-detail-empty">点击左侧 service/client/kwargs 预设后，会在这里展示详细配置和运行态信息。</div>';
     }
 
     async function confirmServiceDelete(serviceKind, serviceKey) {
@@ -1665,6 +2405,20 @@
       const ui = window.ProjUtils || null;
       if (ui && typeof ui.confirmDialog === 'function') {
         return await ui.confirmDialog({ title: '删除 Service 实例', text, okText: '删除', tone: 'danger' });
+      }
+      return window.confirm(text);
+    }
+
+    async function confirmKwargsPresetDelete(presetKey) {
+      const refs = collectKwargsPresetReferences().get(presetKey) || [];
+      if (refs.length) {
+        setStatus('error', `Kwargs preset ${presetKey} 正被使用，禁止删除：${refs.slice(0, 4).join('、')}${refs.length > 4 ? '…' : ''}`);
+        return false;
+      }
+      const text = `确认删除 shared kwargs preset ${presetKey} 吗？`;
+      const ui = window.ProjUtils || null;
+      if (ui && typeof ui.confirmDialog === 'function') {
+        return await ui.confirmDialog({ title: '删除 Kwargs 预设', text, okText: '删除', tone: 'danger' });
       }
       return window.confirm(text);
     }
@@ -1681,9 +2435,7 @@
     function renameClientEverywhere(oldKey, newKey, serviceKind = activeServiceKind()) {
       {
         const bucket = getServiceBucket(serviceKind);
-        const entries = [];
-        if (bucket.default) entries.push(bucket.default);
-        entries.push(...Object.values(bucket.extras || {}));
+        const entries = Object.values(bucket.service || {});
         for (const service of entries) {
           service.clients = (service.clients || []).map(binding => {
             const normalized = normalizeBinding(binding);
@@ -1705,12 +2457,13 @@
     function serviceEntries(serviceKind) {
       const bucket = getServiceBucket(serviceKind);
       const runtimeByKey = new Map(runtimeServicesForKind(serviceKind).map(row => [String(row.key || '').trim(), row]));
-      const rows = [{ key: 'default', isDefault: true, config: bucket.default, runtime: runtimeByKey.get('default') || null }];
-      for (const extraKey of Object.keys(bucket.extras || {}).sort((left, right) => left.localeCompare(right, 'zh-CN'))) {
-        rows.push({ key: extraKey, isDefault: false, config: bucket.extras[extraKey], runtime: runtimeByKey.get(extraKey) || null });
+      const services = bucket.service || {};
+      const rows = [{ key: 'default', isDefault: true, config: services.default || null, runtime: runtimeByKey.get('default') || null }];
+      for (const serviceKey of Object.keys(services).filter(key => key !== 'default').sort((left, right) => left.localeCompare(right, 'zh-CN'))) {
+        rows.push({ key: serviceKey, isDefault: false, config: services[serviceKey], runtime: runtimeByKey.get(serviceKey) || null });
       }
       for (const [runtimeKey, runtime] of runtimeByKey.entries()) {
-        if (!runtimeKey || runtimeKey === 'default' || bucket.extras?.[runtimeKey]) continue;
+        if (!runtimeKey || runtimeKey === 'default' || services[runtimeKey]) continue;
         rows.push({ key: runtimeKey, isDefault: false, config: null, runtime });
       }
       return rows;
@@ -1746,7 +2499,7 @@
       if (!state.editing) return;
       const serviceKind = activeServiceKind();
       const bucket = getServiceBucket(serviceKind);
-      if (!bucket.default) {
+      if (!bucket.service.default) {
         openServiceModal({ serviceKind, key: 'default', config: createEmptyService(), mode: 'new', isDefault: true });
       } else {
         openServiceModal({ serviceKind, key: nextServiceKey(bucket), config: createEmptyService(), mode: 'new', isDefault: false });
@@ -1755,14 +2508,22 @@
 
     function nextServiceKey(bucket) {
       let nextIndex = 1;
-      while (bucket.extras[`service-${nextIndex}`]) nextIndex += 1;
+      while (bucket.service[`service-${nextIndex}`]) nextIndex += 1;
       return `service-${nextIndex}`;
     }
 
     function nextClientKey() {
       let nextIndex = 1;
-      while (state.config?.clients?.[`client-${nextIndex}`]) nextIndex += 1;
+      const clients = getServiceBucket(activeServiceKind()).clients || {};
+      while (clients[`client-${nextIndex}`]) nextIndex += 1;
       return `client-${nextIndex}`;
+    }
+
+    function nextKwargsPresetKey() {
+      const presets = getSharedKwargsPresets();
+      let nextIndex = 1;
+      while (presets[`preset-${nextIndex}`]) nextIndex += 1;
+      return `preset-${nextIndex}`;
     }
 
     function openModalShell() {
@@ -1775,6 +2536,7 @@
       const backdrop = document.getElementById('instance-modal-backdrop');
       backdrop.classList.remove('is-open');
       backdrop.setAttribute('aria-hidden', 'true');
+      closeAdapterBrowser();
       Object.assign(modalState, {
         open: false,
         entity: null,
@@ -1784,6 +2546,8 @@
         draftKey: '',
         draftConfig: null,
         isDefault: false,
+        adapterSourceMode: null,
+        remoteAdapterSelection: null,
       });
     }
 
@@ -1803,7 +2567,7 @@
     }
 
     function openClientModal({ key, config, mode }) {
-      const draft = clone(config || createEmptyClient());
+      const draft = clone(config || createEmptyClient(activeServiceKind()));
       draft.key = key;
       Object.assign(modalState, {
         open: true,
@@ -1813,6 +2577,23 @@
         originalKey: key,
         draftKey: key,
         draftConfig: draft,
+        isDefault: false,
+        adapterSourceMode: null,
+        remoteAdapterSelection: null,
+      });
+      renderInstanceModal();
+      openModalShell();
+    }
+
+    function openKwargsPresetModal({ key, value, mode }) {
+      Object.assign(modalState, {
+        open: true,
+        entity: 'kwargs-preset',
+        mode,
+        serviceKind: null,
+        originalKey: key,
+        draftKey: key,
+        draftConfig: clone(value || createEmptyKwargsPreset()),
         isDefault: false,
       });
       renderInstanceModal();
@@ -1859,33 +2640,141 @@
     function renderServiceModalBody() {
       const service = modalState.draftConfig || createEmptyService();
       const bindings = (service.clients || []).map(normalizeBinding);
+      const boundClients = new Set(bindings.map(binding => binding.client).filter(Boolean));
+      const availableClients = clientKeys(modalState.serviceKind).filter(key => !boundClients.has(key));
       return `
         <div class="ai-editor-inline-grid">
           <label class="ai-editor-field"><span>Instance Key</span><input id="modal-service-key" type="text" value="${escHtml(modalState.draftKey)}" ${modalState.isDefault ? 'disabled' : ''} /></label>
           <label class="ai-editor-field"><span>Fail Cooldown</span><input id="modal-service-fail-cooldown" type="number" min="1" step="1" value="${escHtml(service.fail_cooldown ?? 10)}" /></label>
-          <label class="ai-editor-field"><span>Recovery Interval</span><input id="modal-service-recovery-interval" type="number" min="1" step="1" value="${service.recovery_interval == null ? '' : escHtml(service.recovery_interval)}" /></label>
+          <label class="ai-editor-field"><span>Recovery Interval</span><input id="modal-service-recovery-interval" type="text" value="${escHtml(recoveryIntervalInputValue(service.recovery_interval))}" placeholder="留空关闭，或填秒数 / JSON" /></label>
         </div>
-        <label class="ai-editor-field"><span>Service Kwargs JSON</span><textarea id="modal-service-kwargs" rows="6">${escHtml(JSON.stringify(service.kwargs || {}, null, 2))}</textarea></label>
+        ${renderJsonEditorField({ id: 'modal-service-kwargs', label: 'Service Kwargs JSON', value: service.kwargs || {}, rows: 6 })}
         <div class="ai-service-binding-list">
           ${bindings.length ? bindings.map(serviceModalBindingRow).join('') : '<div class="ai-services-empty is-compact">当前 service 没有挂载 client。</div>'}
         </div>
-        <button id="modal-add-binding-btn" type="button" class="panel-btn">分配 Client</button>
+        <button id="modal-add-binding-btn" type="button" class="panel-btn" ${availableClients.length ? '' : 'disabled'}>分配 Client</button>
+      `;
+    }
+
+    function renderClientFieldInput(def, value) {
+      const rawValue = value == null ? '' : (def.type === 'json' && typeof value !== 'string' ? JSON.stringify(value) : String(value));
+      if (def.type === 'boolean') {
+        return `<select class="ai-client-field-value" data-field-type="boolean"><option value="">未设置</option><option value="true" ${value === true ? 'selected' : ''}>true</option><option value="false" ${value === false ? 'selected' : ''}>false</option></select>`;
+      }
+      const inputType = def.type === 'number' ? 'number' : 'text';
+      return `<input class="ai-client-field-value" data-field-type="${escHtml(def.type || 'text')}" type="${inputType}" value="${escHtml(rawValue)}" placeholder="${escHtml(def.placeholder || '')}" />`;
+    }
+
+    function renderClientPresetEditor(client) {
+      const presetKeys = kwargsPresetKeys();
+      const refs = normalizePresetRefs(client?.kwargs);
+      const available = presetKeys.filter(key => !refs.includes(key));
+      return `
+        <div class="ai-client-preset-board">
+          <div class="ai-detail-section-title">Kwargs Presets</div>
+          <div class="ai-client-preset-tags" id="modal-client-preset-tags">
+            ${refs.length ? refs.map(ref => `
+              <span class="ai-client-preset-tag" data-preset-ref="${escHtml(ref)}">
+                ${escHtml(ref)}
+                <button type="button" class="ai-remove-client-preset-btn" data-preset-ref="${escHtml(ref)}" aria-label="移除 ${escHtml(ref)}">
+                  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.2 4.2l7.6 7.6m0-7.6l-7.6 7.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                </button>
+              </span>
+            `).join('') : '<span class="ai-inline-note">未绑定 preset。</span>'}
+          </div>
+          <div class="ai-client-preset-add-row">
+            <select id="modal-client-preset-select"><option value="">选择 preset…</option>${available.map(key => `<option value="${escHtml(key)}">${escHtml(key)}</option>`).join('')}</select>
+            <button id="modal-client-add-preset-btn" type="button" class="panel-btn">添加</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderClientFieldBoard(serviceKind, client) {
+      const fields = clientEditableFieldValues(client, { includeEmpty: true });
+      const defs = clientFieldDefs(serviceKind, client?.type || '').map(def => ({ ...def, builtIn: true }));
+      const defKeys = new Set(defs.map(def => def.key));
+      const customDefs = Object.keys(fields)
+        .filter(key => !defKeys.has(key))
+        .sort()
+        .map(key => ({ key, label: key, type: typeof fields[key] === 'boolean' ? 'boolean' : typeof fields[key] === 'number' ? 'number' : (isPlainObject(fields[key]) || Array.isArray(fields[key])) ? 'json' : 'text', builtIn: false }));
+      const allDefs = [...defs, ...customDefs];
+      const suggestionKeys = defs.map(def => def.key).filter(key => !Object.prototype.hasOwnProperty.call(fields, key));
+      return `
+        <div class="ai-client-field-board">
+          <div class="ai-client-field-head"><span>Field</span><span>Value</span><span></span></div>
+          <div id="modal-client-field-rows" class="ai-client-field-board">
+            ${allDefs.map(def => `
+              <div class="ai-client-field-row" data-client-field-row data-field-built-in="${def.builtIn ? '1' : '0'}">
+                <input class="ai-client-field-name" type="text" value="${escHtml(def.key)}" ${def.builtIn ? 'readonly' : ''} />
+                ${renderClientFieldInput(def, fields[def.key])}
+                <button type="button" class="panel-btn ai-remove-client-field-btn" title="移除字段">移除</button>
+              </div>
+            `).join('')}
+          </div>
+          <div class="ai-client-preset-add-row">
+            <select id="modal-client-field-suggest"><option value="">选择常用 field…</option>${suggestionKeys.map(key => `<option value="${escHtml(key)}">${escHtml(key)}</option>`).join('')}</select>
+            <input id="modal-client-custom-field" type="text" placeholder="自定义 field" />
+            <button id="modal-client-add-field-btn" type="button" class="panel-btn">添加 Field</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderClientFinalPreview(client, serviceKind) {
+      const finalParams = clientFinalInitParams(client, serviceKind, modalState.draftKey || '');
+      const errors = validateClientDraft(client, serviceKind, modalState.draftKey || '');
+      return `
+        ${errors.length ? `<div class="ai-modal-validation-list">${errors.map(error => `<div>${escHtml(error)}</div>`).join('')}</div>` : ''}
+        <div class="ai-detail-section-title">Final Init Params</div>
+        <pre class="ai-json-preview ai-client-final-preview" id="modal-client-final-preview">${escHtml(JSON.stringify(finalParams, null, 2))}</pre>
       `;
     }
 
     function renderClientModalBody() {
-      const client = modalState.draftConfig || createEmptyClient();
+      const serviceKind = modalState.serviceKind || activeServiceKind();
+      const client = modalState.draftConfig || createEmptyClient(serviceKind);
+      const typeOptions = clientTypesForKind(serviceKind);
+      const adapterSourceValue = formatAdapterSourceValue(client.adapter);
+      const isCustomClient = client.type === 'custom';
+      const adapterStatusText = modalState.adapterSourceMode === 'local-upload'
+        ? '本地 adapter 已上传到 Object Storage，并已写入 Adapter Source。'
+        : modalState.adapterSourceMode === 'remote' && modalState.remoteAdapterSelection
+          ? `当前使用远端文件路径：${modalState.remoteAdapterSelection.serverPath}`
+          : '本地文件会直接上传到 Object Storage；远端文件可先引用服务器路径，再按需上传到 Object Storage。';
       return `
         <div class="ai-editor-inline-grid">
           <label class="ai-editor-field"><span>Client Key</span><input id="modal-client-key" type="text" value="${escHtml(modalState.draftKey)}" /></label>
-          <label class="ai-editor-field"><span>Type</span><select id="modal-client-type">${state.clientTypes.map(type => `<option value="${escHtml(type)}" ${type === client.type ? 'selected' : ''}>${escHtml(type)}</option>`).join('')}</select></label>
+          <label class="ai-editor-field"><span>Type</span><select id="modal-client-type">${typeOptions.map(type => `<option value="${escHtml(type)}" ${type === client.type ? 'selected' : ''}>${escHtml(type)}</option>`).join('')}</select></label>
           <label class="ai-editor-field"><span>Max Concurrent</span><input id="modal-client-max-concurrent" type="number" min="1" step="1" value="${client.max_concurrent == null ? '' : escHtml(client.max_concurrent)}" /></label>
           <label class="ai-editor-field"><span>Priority</span><input id="modal-client-priority" type="number" step="0.1" value="${escHtml(client.priority ?? 0)}" /></label>
         </div>
         <div class="ai-editor-inline-grid">
           <label class="ai-editor-field"><span>Strategy</span><select id="modal-client-strategy">${STRATEGY_OPTIONS.map(option => `<option value="${option.value}" ${Number(client.strategy_lvl ?? 0) === option.value ? 'selected' : ''}>${option.label}</option>`).join('')}</select></label>
         </div>
-        <label class="ai-editor-field"><span>Client Kwargs JSON</span><textarea id="modal-client-kwargs" rows="8">${escHtml(JSON.stringify(client.kwargs || {}, null, 2))}</textarea></label>
+        ${isCustomClient ? `
+        <label class="ai-editor-field"><span>Adapter Source</span><textarea id="modal-client-adapter-source" rows="6" placeholder="本地路径 / URL / OBS_Object JSON">${escHtml(adapterSourceValue)}</textarea></label>
+        <input id="modal-client-adapter-file" type="file" accept=".py,.pyw,text/x-python" hidden />
+        <div class="panel-action-row">
+          <button id="modal-client-pick-local-adapter-btn" type="button" class="panel-btn">选择本地文件</button>
+          <button id="modal-client-pick-remote-adapter-btn" type="button" class="panel-btn">选择远端文件</button>
+          <button id="modal-client-upload-adapter-btn" type="button" class="panel-btn" ${modalState.adapterSourceMode === 'remote' && modalState.remoteAdapterSelection ? '' : 'hidden'}>上传到 Object Storage</button>
+          <span id="modal-client-upload-adapter-status" class="ai-inline-note">${escHtml(adapterStatusText)}</span>
+        </div>
+        ` : ''}
+        ${renderClientPresetEditor(client)}
+        ${renderClientFieldBoard(serviceKind, client)}
+        ${renderClientFinalPreview(client, serviceKind)}
+      `;
+    }
+
+    function renderKwargsPresetModalBody() {
+      const preset = modalState.draftConfig || createEmptyKwargsPreset();
+      return `
+        <div class="ai-editor-inline-grid">
+          <label class="ai-editor-field"><span>Preset Key</span><input id="modal-kwargs-preset-key" type="text" value="${escHtml(modalState.draftKey)}" /></label>
+        </div>
+        ${renderJsonEditorField({ id: 'modal-kwargs-preset-value', label: 'Preset Kwargs JSON', value: preset, rows: 12, placeholder: '{ "model": "..." }' })}
       `;
     }
 
@@ -1915,23 +2804,61 @@
           strategy_lvl: strategyRaw ? Number(strategyRaw) : null,
         };
       }).filter(binding => binding.client);
+      const duplicated = bindings.map(binding => binding.client).find((client, index, list) => client && list.indexOf(client) !== index);
+      if (duplicated) throw new Error(`Service 不能重复挂载 client ${duplicated}。`);
       return {
         clients: bindings,
         fail_cooldown: Number(document.getElementById('modal-service-fail-cooldown')?.value || 10),
-        recovery_interval: rawRecovery ? Number(rawRecovery) : null,
-        kwargs: parseJsonInput(document.getElementById('modal-service-kwargs')?.value || '{}', 'service kwargs'),
+        recovery_interval: parseRecoveryIntervalInput(rawRecovery),
+        kwargs: parseJsonObjectInput(document.getElementById('modal-service-kwargs')?.value || '{}', 'service kwargs'),
       };
     }
 
-    function readClientDraftFromModal() {
+    function collectClientPresetRefsFromModal() {
+      return Array.from(document.querySelectorAll('#modal-client-preset-tags [data-preset-ref]'))
+        .map(node => String(node.dataset.presetRef || '').trim())
+        .filter(Boolean);
+    }
+
+    function collectClientFieldsFromModal() {
+      const fields = {};
+      for (const row of Array.from(document.querySelectorAll('[data-client-field-row]'))) {
+        const name = String(row.querySelector('.ai-client-field-name')?.value || '').trim();
+        if (!name) continue;
+        const valueNode = row.querySelector('.ai-client-field-value');
+        const raw = valueNode?.value ?? '';
+        if (String(raw).trim() === '') continue;
+        const type = valueNode?.dataset.fieldType || 'text';
+        fields[name] = parseFieldValue(raw, type, name);
+      }
+      return fields;
+    }
+
+    function readClientDraftFromModal({ validate = true } = {}) {
       const rawMaxConcurrent = String(document.getElementById('modal-client-max-concurrent')?.value || '').trim();
-      return {
+      const type = String(document.getElementById('modal-client-type')?.value || '').trim();
+      const adapterSource = parseAdapterSourceInput(document.getElementById('modal-client-adapter-source')?.value || '');
+      const draft = {
         key: String(document.getElementById('modal-client-key')?.value || '').trim(),
-        type: String(document.getElementById('modal-client-type')?.value || '').trim(),
+        type,
+        adapter: type === 'custom' ? adapterSource : null,
         max_concurrent: rawMaxConcurrent ? Number(rawMaxConcurrent) : null,
         priority: Number(document.getElementById('modal-client-priority')?.value || 0),
         strategy_lvl: Number(document.getElementById('modal-client-strategy')?.value || 0),
-        kwargs: parseJsonInput(document.getElementById('modal-client-kwargs')?.value || '{}', 'client kwargs'),
+        kwargs: serializePresetRefs(collectClientPresetRefsFromModal()),
+      };
+      Object.assign(draft, collectClientFieldsFromModal());
+      if (validate) {
+        const errors = validateClientDraft(draft, modalState.serviceKind || activeServiceKind(), draft.key || modalState.draftKey || '');
+        if (errors.length) throw new Error(errors.join('\n'));
+      }
+      return draft;
+    }
+
+    function readKwargsPresetDraftFromModal() {
+      return {
+        key: String(document.getElementById('modal-kwargs-preset-key')?.value || '').trim(),
+        value: parseJsonObjectInput(document.getElementById('modal-kwargs-preset-value')?.value || '{}', 'kwargs preset'),
       };
     }
 
@@ -1940,18 +2867,25 @@
         ? `${modalState.mode === 'new' ? '新增' : '编辑'} Service 实例 · ${modalState.serviceKind}`
         : modalState.entity === 'runtime-client'
           ? `编辑内部 Client · ${modalState.serviceKind}`
+        : modalState.entity === 'kwargs-preset'
+          ? `${modalState.mode === 'new' ? '新增' : '编辑'} Kwargs 预设`
         : `${modalState.mode === 'new' ? '新增' : '编辑'} Client 实例`;
       document.getElementById('instance-modal-title').textContent = title;
       document.getElementById('instance-modal-body').innerHTML = modalState.entity === 'service'
         ? renderServiceModalBody()
         : modalState.entity === 'runtime-client'
           ? renderRuntimeClientModalBody()
+          : modalState.entity === 'kwargs-preset'
+            ? renderKwargsPresetModalBody()
           : renderClientModalBody();
       document.getElementById('instance-modal-save-btn').textContent = '暂存';
       document.getElementById('modal-add-binding-btn')?.addEventListener('click', () => {
         try {
           modalState.draftConfig = readServiceDraftFromModal();
-          modalState.draftConfig.clients.push(createClientBinding(clientKeys(modalState.serviceKind)[0] || ''));
+          const used = new Set((modalState.draftConfig.clients || []).map(binding => normalizeBinding(binding).client).filter(Boolean));
+          const nextClient = clientKeys(modalState.serviceKind).find(key => !used.has(key)) || '';
+          if (!nextClient) return;
+          modalState.draftConfig.clients.push(createClientBinding(nextClient));
           renderInstanceModal();
         } catch (error) {
           setStatus('error', error.message || String(error));
@@ -1964,6 +2898,90 @@
           renderInstanceModal();
         });
       });
+      document.getElementById('modal-client-upload-adapter-btn')?.addEventListener('click', async () => {
+        try {
+          await uploadCustomAdapterScript({ source: 'remote' });
+        } catch (error) {
+          setStatus('error', error.message || String(error));
+        }
+      });
+      document.getElementById('modal-client-pick-local-adapter-btn')?.addEventListener('click', () => {
+        document.getElementById('modal-client-adapter-file')?.click();
+      });
+      document.getElementById('modal-client-adapter-file')?.addEventListener('change', async () => {
+        try {
+          await uploadCustomAdapterScript({ source: 'local' });
+        } catch (error) {
+          setStatus('error', error.message || String(error));
+        }
+      });
+      document.getElementById('modal-client-pick-remote-adapter-btn')?.addEventListener('click', () => {
+        void openAdapterBrowser();
+      });
+      document.getElementById('modal-client-adapter-source')?.addEventListener('input', () => {
+        modalState.adapterSourceMode = null;
+        modalState.remoteAdapterSelection = null;
+        syncClientAdapterControls();
+      });
+      const refreshClientModal = () => {
+        try {
+          modalState.draftConfig = readClientDraftFromModal({ validate: false });
+        } catch {
+          modalState.draftConfig = modalState.draftConfig || createEmptyClient(modalState.serviceKind || activeServiceKind());
+        }
+        modalState.draftKey = String(document.getElementById('modal-client-key')?.value || modalState.draftKey || '').trim();
+        renderInstanceModal();
+      };
+      document.getElementById('modal-client-type')?.addEventListener('change', refreshClientModal);
+      document.getElementById('modal-client-add-preset-btn')?.addEventListener('click', () => {
+        try {
+          const current = readClientDraftFromModal({ validate: false });
+          const refs = normalizePresetRefs(current.kwargs);
+          const picked = String(document.getElementById('modal-client-preset-select')?.value || '').trim();
+          if (!picked) return;
+          if (!getSharedKwargsPresets()[picked]) throw new Error(`Kwargs preset ${picked} 不存在。`);
+          if (!refs.includes(picked)) refs.push(picked);
+          current.kwargs = serializePresetRefs(refs);
+          modalState.draftConfig = current;
+          renderInstanceModal();
+        } catch (error) {
+          setStatus('error', error.message || String(error));
+        }
+      });
+      document.querySelectorAll('.ai-remove-client-preset-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          const current = readClientDraftFromModal({ validate: false });
+          const refs = normalizePresetRefs(current.kwargs).filter(ref => ref !== button.dataset.presetRef);
+          current.kwargs = serializePresetRefs(refs);
+          modalState.draftConfig = current;
+          renderInstanceModal();
+        });
+      });
+      document.getElementById('modal-client-add-field-btn')?.addEventListener('click', () => {
+        try {
+          const current = readClientDraftFromModal({ validate: false });
+          const suggested = String(document.getElementById('modal-client-field-suggest')?.value || '').trim();
+          const custom = String(document.getElementById('modal-client-custom-field')?.value || '').trim();
+          const fieldName = custom || suggested;
+          if (!fieldName) return;
+          if (CLIENT_CORE_FIELDS.has(fieldName)) throw new Error(`${fieldName} 是 client 保留字段。`);
+          if (!Object.prototype.hasOwnProperty.call(current, fieldName)) current[fieldName] = '';
+          modalState.draftConfig = current;
+          renderInstanceModal();
+        } catch (error) {
+          setStatus('error', error.message || String(error));
+        }
+      });
+      document.querySelectorAll('.ai-remove-client-field-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          const row = button.closest('[data-client-field-row]');
+          const fieldName = String(row?.querySelector('.ai-client-field-name')?.value || '').trim();
+          const current = readClientDraftFromModal({ validate: false });
+          delete current[fieldName];
+          modalState.draftConfig = current;
+          renderInstanceModal();
+        });
+      });
     }
 
     function saveServiceModal() {
@@ -1972,17 +2990,17 @@
       const nextKey = modalState.isDefault ? 'default' : String(document.getElementById('modal-service-key')?.value || '').trim();
       if (!nextKey) throw new Error('Service key 不能为空。');
       if (!modalState.isDefault && nextKey === 'default') throw new Error('额外 service 不能使用 default 作为 key。');
-      if (!modalState.isDefault && nextKey !== modalState.originalKey && bucket.extras[nextKey]) {
+      if (!modalState.isDefault && nextKey !== modalState.originalKey && bucket.service[nextKey]) {
         throw new Error(`Service key ${nextKey} 已存在。`);
       }
       const draft = readServiceDraftFromModal();
       if (modalState.isDefault) {
-        bucket.default = draft;
+        bucket.service.default = draft;
       } else {
         if (modalState.mode === 'edit' && modalState.originalKey && modalState.originalKey !== nextKey) {
-          delete bucket.extras[modalState.originalKey];
+          delete bucket.service[modalState.originalKey];
         }
-        bucket.extras[nextKey] = draft;
+        bucket.service[nextKey] = draft;
       }
     }
 
@@ -1999,6 +3017,21 @@
         renameClientEverywhere(modalState.originalKey, nextKey, modalState.serviceKind);
       }
       bucket.clients[nextKey] = draft;
+    }
+
+    function saveKwargsPresetModal() {
+      const draft = readKwargsPresetDraftFromModal();
+      const nextKey = draft.key;
+      const presets = getSharedKwargsPresets();
+      if (!nextKey) throw new Error('Preset key 不能为空。');
+      if (nextKey !== modalState.originalKey && presets[nextKey]) {
+        throw new Error(`Kwargs preset ${nextKey} 已存在。`);
+      }
+      if (modalState.mode === 'edit' && modalState.originalKey && modalState.originalKey !== nextKey) {
+        delete presets[modalState.originalKey];
+        renameKwargsPresetReferences(modalState.originalKey, nextKey);
+      }
+      presets[nextKey] = draft.value;
     }
 
     function saveRuntimeClientModal() {
@@ -2028,6 +3061,7 @@
       try {
         if (modalState.entity === 'service') saveServiceModal();
         if (modalState.entity === 'client') saveClientModal();
+        if (modalState.entity === 'kwargs-preset') saveKwargsPresetModal();
         if (modalState.entity === 'runtime-client') saveRuntimeClientModal();
         markDirty(true);
         updateConfigBadge();
@@ -2090,6 +3124,238 @@
       return data;
     }
 
+    async function fetchAdminBinary(path) {
+      const response = await fetch(path, { credentials: 'same-origin' });
+      if (!response.ok) {
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error('登录状态已失效，正在跳转登录页。');
+        }
+        throw new Error((await response.text().catch(() => '')) || `HTTP ${response.status}`);
+      }
+      return response;
+    }
+
+    function renderAdapterBrowserSelection() {
+      const selection = document.getElementById('adapter-browser-selection');
+      const confirm = document.getElementById('adapter-browser-confirm');
+      if (selection) {
+        selection.textContent = adapterBrowserState.selectedRelativePath
+          ? `已选择：${adapterBrowserState.selectedRelativePath}`
+          : '尚未选择远端文件。';
+      }
+      if (confirm) confirm.disabled = !adapterBrowserState.selectedRelativePath;
+    }
+
+    function closeAdapterBrowser() {
+      const backdrop = document.getElementById('adapter-browser-backdrop');
+      if (!backdrop) return;
+      backdrop.classList.remove('is-open');
+      backdrop.setAttribute('aria-hidden', 'true');
+      adapterBrowserState.open = false;
+      adapterBrowserState.selectedRelativePath = '';
+      adapterBrowserState.selectedName = '';
+      renderAdapterBrowserSelection();
+    }
+
+    function renderAdapterBrowserEntries(entries) {
+      const root = document.getElementById('adapter-browser-list');
+      if (!root) return;
+      if (!Array.isArray(entries) || !entries.length) {
+        root.innerHTML = '<div class="ai-services-empty is-compact">当前目录没有可显示的文件。</div>';
+        return;
+      }
+      root.innerHTML = entries.map(entry => {
+        const relativePath = String(entry.relative_path || '');
+        const selectable = !entry.is_dir && isAdapterScriptPath(relativePath || entry.name);
+        const selected = adapterBrowserState.selectedRelativePath === relativePath;
+        const meta = [entry.is_dir ? 'DIR' : formatBytes(entry.size || 0), entry.modified_at || ''];
+        if (!selectable && !entry.is_dir) meta.push('仅支持 .py / .pyw');
+        return `
+          <div class="ai-picker-browser-row ${selected ? 'is-selected' : ''}" data-relative-path="${escHtml(relativePath)}">
+            <div class="ai-picker-browser-main">
+              <div class="ai-picker-browser-name">${escHtml(entry.name || relativePath)}</div>
+              <div class="ai-picker-browser-meta">${escHtml(meta.filter(Boolean).join(' · '))}</div>
+            </div>
+            <div class="ai-picker-browser-actions">
+              ${entry.is_dir
+                ? `<button type="button" class="panel-btn" data-browser-action="enter" data-relative-path="${escHtml(relativePath)}">进入</button>`
+                : selectable
+                  ? `<button type="button" class="panel-btn panel-btn-primary" data-browser-action="select" data-relative-path="${escHtml(relativePath)}" data-entry-name="${escHtml(entry.name || '')}">选择</button>`
+                  : '<button type="button" class="panel-btn" disabled>不可用</button>'}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      root.querySelectorAll('[data-browser-action="enter"]').forEach(button => {
+        button.addEventListener('click', () => {
+          void loadAdapterBrowserDirectory({ root: adapterBrowserState.root, path: button.dataset.relativePath || '' });
+        });
+      });
+      root.querySelectorAll('[data-browser-action="select"]').forEach(button => {
+        button.addEventListener('click', () => {
+          adapterBrowserState.selectedRelativePath = String(button.dataset.relativePath || '');
+          adapterBrowserState.selectedName = String(button.dataset.entryName || '');
+          root.querySelectorAll('.ai-picker-browser-row').forEach(row => {
+            row.classList.toggle('is-selected', row.dataset.relativePath === adapterBrowserState.selectedRelativePath);
+          });
+          renderAdapterBrowserSelection();
+        });
+      });
+    }
+
+    async function loadAdapterBrowserDirectory(options = {}) {
+      const rootKey = String(options.root || adapterBrowserState.root || '');
+      if (!rootKey) return;
+      const root = document.getElementById('adapter-browser-list');
+      const location = document.getElementById('adapter-browser-location');
+      if (root) root.innerHTML = '<div class="ai-services-empty is-compact">正在载入远端目录…</div>';
+      const payload = await fetchAdminJson(buildSystemFilesListUrl(rootKey, options.path || ''));
+      adapterBrowserState.root = String(payload?.root?.key || rootKey);
+      adapterBrowserState.path = String(payload?.current_path || '');
+      adapterBrowserState.parentPath = payload?.parent_path || null;
+      adapterBrowserState.selectedRelativePath = '';
+      adapterBrowserState.selectedName = '';
+      const rootInfo = currentAdapterBrowserRootInfo();
+      if (location) {
+        location.textContent = rootInfo
+          ? `${rootInfo.label} / ${adapterBrowserState.path || '根目录'}`
+          : (adapterBrowserState.path || '根目录');
+      }
+      renderAdapterBrowserSelection();
+      renderAdapterBrowserEntries(Array.isArray(payload?.entries) ? payload.entries : []);
+    }
+
+    async function ensureAdapterBrowserReady() {
+      if (!adapterBrowserState.roots.length) {
+        const payload = await fetchAdminJson(buildSystemToolsConfigUrl());
+        adapterBrowserState.roots = Array.isArray(payload?.roots) ? payload.roots : [];
+        adapterBrowserState.root = String(payload?.default_root || adapterBrowserState.roots[0]?.key || '');
+      }
+      const rootSelect = document.getElementById('adapter-browser-root');
+      if (rootSelect) {
+        rootSelect.innerHTML = adapterBrowserState.roots.map(root => `<option value="${escHtml(root.key)}">${escHtml(root.label)}</option>`).join('');
+        rootSelect.value = adapterBrowserState.root;
+      }
+      await loadAdapterBrowserDirectory({ root: adapterBrowserState.root, path: adapterBrowserState.path || '' });
+    }
+
+    async function openAdapterBrowser() {
+      const type = String(document.getElementById('modal-client-type')?.value || '').trim();
+      if (type !== 'custom') return;
+      const backdrop = document.getElementById('adapter-browser-backdrop');
+      if (!backdrop) return;
+      backdrop.classList.add('is-open');
+      backdrop.setAttribute('aria-hidden', 'false');
+      adapterBrowserState.open = true;
+      try {
+        await ensureAdapterBrowserReady();
+      } catch (error) {
+        const root = document.getElementById('adapter-browser-list');
+        if (root) root.innerHTML = `<div class="ai-services-empty is-compact">${escHtml(error.message || String(error))}</div>`;
+      }
+    }
+
+    function applyAdapterBrowserSelection() {
+      const rootInfo = currentAdapterBrowserRootInfo();
+      if (!rootInfo || !adapterBrowserState.selectedRelativePath) return;
+      const serverPath = buildAdapterServerPath(rootInfo, adapterBrowserState.selectedRelativePath);
+      const target = document.getElementById('modal-client-adapter-source');
+      if (target) target.value = serverPath;
+      modalState.adapterSourceMode = 'remote';
+      modalState.remoteAdapterSelection = {
+        rootKey: adapterBrowserState.root,
+        relativePath: adapterBrowserState.selectedRelativePath,
+        serverPath,
+        name: adapterBrowserState.selectedName || adapterBrowserState.selectedRelativePath.split('/').pop() || 'adapter.py',
+      };
+      setClientAdapterStatus(`当前使用远端文件路径：${serverPath}`);
+      syncClientAdapterControls();
+      closeAdapterBrowser();
+    }
+
+    async function uploadCustomAdapterScript(options = {}) {
+      const type = String(document.getElementById('modal-client-type')?.value || '').trim();
+      if (type !== 'custom') {
+        throw new Error('只有 custom client 才需要上传 adapter 脚本。');
+      }
+      const source = String(options.source || 'local');
+      const status = document.getElementById('modal-client-upload-adapter-status');
+      let uploadFile = null;
+      let fallbackName = 'adapter.py';
+      let fallbackSize = 0;
+      let fallbackType = 'text/x-python';
+
+      if (source === 'local') {
+        const input = document.getElementById('modal-client-adapter-file');
+        const file = input?.files?.[0] || null;
+        if (!file) {
+          throw new Error('请先选择一个 .py 脚本文件。');
+        }
+        if (!/\.pyw?$/i.test(file.name || '')) {
+          throw new Error('只允许上传 .py / .pyw adapter 脚本。');
+        }
+        uploadFile = file;
+        fallbackName = file.name || fallbackName;
+        fallbackSize = Number(file.size || 0);
+        fallbackType = file.type || fallbackType;
+      } else if (source === 'remote') {
+        const selection = modalState.remoteAdapterSelection;
+        if (!selection?.rootKey || !selection?.relativePath) {
+          throw new Error('请先选择一个远端 adapter 文件。');
+        }
+        const rawResponse = await fetchAdminBinary(buildSystemFileRawUrl(selection.rootKey, selection.relativePath));
+        const blob = await rawResponse.blob();
+        uploadFile = blob;
+        fallbackName = selection.name || selection.relativePath.split('/').pop() || fallbackName;
+        fallbackSize = Number(blob.size || 0);
+        fallbackType = blob.type || fallbackType;
+      } else {
+        throw new Error(`未知 adapter 上传来源：${source}`);
+      }
+
+      if (status) status.textContent = source === 'remote' ? '正在读取远端 adapter 并上传到 Object Storage…' : '正在上传 adapter 脚本…';
+      const formData = new FormData();
+      formData.append('files', uploadFile, fallbackName);
+      formData.append('prefix', `ai/custom-adapters/${modalState.serviceKind || activeServiceKind()}/`);
+      formData.append('overwrite', 'true');
+      formData.append('metadata_json', JSON.stringify({
+        purpose: 'ai-custom-adapter',
+        service_kind: modalState.serviceKind || activeServiceKind(),
+        client_key: String(document.getElementById('modal-client-key')?.value || modalState.draftKey || '').trim() || null,
+      }));
+
+      const data = await fetchAdminJson('/admin/api/storage/object/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const uploaded = Array.isArray(data?.uploaded) ? data.uploaded[0] : null;
+      if (!uploaded?.path) {
+        throw new Error('上传接口没有返回有效的 object 路径。');
+      }
+      const adapterRef = {
+        storage_name: 'default',
+        object_id: String(uploaded.path),
+        path: String(uploaded.path),
+        name: String(uploaded.name || fallbackName || '').trim(),
+        size: Number(uploaded.size || fallbackSize || 0),
+        content_type: uploaded.content_type || fallbackType || 'text/x-python',
+        metadata: uploaded.metadata || {},
+      };
+      const target = document.getElementById('modal-client-adapter-source');
+      if (target) target.value = JSON.stringify(adapterRef, null, 2);
+      if (status) status.textContent = `已上传到 ${adapterRef.path}`;
+      modalState.adapterSourceMode = 'local-upload';
+      modalState.remoteAdapterSelection = null;
+      syncClientAdapterControls();
+      if (modalState.draftConfig && typeof modalState.draftConfig === 'object') {
+        modalState.draftConfig.adapter = adapterRef;
+      }
+      const input = document.getElementById('modal-client-adapter-file');
+      if (input) input.value = '';
+    }
+
     async function applyPendingRuntimeClientUpdates() {
       const pendingEntries = Object.entries(state.pendingRuntimeClientUpdates || {});
       const failures = [];
@@ -2129,23 +3395,35 @@
 
     function applyKindPaneLayout() {
       const shell = document.getElementById('instance-shell');
+      const serviceCategoryActive = activeInstanceCategory() === 'service';
       const kindToggle = document.getElementById('toggle-service-kind-pane-btn');
+      const kindSplitter = document.getElementById('service-kind-splitter');
       const detailToggle = document.getElementById('toggle-detail-pane-btn');
+      const detailSplitter = document.getElementById('detail-pane-splitter');
       const isMobile = window.innerWidth <= 900;
+      const hasDetailSelection = !!state.selectedDetail;
       const nextKindWidth = Math.max(168, Math.min(280, Number(state.kindNavWidth) || 216));
       const nextDetailWidth = Math.max(280, Math.min(420, Number(state.detailWidth) || 320));
-      const kindCollapsed = isMobile ? true : !!state.kindNavCollapsed;
-      const detailCollapsed = isMobile ? true : !!state.detailCollapsed;
+      const kindCollapsed = serviceCategoryActive ? (isMobile ? true : !!state.kindNavCollapsed) : true;
+      const detailCollapsed = isMobile ? true : (!hasDetailSelection || !!state.detailCollapsed);
       shell.style.setProperty('--ai-kind-pane-width', `${nextKindWidth}px`);
       shell.style.setProperty('--ai-kind-pane-size', kindCollapsed ? '0px' : `${nextKindWidth}px`);
+      shell.style.setProperty('--ai-kind-splitter-size', serviceCategoryActive ? '12px' : '0px');
       shell.style.setProperty('--ai-detail-pane-width', `${nextDetailWidth}px`);
+      shell.style.setProperty('--ai-detail-splitter-size', hasDetailSelection ? '12px' : '0px');
       shell.style.setProperty('--ai-detail-pane-size', detailCollapsed ? '0px' : `${nextDetailWidth}px`);
       shell.classList.toggle('kind-nav-collapsed', kindCollapsed);
       shell.classList.toggle('detail-pane-collapsed', detailCollapsed);
+      shell.classList.toggle('kind-nav-hidden', !serviceCategoryActive);
+      kindSplitter.hidden = !serviceCategoryActive;
+      kindToggle.hidden = !serviceCategoryActive;
       kindToggle.textContent = kindCollapsed ? '›' : '‹';
       kindToggle.setAttribute('aria-label', kindCollapsed ? '展开 service kind 侧栏' : '折叠 service kind 侧栏');
+      detailSplitter.hidden = !hasDetailSelection;
+      detailToggle.hidden = !hasDetailSelection;
+      detailToggle.disabled = !hasDetailSelection;
       detailToggle.textContent = detailCollapsed ? '‹' : '›';
-      detailToggle.setAttribute('aria-label', detailCollapsed ? '展开详情侧栏' : '折叠详情侧栏');
+      detailToggle.setAttribute('aria-label', hasDetailSelection ? (detailCollapsed ? '展开详情侧栏' : '折叠详情侧栏') : '请先选择一个实例');
       writeStoredValue(UI_STORAGE_KEYS.kindNavCollapsed, state.kindNavCollapsed ? '1' : '0');
       writeStoredValue(UI_STORAGE_KEYS.kindNavWidth, nextKindWidth);
       writeStoredValue(UI_STORAGE_KEYS.detailPaneCollapsed, state.detailCollapsed ? '1' : '0');
@@ -2179,30 +3457,47 @@
     }
 
     function renderWorkspaceChrome() {
+      const category = activeInstanceCategory();
+      const serviceCategoryActive = category === 'service';
       const serviceKind = activeServiceKind();
       const stats = serviceUsage(serviceKind);
-      document.getElementById('instance-kind-title').textContent = serviceKind;
+      const totalServiceCount = state.serviceKinds.reduce((sum, kind) => sum + serviceUsage(kind).serviceCount, 0);
+      const totalClientCount = state.serviceKinds.reduce((sum, kind) => sum + serviceUsage(kind).usage.size, 0);
+      document.getElementById('instance-kind-kicker').textContent = serviceCategoryActive ? 'Current Kind' : 'Shared Presets';
+      document.getElementById('instance-kind-title').textContent = serviceCategoryActive ? serviceKind : 'shared kwargs presets';
       document.getElementById('instance-kind-note').textContent = state.selectedDetail
-        ? '详情侧栏会展示当前选中实例的完整配置和运行态。'
+        ? '详情侧栏会展示当前选中项的完整配置和运行态。'
         : '';
       document.getElementById('instance-kind-meta').innerHTML = `
-        <span class="ai-runtime-chip is-muted">service ${stats.serviceCount}</span>
-        <span class="ai-runtime-chip is-muted">client ${stats.usage.size}</span>
+        <span class="ai-runtime-chip is-muted">service ${serviceCategoryActive ? stats.serviceCount : totalServiceCount}</span>
+        <span class="ai-runtime-chip is-muted">client ${serviceCategoryActive ? stats.usage.size : totalClientCount}</span>
+        <span class="ai-runtime-chip is-muted">kwargs ${totalKwargsPresetCount()}</span>
         <span class="ai-runtime-chip is-muted">version ${escHtml(state.configVersion || 0)}</span>
       `;
 
+      document.querySelectorAll('[data-instance-category]').forEach(button => {
+        button.classList.toggle('is-active', button.dataset.instanceCategory === category);
+      });
       document.querySelectorAll('[data-instance-tab]').forEach(button => {
         button.classList.toggle('is-active', button.dataset.instanceTab === state.activeInstanceTab);
       });
+      document.getElementById('instance-service-tab-group').hidden = !serviceCategoryActive;
       document.querySelectorAll('[data-instance-pane]').forEach(pane => {
-        pane.classList.toggle('is-active', pane.dataset.instancePane === state.activeInstanceTab);
+        const paneName = pane.dataset.instancePane;
+        const shouldShow = serviceCategoryActive
+          ? paneName === state.activeInstanceTab
+          : paneName === 'kwargs';
+        pane.classList.toggle('is-active', shouldShow);
       });
       const addServiceBtn = document.getElementById('add-service-btn');
       const addClientBtn = document.getElementById('add-client-btn');
-      addServiceBtn.hidden = state.activeInstanceTab !== 'services';
-      addClientBtn.hidden = state.activeInstanceTab !== 'clients';
+      const addKwargsPresetBtn = document.getElementById('add-kwargs-preset-btn');
+      addServiceBtn.hidden = !serviceCategoryActive || state.activeInstanceTab !== 'services';
+      addClientBtn.hidden = !serviceCategoryActive || state.activeInstanceTab !== 'clients';
+      addKwargsPresetBtn.hidden = serviceCategoryActive;
       addServiceBtn.disabled = !state.editing;
       addClientBtn.disabled = !state.editing;
+      addKwargsPresetBtn.disabled = !state.editing;
       applyKindPaneLayout();
       updateEditControls();
     }
@@ -2222,11 +3517,16 @@
           <div class="ai-services-summary-label">Client Instances</div>
           <div class="ai-services-summary-value">${totalClientCount()}</div>
         </article>
+        <article class="ai-services-summary-card">
+          <div class="ai-services-summary-label">Kwargs Presets</div>
+          <div class="ai-services-summary-value">${totalKwargsPresetCount()}</div>
+        </article>
       `;
     }
 
     function renderReloadWorkers(rows) {
       const root = document.getElementById('reload-workers');
+      if (!root) return;
       const data = Array.isArray(rows) ? rows : [];
       if (!data.length) {
         root.innerHTML = '<div class="ai-services-empty is-compact">暂无重载记录</div>';
@@ -2255,6 +3555,7 @@
     function renderRuntimeSnapshot() {
       const root = document.getElementById('runtime-snapshot');
       const meta = document.getElementById('runtime-snapshot-meta');
+      if (!root) return;
       const workers = Array.isArray(state.workers) ? state.workers : [];
       const configChipTone = state.configLoaded ? 'ok' : 'warn';
       if (meta) {
@@ -2305,7 +3606,7 @@
                 <h3 class="ai-service-title">${escHtml(instanceName)}</h3>
               </div>
               <div class="ai-instance-muted-line">${escHtml(serviceKind)} · ${clientCount} 个 client · ${escHtml(sourceLabel)}</div>
-              <div class="ai-instance-muted-line">cooldown ${escHtml(serviceConfig?.fail_cooldown ?? entry.runtime?.fail_cooldown ?? 10)} · recovery ${escHtml(present(serviceConfig?.recovery_interval ?? entry.runtime?.recovery_interval))}</div>
+              <div class="ai-instance-muted-line">cooldown ${escHtml(serviceConfig?.fail_cooldown ?? entry.runtime?.fail_cooldown ?? 10)} · recovery ${escHtml(formatRecoveryInterval(serviceConfig?.recovery_interval ?? entry.runtime?.recovery_interval))}</div>
             </div>
             <div class="ai-instance-card-actions">
               <button type="button" class="panel-btn ai-edit-service-btn" data-service-kind="${escHtml(serviceKind)}" data-service-key="${escHtml(instanceName)}" ${editable ? '' : 'disabled'}>编辑</button>
@@ -2372,6 +3673,7 @@
         const client = row.config || row.runtime || {};
         const isInternal = !!row.internal || (!!row.runtime && !row.config);
         const maxConcurrent = client.max_concurrent == null ? '∞' : escHtml(client.max_concurrent);
+        const presetRefs = normalizePresetRefs(row.config?.kwargs);
         const selected = state.selectedDetail?.entity === 'client' && state.selectedDetail?.serviceKind === serviceKind && state.selectedDetail?.key === key;
         const actions = isInternal ? `
                 <button type="button" class="panel-btn ai-edit-client-btn" data-client-key="${escHtml(key)}" data-internal-client="1" ${state.editing ? '' : 'disabled'}>编辑</button>
@@ -2388,6 +3690,8 @@
                 </div>
                 <div class="ai-instance-muted-line">${escHtml(client.type || '未指定类型')}${isInternal ? ' · 内部 client' : ''}</div>
                 <div class="ai-instance-muted-line">并发 ${maxConcurrent} · priority ${escHtml(client.priority ?? 0)} · ${row.usageCount ? `当前 kind 挂载 ${row.usageCount}` : '当前 kind 未挂载'}</div>
+                <div class="ai-client-health-strip">${renderHealthChips(row.runtime)}</div>
+                ${presetRefs.length ? `<div class="ai-client-preset-tags">${presetRefs.map(ref => `<span class="ai-client-preset-tag">${escHtml(ref)}</span>`).join('')}</div>` : ''}
               </div>
               <div class="ai-instance-card-actions">
                 ${actions}
@@ -2439,15 +3743,79 @@
       });
     }
 
+    function renderKwargsPresetLibrary() {
+      const root = document.getElementById('kwargs-preset-library');
+      const presets = getSharedKwargsPresets();
+      const keys = kwargsPresetKeys();
+      if (!keys.length) {
+        root.innerHTML = '<div class="ai-services-empty is-compact">还没有 shared kwargs preset。</div>';
+        return;
+      }
+
+      root.innerHTML = keys.map(key => {
+        const value = presets[key] || {};
+        const refs = collectKwargsPresetReferences().get(key) || [];
+        const selected = state.selectedDetail?.entity === 'kwargs-preset' && state.selectedDetail?.key === key;
+        return `
+          <article class="ai-editor-form ai-kwargs-preset-card ${selected ? 'is-selected' : ''}" data-kwargs-preset-key="${escHtml(key)}" data-detail-entity="kwargs-preset">
+            <div class="ai-instance-card-summary">
+              <div class="ai-instance-card-main">
+                <div class="ai-service-title-row">
+                  <h3 class="ai-editor-title">${escHtml(key)}</h3>
+                </div>
+                <div class="ai-instance-muted-line">${Object.keys(value || {}).length} 个字段 · 被引用 ${refs.length}</div>
+                <div class="ai-instance-muted-line">${escHtml(Object.keys(value || {}).slice(0, 6).join(', ') || '空 preset')}</div>
+              </div>
+              <div class="ai-instance-card-actions">
+                <button type="button" class="panel-btn ai-edit-kwargs-preset-btn" data-kwargs-preset-key="${escHtml(key)}" ${state.editing ? '' : 'disabled'}>编辑</button>
+                <button type="button" class="panel-btn ai-delete-kwargs-preset-btn" data-kwargs-preset-key="${escHtml(key)}" ${state.editing && !refs.length ? '' : 'disabled'}>删除</button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      root.querySelectorAll('.ai-edit-kwargs-preset-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          if (!state.editing) return;
+          const key = button.dataset.kwargsPresetKey;
+          openKwargsPresetModal({ key, value: getSharedKwargsPresets()[key], mode: 'edit' });
+        });
+      });
+
+      root.querySelectorAll('[data-detail-entity="kwargs-preset"]').forEach(card => {
+        card.addEventListener('click', event => {
+          if (event.target.closest('button')) return;
+          openDetailPane('kwargs-preset', '', card.dataset.kwargsPresetKey);
+        });
+      });
+
+      root.querySelectorAll('.ai-delete-kwargs-preset-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+          if (!state.editing) return;
+          const key = button.dataset.kwargsPresetKey;
+          if (!key) return;
+          const confirmed = await confirmKwargsPresetDelete(key);
+          if (!confirmed) return;
+          delete getSharedKwargsPresets()[key];
+          if (state.selectedDetail?.entity === 'kwargs-preset' && state.selectedDetail?.key === key) {
+            clearDetailSelection();
+          }
+          markDirty(true);
+          updateConfigBadge();
+          renderAll();
+        });
+      });
+    }
+
     function renderAll() {
       renderWorkspaceChrome();
       updateSummary();
-      renderRuntimeSnapshot();
       renderServiceKindRail();
       renderServiceBoard();
       renderClientLibrary();
+      renderKwargsPresetLibrary();
       renderDetailPane();
-      renderReloadWorkers(state.reloadState);
       updateConfigBadge();
     }
 
@@ -2458,8 +3826,11 @@
         const data = await fetchAdminJson('/admin/api/ai-services/settings');
         const nextServiceKinds = Array.isArray(data.service_kinds) && data.service_kinds.length ? data.service_kinds : DEFAULT_SERVICE_KINDS.slice();
         state.serviceKinds = nextServiceKinds;
-        state.config = ensureConfigShape(data.config, nextServiceKinds);
-        state.clientTypes = Array.isArray(data.client_types) && data.client_types.length ? data.client_types : ['openai-completion'];
+        state.config = ensureConfigShape(data.raw_config || data.config, nextServiceKinds);
+        state.clientTypes = Array.isArray(data.client_types) ? data.client_types : [];
+        state.clientTypesByKind = data.client_types_by_kind && typeof data.client_types_by_kind === 'object'
+          ? data.client_types_by_kind
+          : {};
         state.workers = Array.isArray(data.workers) ? data.workers : [];
         state.reloadState = Array.isArray(data.reload_state) ? data.reload_state : [];
         state.runtimeServices = Array.isArray(data.services) ? data.services : [];
@@ -2473,7 +3844,7 @@
           writeStoredValue(UI_STORAGE_KEYS.activeServiceKind, state.activeServiceKind);
         }
         const configTag = document.getElementById('__AI_SERVICES_CONFIG__');
-        if (configTag) configTag.textContent = JSON.stringify(data.config || {}, null, 2);
+        if (configTag) configTag.textContent = JSON.stringify(data.raw_config || data.config || {}, null, 2);
         state.dirty = false;
         renderAll();
         if (!state.configLoaded) {
@@ -2509,7 +3880,6 @@
           error: row.error || null,
           updated_at: new Date().toISOString(),
         })) : [];
-        renderReloadWorkers(state.reloadState);
         setStatus('success', data.message || 'AI 服务配置已同步。');
         await loadSettingsSnapshot();
       } catch (error) {
@@ -2594,9 +3964,20 @@
     }
 
     function bindStaticEvents() {
+      document.querySelectorAll('[data-instance-category]').forEach(button => {
+        button.addEventListener('click', () => {
+          const nextCategory = normalizeInstanceCategory(button.dataset.instanceCategory);
+          if (state.activeInstanceCategory === nextCategory) return;
+          state.activeInstanceCategory = nextCategory;
+          clearDetailSelection();
+          writeStoredValue(UI_STORAGE_KEYS.activeInstanceCategory, state.activeInstanceCategory);
+          renderWorkspaceChrome();
+        });
+      });
+
       document.querySelectorAll('[data-instance-tab]').forEach(button => {
         button.addEventListener('click', () => {
-          state.activeInstanceTab = button.dataset.instanceTab === 'clients' ? 'clients' : 'services';
+          state.activeInstanceTab = normalizeInstanceTab(button.dataset.instanceTab);
           writeStoredValue(UI_STORAGE_KEYS.activeInstanceTab, state.activeInstanceTab);
           renderWorkspaceChrome();
         });
@@ -2607,12 +3988,23 @@
       document.getElementById('add-client-btn').addEventListener('click', () => {
         if (!state.config || !state.editing) return;
         const nextKey = nextClientKey();
-        const client = createEmptyClient();
+        const client = createEmptyClient(activeServiceKind());
         client.key = nextKey;
+        state.activeInstanceCategory = 'service';
+        writeStoredValue(UI_STORAGE_KEYS.activeInstanceCategory, state.activeInstanceCategory);
         state.activeInstanceTab = 'clients';
         writeStoredValue(UI_STORAGE_KEYS.activeInstanceTab, state.activeInstanceTab);
         renderWorkspaceChrome();
         openClientModal({ key: nextKey, config: client, mode: 'new' });
+      });
+
+      document.getElementById('add-kwargs-preset-btn').addEventListener('click', () => {
+        if (!state.config || !state.editing) return;
+        const nextKey = nextKwargsPresetKey();
+        state.activeInstanceCategory = 'kwargs';
+        writeStoredValue(UI_STORAGE_KEYS.activeInstanceCategory, state.activeInstanceCategory);
+        renderWorkspaceChrome();
+        openKwargsPresetModal({ key: nextKey, value: createEmptyKwargsPreset(), mode: 'new' });
       });
 
       document.getElementById('settings-refresh-btn').addEventListener('click', loadSettingsSnapshot);
@@ -2628,6 +4020,24 @@
       document.getElementById('instance-modal-close-btn').addEventListener('click', closeInstanceModal);
       document.getElementById('instance-modal-backdrop').addEventListener('click', event => {
         if (event.target.id === 'instance-modal-backdrop') closeInstanceModal();
+      });
+      document.getElementById('adapter-browser-backdrop').addEventListener('click', event => {
+        if (event.target.id === 'adapter-browser-backdrop') closeAdapterBrowser();
+      });
+      document.getElementById('adapter-browser-close').addEventListener('click', closeAdapterBrowser);
+      document.getElementById('adapter-browser-cancel').addEventListener('click', closeAdapterBrowser);
+      document.getElementById('adapter-browser-confirm').addEventListener('click', applyAdapterBrowserSelection);
+      document.getElementById('adapter-browser-root').addEventListener('change', event => {
+        adapterBrowserState.root = String(event.target.value || '');
+        adapterBrowserState.path = '';
+        void loadAdapterBrowserDirectory({ root: adapterBrowserState.root, path: '' });
+      });
+      document.getElementById('adapter-browser-up').addEventListener('click', () => {
+        if (!adapterBrowserState.parentPath) return;
+        void loadAdapterBrowserDirectory({ root: adapterBrowserState.root, path: adapterBrowserState.parentPath || '' });
+      });
+      document.getElementById('adapter-browser-refresh').addEventListener('click', () => {
+        void loadAdapterBrowserDirectory({ root: adapterBrowserState.root, path: adapterBrowserState.path || '' });
       });
       bindKindPaneSplitter();
     }

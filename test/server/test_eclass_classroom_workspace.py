@@ -24,7 +24,7 @@ class EclassClassroomWorkspaceTest(unittest.IsolatedAsyncioTestCase):
         root = Path(__file__).resolve().parent.parent.parent
         cfg.server_config.extra_app_paths = [str(root / "example" / "e-class")]
         cfg.server_config.extra_public_paths = [str(root / "example" / "e-class" / "public")]
-        cfg.server_config.enable_rtc_chatroom = True
+        cfg.plugin_configs["webrtc-chatroom"] = {"enabled": True}
         cls.app = create_app(config=cfg)
 
     async def asyncSetUp(self):

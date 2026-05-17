@@ -259,7 +259,7 @@
 
     <section class="ai-content-shell">
       <section class="ai-frame-shell ai-workbench-panel">
-        <iframe id="test-frame" class="ai-frame" src="/admin/test/ai/chat" title="AI 测试页面"></iframe>
+        <iframe id="test-frame" class="ai-frame" src="about:blank" title="AI 测试页面"></iframe>
       </section>
     </section>
   </div>
@@ -267,35 +267,53 @@
   <script>
     'use strict';
 
+    const AI_TEST_MARKER = '/admin/test/ai';
+    const adminTestBasePath = (() => {
+      const pathname = window.location.pathname || '';
+      const markerIndex = pathname.lastIndexOf(AI_TEST_MARKER);
+      return markerIndex >= 0 ? pathname.slice(0, markerIndex) + AI_TEST_MARKER : AI_TEST_MARKER;
+    })();
+
+    function adminTestPath(pageKey = '') {
+      const key = String(pageKey || '').replace(/^\/+/, '');
+      return key ? `${adminTestBasePath}/${key}` : adminTestBasePath;
+    }
+
     const PAGE_GROUPS = [
       {
         title: 'Completion',
         items: [
-          { key: 'chat', title: '对话', route: '/admin/test/ai/chat', endpoint: '/ai/complete*', brief: '多轮对话、历史与工具链调试', desc: '保留会话输入、输出和历史记录，适合直接排查 chat 流程。', focus: '多轮与流式调试' },
-          { key: 'translate', title: '翻译', route: '/admin/test/ai/translate', endpoint: '/ai/translate', brief: '单次与逐行翻译对照', desc: '直接进入真实测试页，保留请求参数、结果、历史与检查面板。', focus: '单接口调试' },
-          { key: 'detect_language', title: '语言检测', route: '/admin/test/ai/detect_language', endpoint: '/ai/detect-language', brief: '单条或分段批量识别语言', desc: '适合快速核对语言码识别结果与最近记录。', focus: '快速识别验证' },
-          { key: 'summarize', title: '摘要生成', route: '/admin/test/ai/summarize', endpoint: '/ai/summarize', brief: '长文本压缩与摘要输出', desc: '用于查看摘要提示词、结果和返回结构。', focus: '长文本摘要' },
-          { key: 'ocr', title: 'OCR 识别', route: '/admin/test/ai/ocr', endpoint: '/ai/ocr', brief: '图片文字识别与返回检查', desc: '用于上传样例图并比对 OCR 输出内容。', focus: '图文识别' },
+          { key: 'chat', title: '对话', endpoint: '/ai/completion/{service|client}/{key}/complete', brief: '多轮对话、历史与工具链调试', desc: '保留会话输入、输出和历史记录，适合直接排查 chat 流程。', focus: '多轮与流式调试' },
+          { key: 'translate', title: '翻译', endpoint: '/ai/completion/{service|client}/{key}/translate', brief: '单次与逐行翻译对照', desc: '直接进入真实测试页，保留请求参数、结果、历史与检查面板。', focus: '单接口调试' },
+          { key: 'detect_language', title: '语言检测', endpoint: '/ai/completion/{service|client}/{key}/detect-language', brief: '单条或分段批量识别语言', desc: '适合快速核对语言码识别结果与最近记录。', focus: '快速识别验证' },
+          { key: 'summarize', title: '摘要生成', endpoint: '/ai/completion/{service|client}/{key}/summarize', brief: '长文本压缩与摘要输出', desc: '用于查看摘要提示词、结果和返回结构。', focus: '长文本摘要' },
+          { key: 'ocr', title: 'OCR 识别', endpoint: '/ai/completion/{service|client}/{key}/ocr', brief: '图片文字识别与返回检查', desc: '用于上传样例图并比对 OCR 输出内容。', focus: '图文识别' },
         ],
       },
       {
         title: 'Speech Recognition',
         items: [
-          { key: 'asr', title: 'ASR 语音识别', route: '/admin/test/ai/asr', endpoint: '/ai/asr', brief: '语音输入到文本结果', desc: '用于检查音频识别质量和接口响应内容。', focus: '音频转写' },
-          { key: 's2t', title: 'S2T 语音转文字', route: '/admin/test/ai/s2t', endpoint: '/ai/s2t', brief: '更偏简洁的语音转写页', desc: '用于验证基础语音转文字能力与参数选择。', focus: '基础转写' },
+          { key: 'asr', title: 'ASR 语音识别', endpoint: '/ai/completion/{service|client}/{key}/asr', brief: '语音输入到文本结果', desc: '用于检查音频识别质量和接口响应内容。', focus: '音频转写' },
+          { key: 's2t', title: 'S2T 语音转文字', endpoint: '/ai/s2t/{service|client}/{key}/s2t', brief: '更偏简洁的语音转写页', desc: '用于验证基础语音转文字能力与参数选择。', focus: '基础转写' },
         ],
       },
       {
         title: 'Speech Generation',
         items: [
-          { key: 't2s', title: 'T2S 文字转语音', route: '/admin/test/ai/t2s', endpoint: '/ai/t2s*', brief: '文本合成语音输出', desc: '用于试听 TTS 结果并检查返回元数据。', focus: '语音合成' },
+          { key: 't2s', title: '文字转语音', endpoint: '/ai/t2s/{service|client}/{key}/{t2s|stream}', brief: '文本合成语音输出', desc: '用于试听 TTS 结果并检查返回元数据。', focus: '语音合成' },
+        ],
+      },
+      {
+        title: 'Image Generation',
+        items: [
+          { key: 't2img', title: '文字生成图片', endpoint: '/ai/t2img/{service|client}/{key}/openai/*', brief: '图片生成、编辑、变体与流式事件检查', desc: '用于验证 t2img service/client、OpenAI-compatible 参数、背景和输出格式。', focus: '图片生成' },
         ],
       },
       {
         title: 'Vector / Rank',
         items: [
-          { key: 'embedding', title: '向量嵌入', route: '/admin/test/ai/embedding', endpoint: '/ai/embedding*', brief: '文本向量生成与形状检查', desc: '用于查看 embedding 调用参数、维度与返回结构。', focus: '向量生成' },
-          { key: 'rerank', title: '重排序', route: '/admin/test/ai/rerank', endpoint: '/ai/rerank', brief: '候选项打分和重排', desc: '用于验证 rerank 分数、顺序和候选内容。', focus: '排序质量' },
+          { key: 'embedding', title: '向量嵌入', endpoint: '/ai/embedding/{service|client}/{key}/*', brief: '文本向量生成与形状检查', desc: '用于查看 embedding 调用参数、维度与返回结构。', focus: '向量生成' },
+          { key: 'rerank', title: '重排序', endpoint: '/ai/embedding/{service|client}/{key}/rerank', brief: '候选项打分和重排', desc: '用于验证 rerank 分数、顺序和候选内容。', focus: '排序质量' },
         ],
       },
     ];
@@ -373,7 +391,7 @@
       const key = validPages.has(pageKey) ? pageKey : DEFAULT_PAGE;
       const page = PAGE_CATALOG[key];
       navItems.forEach((item) => item.classList.toggle('is-active', item.dataset.page === key));
-      frame.src = page.route;
+      frame.src = adminTestPath(key);
       if (window.location.hash !== '#' + key) {
         history.replaceState(null, '', '#' + key);
       }

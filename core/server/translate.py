@@ -64,9 +64,11 @@ def register_translation(
     bucket = _registry.setdefault(_category_name(category), {})
     _register_translation_to(bucket, key, lang, text, aliases=aliases)
 
-def _register_internal_translation(
+type InternalTranslateLang = Literal['en', 'zh-cn', 'zh-tw', Language.English, Language.SimplifiedChinese, Language.TraditionalChinese]
+
+def register_internal_translation(
     key: str,
-    lang: Literal['en', 'zh-cn', 'zh-tw', Language.English, Language.SimplifiedChinese, Language.TraditionalChinese],
+    lang: InternalTranslateLang,
     text: str,
     *,
     aliases: str | Sequence[str] | None = None,
@@ -165,7 +167,7 @@ __all__ = [
     "normalize_language",
     "is_language_code",
     "register_translation",
-    "_register_internal_translation",
+    "register_internal_translation",
     "get_public_translation",
     "get_internal_translation",
     "get_all_public_translations",

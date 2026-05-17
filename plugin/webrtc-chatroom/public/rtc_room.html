@@ -7,7 +7,7 @@
   <script src="/vendor/tailwindcss/tailwindcss-cdn.js"></script>
   <script>
     tailwind.config = { darkMode: 'class' };
-    tailwind.refresh();
+    if (typeof tailwind.refresh === 'function') tailwind.refresh();
   </script>
   <style>
     .tile-ring { box-shadow: 0 0 0 2px rgba(99,102,241,0.5); border-radius: 12px; }
@@ -360,6 +360,7 @@
     };
 
     const params = new URLSearchParams(location.search);
+    const rtcRoomUrls = window.__RTC_ROOM_URLS__ || {};
     const initCreateToken = params.get('create_token');
     const initJoinToken = params.get('join_token');
     const initMode = params.get('mode') || (initCreateToken ? 'create' : 'join');
@@ -391,7 +392,6 @@
     let serverChannel = null;
     let negotiationChannel = null;
     let localStream = null;
-    let remoteStream = null;
     const remoteStreams = new Map();   // candidate_id → MediaStream
     const trackMidMap = new Map();     // mid → { candidate_id, kind }
     let roomId = null;
@@ -1010,7 +1010,7 @@
     function refreshRemoteVideoBinding() {
       for (const [pid, p] of participants) {
         if (p?.isLocal) continue;
-        const stream = remoteStreams.get(pid) || remoteStream;
+        const stream = remoteStreams.get(pid);
         if (stream) bindStreamToTile(pid, stream);
       }
     }
@@ -1149,7 +1149,7 @@
         if (!tile) continue;
         const video = tile.querySelector('video');
         if (!video) continue;
-        const stream = remoteStreams.get(pid) || remoteStream;
+        const stream = remoteStreams.get(pid);
 
         // Set up Web Audio with createMediaStreamSource (NOT createMediaElementSource,
         // which silently fails for WebRTC MediaStream-backed <video> elements in Chrome).
@@ -2463,13 +2463,8 @@
           }
           try { stream.addTrack(ev.track); } catch {}
         } else {
-          // Fallback: legacy single-stream path
-          if (ev.streams && ev.streams[0]) {
-            remoteStream = ev.streams[0];
-          } else {
-            if (!remoteStream) remoteStream = new MediaStream();
-            try { remoteStream.addTrack(ev.track); } catch {}
-          }
+          dlog(`pc ontrack ignored unmapped ${kind} mid=${mid}`);
+          return;
         }
 
         ev.track.onunmute = () => {
@@ -2510,7 +2505,7 @@
       if (mode === 'create') {
         if (!initCreateToken) throw new Error('missing create token');
         setLoading(t('creating'));
-        const res = await fetch('/rtc_room/create', {
+        const res = await fetch(rtcRoomUrls.create || '/rtc_room/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...payload, token: initCreateToken, name: initName || t('room'), room_type: 'default', close_room_on_creator_left: initCloseRoomOnCreatorLeft }),
@@ -2522,7 +2517,7 @@
       } else {
         if (!initRoomId && !initJoinToken) throw new Error('missing room id or join token');
         setLoading(t('joining'));
-        const res = await fetch('/rtc_room/join', {
+        const res = await fetch(rtcRoomUrls.join || '/rtc_room/join', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...payload, token: initJoinToken || null, room_id: initRoomId || null }),
@@ -2627,7 +2622,6 @@
       try { pc?.close(); } catch {}
       negotiationChannel = null;
       serverChannel = null;
-      remoteStream = null;
       remoteStreams.clear();
       trackMidMap.clear();
       pc = null;
@@ -2791,7 +2785,7 @@
           setTimeout(resolve, 5000);
         });
 
-        const joinRes = await fetch('/rtc_room/join', {
+        const joinRes = await fetch(rtcRoomUrls.join || '/rtc_room/join', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

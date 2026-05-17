@@ -10,7 +10,6 @@
         server_config: 'cyan',
         core_config: 'amber',
         log_config: 'rose',
-        rtc_room_config: 'emerald',
       };
       return toneMap[topLevelPath] || 'indigo';
     }

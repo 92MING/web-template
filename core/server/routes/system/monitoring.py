@@ -37,6 +37,7 @@ from core.utils.system_utils.helper_funcs import (
     get_network_interfaces,
     get_disk_partitions_info,
 )
+from core.utils.network_utils.helper_funcs import get_global_IP as get_global_ip_sync, get_local_ip
 from core.utils.system_utils.cpu_info import collect_cpu_details, CpuDetails, warm_cpu_static_cache
 from core.utils.system_utils.gpu_info import collect_gpu_details, GpuDetails
 from core.storage import StorageConfig, make_orm_system_metrics_store
@@ -112,6 +113,10 @@ class ExtendedHostInfo(HostInfo):
     """服务启动时间 ISO-8601 格式"""
     service_uptime_seconds: float | None = None
     """服务运行时长 (秒)"""
+    local_ip: str | None = None
+    """当前主机内网 IP"""
+    global_ip: str | None = None
+    """当前主机公网 IP"""
     process_count: int | None = None
     """网络接口发送包数"""
     network_interfaces: dict[str, object] = Field(default_factory=dict)
@@ -289,10 +294,22 @@ def _build_extended_host_info() -> ExtendedHostInfo:
             process_count = len(psutil.pids())
         except Exception:
             process_count = 0
+    local_ip: str | None = None
+    global_ip: str | None = None
+    try:
+        local_ip = get_local_ip()
+    except Exception as exc:
+        logger.debug("Failed to resolve local IP for system overview: %s", exc)
+    try:
+        global_ip = get_global_ip_sync()
+    except Exception as exc:
+        logger.debug("Failed to resolve global IP for system overview: %s", exc)
     return ExtendedHostInfo(
         **data,
         server_start_time=server_start_time,
         service_uptime_seconds=service_uptime_seconds,
+        local_ip=local_ip,
+        global_ip=global_ip,
         process_count=process_count,
         network_interfaces=get_network_interfaces(),
         disk_partitions=get_disk_partitions_info(),

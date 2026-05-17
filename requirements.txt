@@ -47,6 +47,8 @@ markdownify
 striprtf
 json5
 PyYAML
+ruamel.yaml
+tomlkit
 openpyxl
 xlrd
 odfpy

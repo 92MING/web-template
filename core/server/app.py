@@ -25,7 +25,7 @@ from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from fastapi.dependencies.utils import solve_dependencies
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse, StreamingResponse, FileResponse
+from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse, StreamingResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.responses import Response as StarletteResponse
 from starlette.routing import compile_path
@@ -52,6 +52,11 @@ _inner_comm_server_thread: Thread | None = None
 _app_stop_event = asyncio.Event()
 
 logger = logging.getLogger(__name__)
+
+
+def _dashboard_mode_enabled() -> bool:
+    value = str(os.getenv("__DASHBOARD_MODE__", "")).strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 def _is_app_shutting_down() -> bool:
     return _app_stop_event.is_set() or os.environ.get("__APP_SHUTTING_DOWN__") == "1"
@@ -340,8 +345,6 @@ def _is_admin_route_module(rel_path: Path) -> bool:
         return False
     if parts[1] in {"admin", "panel", "storage", "system", "distributed"}:
         return True
-    if parts[1] == "rtc_room":
-        return True
     if parts[1] == "ai_services" and len(parts) >= 3 and parts[2] == "panel":
         return True
     return False
@@ -355,7 +358,6 @@ def _is_admin_callback(callback: AppCallback) -> bool:
         "core.server.routes.storage",
         "core.server.routes.system",
         "core.server.routes.distributed",
-        "core.server.routes.rtc_room",
         "core.server.routes.ai_services.panel",
     )
     return module.startswith(admin_prefixes)
@@ -1222,10 +1224,12 @@ def register_public_fallback(app: FastAPI, config=None) -> None:
     from core.server.data_types.config import Config
 
     cfg = config or Config.GetConfig()
+    dashboard_mode = _dashboard_mode_enabled()
     app_dirs: list[Path] = []
-    app_dirs.extend(_config_existing_dirs(cfg.server_config.extra_app_paths))
-    if APP_DIR.is_dir():
-        app_dirs.append(APP_DIR)
+    if not dashboard_mode:
+        app_dirs.extend(_config_existing_dirs(cfg.server_config.extra_app_paths))
+        if APP_DIR.is_dir():
+            app_dirs.append(APP_DIR)
 
     extra_public = cfg.server_config.extra_public_paths
     public_dirs: list[Path] = []
@@ -1244,6 +1248,9 @@ def register_public_fallback(app: FastAPI, config=None) -> None:
 
     @app.middleware("http")
     async def _public_fallback_middleware(request: Request, call_next):
+        if dashboard_mode and request.method in {"GET", "HEAD"} and request.url.path in {"", "/"}:
+            return RedirectResponse(cfg.server_config.get_internal_admin_path("panel"), status_code=307)
+
         guard_response = await resolver.guard_response_for_request(request, app)
         if guard_response is not None:
             handled_guard_response = await resolver.error_response_for_response(request, guard_response)
@@ -1273,10 +1280,6 @@ def register_public_fallback(app: FastAPI, config=None) -> None:
         if _has_registered_route_match(app, request.scope):
             handled_response = await resolver.error_response_for_response(request, response)
             return handled_response or response
-        from .rtc_room import is_rtc_room_public_path
-
-        if is_rtc_room_public_path(request.url.path):
-            return response
         fallback_response = resolver.response_for_path(request.url.path)
         if fallback_response is None:
             handled_response = await resolver.error_response_for_response(request, response)
@@ -1342,7 +1345,13 @@ def create_app(config=None) -> FastAPI:
         if _skip_preload:
             logger.info("AI service preload skipped (__SKIP_AI_PRELOAD__=1).")
         else:
-            preload_default_services(background=True, probe_predefined_clients=False)
+            preload_default_services(background=not expose_internal)
+        if expose_internal:
+            try:
+                from .routes.ai_services.panel import apply_ai_service_client_value_updates_from_shared
+                await apply_ai_service_client_value_updates_from_shared()
+            except Exception as exc:
+                logger.debug('AI services shared client-value sync skipped: %s', exc)
         await warmup_storage_clients(logger=logger, phase="worker startup")
         # Start node-level distributed services. The backing state and port lease
         # are stored in AppSharedData so replacement workers do not advertise
@@ -1864,7 +1873,14 @@ def get_app() -> FastAPI:
     return _app
 
 
-async def redirect_to_worker(worker_id: int, request: Request, request_params: dict[str, object]) -> object:
+async def redirect_to_worker(
+    worker_id: int,
+    request: Request,
+    request_params: dict[str, object],
+    *,
+    msg_port: int | None = None,
+    timeout: float = 30.0,
+) -> object:
     """Redirect a request to another worker by PID.
     
     Args:
@@ -1880,6 +1896,7 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
         WorkerRedirectStreamStart,
         WorkerRedirectStreamChunk,
         WorkerRedirectStreamEnd,
+        WorkerInfo,
         drop_worker_client_cache,
         get_worker_info,
     )
@@ -1889,7 +1906,10 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
         path=request.url.path,
         method=request.method,
         request_params=request_params,
-        headers=[(k.decode("latin-1"), v.decode("latin-1")) for k, v in request.headers.raw],
+        headers=[
+            *((k.decode("latin-1"), v.decode("latin-1")) for k, v in request.headers.raw),
+            ("x-worker-redirected", "1"),
+        ],
     )
     if worker_id == os.getpid():
         # Same worker, handle locally
@@ -1900,7 +1920,25 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
             return StreamingResponse(_iter_stream_chunks(r.result), media_type="text/event-stream")
         return r.result
 
+    def _worker_info_from_msg_port() -> WorkerInfo | None:
+        if msg_port is None or int(msg_port) <= 0:
+            return None
+        return WorkerInfo(
+            pid=int(worker_id),
+            generation=0,
+            msg_port=int(msg_port),
+            status="running",
+            dead=False,
+        )
+
     worker_info = get_worker_info(worker_id)
+    if msg_port is not None and int(msg_port) > 0:
+        if worker_info is None:
+            worker_info = _worker_info_from_msg_port()
+        else:
+            worker_info.msg_port = int(msg_port)
+    if worker_info is None or int(worker_info.msg_port or 0) <= 0:
+        worker_info = _worker_info_from_msg_port()
     if worker_info is None:
         raise RuntimeError(f"Worker {worker_id} is not available for redirect to {msg.path}")
     lock = worker_info.get_client_lock()
@@ -1910,20 +1948,29 @@ async def redirect_to_worker(worker_id: int, request: Request, request_params: d
     try:
         for attempt in range(2):
             try:
-                reader, writer = await worker_info.get_client()
+                reader, writer = await asyncio.wait_for(worker_info.get_client(), timeout=timeout)
                 writer.write(msg.dump())
-                await writer.drain()
+                await asyncio.wait_for(writer.drain(), timeout=timeout)
 
                 try:
-                    response_data = await _read_worker_response_frame(reader, timeout=30.0)
+                    response_data = await _read_worker_response_frame(reader, timeout=timeout)
                 except asyncio.TimeoutError:
-                    raise TimeoutError(f"Worker {worker_id} did not respond within 30s for redirect to {msg.path}")
+                    raise RuntimeError(
+                        f"Worker {worker_id} did not respond within {timeout:g}s for redirect to {msg.path}"
+                    )
                 break
-            except (EOFError, BrokenPipeError, ConnectionResetError, OSError, asyncio.IncompleteReadError) as exc:
+            except (EOFError, BrokenPipeError, ConnectionResetError, OSError, asyncio.IncompleteReadError, asyncio.TimeoutError) as exc:
                 drop_worker_client_cache(worker_info.pid, worker_info.generation)
                 if attempt >= 1:
                     raise RuntimeError(f"Worker {worker_id} connection failed for redirect to {msg.path}: {exc}") from exc
                 fresh_info = get_worker_info(worker_id)
+                if msg_port is not None and int(msg_port) > 0:
+                    if fresh_info is None:
+                        fresh_info = _worker_info_from_msg_port()
+                    else:
+                        fresh_info.msg_port = int(msg_port)
+                if fresh_info is None or int(fresh_info.msg_port or 0) <= 0:
+                    fresh_info = _worker_info_from_msg_port()
                 if fresh_info is None:
                     raise RuntimeError(f"Worker {worker_id} is no longer available for redirect to {msg.path}") from exc
                 worker_info = fresh_info

@@ -1658,8 +1658,49 @@ def _register_panel_routes(app: FastAPI):
 
 
 def _register_rtc_room_routes(app: FastAPI):
-    from core.server.routes.rtc_room import register_rtc_room_routes  # type: ignore
-    register_rtc_room_routes(app)
+    from core.server.data_types.config import Config  # type: ignore
+    from core.server.plugin import clear_plugins, configure_plugins, is_platform_supported, load_plugins_from_paths, start_plugins  # type: ignore
+    from core.utils.concurrent_utils import run_any_func  # type: ignore
+
+    plugin_root = Path(__file__).resolve().parents[2] / "plugin"
+    plugin_paths = [
+        plugin_root / plugin_name
+        for plugin_name, supported_platforms in (
+            ("webrtc-chatroom", ("all",)),
+            ("frp-manager", ("all",)),
+            ("docker-manager", ("all",)),
+            ("clash", ("linux",)),
+            ("nginx-manager", ("linux",)),
+        )
+        if is_platform_supported(supported_platforms) and (plugin_root / plugin_name).is_dir()
+    ]
+    clear_plugins()
+    load_plugins_from_paths(plugin_paths)
+    configure_plugins(Config.GetConfig().plugin_configs)
+    run_any_func(start_plugins, "worker", app)
+
+
+def _load_webrtc_chatroom_module():
+    import sys
+
+    from core.server.plugin import get_plugin_key, load_plugins_from_paths  # type: ignore
+
+    plugin_path = Path(__file__).resolve().parents[2] / "plugin" / "webrtc-chatroom"
+    plugin_classes = load_plugins_from_paths([plugin_path])
+    plugin_class = next(
+        (
+            plugin
+            for plugin in plugin_classes
+            if get_plugin_key(plugin) == "webrtc-chatroom"
+        ),
+        None,
+    )
+    if plugin_class is None:
+        raise RuntimeError("webrtc-chatroom plugin could not be loaded.")
+    module = sys.modules.get(plugin_class.__module__)
+    if module is None:
+        raise RuntimeError("webrtc-chatroom plugin module is not loaded.")
+    return module
 
 
 def _register_system_monitoring_routes(app: FastAPI):
@@ -1697,6 +1738,11 @@ def _register_admin_auth_routes(app: FastAPI):
     register_admin_auth_routes(app)
 
 
+def _register_plugin_panel_routes(app: FastAPI):
+    from core.server.plugin import register_plugin_panel_routes  # type: ignore
+    register_plugin_panel_routes(app)
+
+
 _ALL_ROUTE_REGISTRARS: list[tuple[str, Callable]] = [
     ("kv",          _register_kv_routes),
     ("object",      _register_object_routes),
@@ -1711,6 +1757,7 @@ _ALL_ROUTE_REGISTRARS: list[tuple[str, Callable]] = [
     ("ai_services_panel", _register_ai_services_panel_routes),
     ("distributed", _register_distributed_routes),
     ("admin_auth", _register_admin_auth_routes),
+    ("plugin_panel", _register_plugin_panel_routes),
 ]
 
 
@@ -1761,12 +1808,12 @@ class FullAppTestBase(unittest.IsolatedAsyncioTestCase):
             sc = _make_storage_config(tmp)
             cls._storage_config = sc
 
-            from core.server.data_types.config import Config, LogConfig, ServerConfig, WebRTCRoomConfig   # type: ignore
+            from core.server.data_types.config import Config, LogConfig, ServerConfig   # type: ignore
             from core.server.app import register_public_fallback
             cfg = Config(
-                server_config=ServerConfig(host="127.0.0.1", port=18999, expose_ai_service=True, enable_rtc_chatroom=True),
+                server_config=ServerConfig(host="127.0.0.1", port=18999, expose_ai_service=True),
                 log_config=LogConfig(log_method=["db"]),
-                rtc_room_config=WebRTCRoomConfig(rtc_room_enable=True),
+                plugin_configs={"webrtc-chatroom": {"enabled": True}},
             )
             Config.SetConfig(cfg)
             StorageConfig.SetGlobal(sc)

@@ -6,11 +6,11 @@ import socket
 import logging
 import argparse
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from datetime import datetime
 from typing import Any, ClassVar, Literal, Self, TypedDict
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 try:
     import tomllib
@@ -22,7 +22,6 @@ try:
 except ImportError:  # pragma: no cover
     from logging.handlers import TimedRotatingFileHandler as _TimedRotatingFileHandler  # type: ignore
 
-from core.rtc_chat.config import ChatRoomConfig, AudioConfig, WebRTCConfiguration, WebRTCIceServer
 from core.constants import PROJECT_DIR
 from core.server.constants import (
     SERVER_DIR,
@@ -113,9 +112,51 @@ __all__ = [
     "RuntimeConfigPathInfo",
     "ServerConfig",
     "LogConfig",
-    "WebRTCRoomConfig",
     "Config",
 ]
+
+type PluginConfigPayload = dict[str, Any]
+type PluginConfigMapping = dict[str, PluginConfigPayload]
+
+
+class PluginEntry(BaseModel):
+    path: str
+    config: PluginConfigMapping = Field(default_factory=dict)
+
+    @field_validator('path', mode='before')
+    @classmethod
+    def _validate_path(cls, value):
+        text = str(value or '').strip()
+        if not text:
+            raise ValueError('plugin path cannot be empty')
+        return text
+
+    @field_validator('config', mode='before')
+    @classmethod
+    def _validate_config(cls, value):
+        return _normalize_plugin_config_mapping(value)
+
+
+def _normalize_plugin_config_mapping(value) -> PluginConfigMapping:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise TypeError('plugin config must be a dict[str, dict[str, object]].')
+    configs: PluginConfigMapping = {}
+    for plugin_key, plugin_config in value.items():
+        key_text = str(plugin_key).strip()
+        if not key_text:
+            continue
+        if plugin_config is None:
+            configs[key_text] = {}
+            continue
+        if isinstance(plugin_config, BaseModel):
+            configs[key_text] = plugin_config.model_dump(mode='python')
+            continue
+        if not isinstance(plugin_config, dict):
+            raise TypeError(f'plugin config for {key_text!r} must be a mapping.')
+        configs[key_text] = dict(plugin_config)
+    return configs
 
 # ---- Helpers ----
 def _get_int_env(name: str, default: int) -> int:
@@ -126,6 +167,9 @@ def _get_int_env(name: str, default: int) -> int:
 
 def _get_bool_env(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).lower().strip() in ("true", "1", "yes")
+
+def _dashboard_mode_env_enabled() -> bool:
+    return str(os.getenv("__DASHBOARD_MODE__", "")).strip().lower() in {"1", "true", "yes", "on"}
 
 def _get_path_list_env(name: str, default: list[str]) -> list[str]:
     raw = os.getenv(name, None)
@@ -145,6 +189,16 @@ def _get_path_list_env(name: str, default: list[str]) -> list[str]:
     normalized = text.replace("\r", "\n").replace(";", "\n").replace(",", "\n")
     items = [part.strip() for part in normalized.split("\n") if part.strip()]
     return items or list(default)
+
+
+def _get_optional_path_list_env(name: str) -> list[str] | None:
+    raw = os.getenv(name, None)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    return _get_path_list_env(name, []) or None
 
 def _default_log_path() -> str:
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -338,15 +392,15 @@ class ServerConfig(_AutoDocstringModel):
         default_factory=lambda: os.getenv("INTERNAL_PATH_ALLOWED_IP", None) or ["localhost", "127.0.0.1"]
     )
     """IP patterns allowed to access internal routes. Use ``'all'`` to disable IP checks."""
-    expose_ai_service: bool = Field(default_factory=lambda: _get_bool_env("EXPOSE_AI_SERVICE", False))
+    expose_ai_service: bool = Field(default_factory=lambda: _get_bool_env("EXPOSE_AI_SERVICE", _dashboard_mode_env_enabled()))
     """Whether to expose public AI service aliases (``/ai/*``). Internal AI APIs live under ``internal_path_prefix/ai/*``."""
-    enable_rtc_chatroom: bool = Field(default_factory=lambda: _get_bool_env("ENABLE_RTC_CHATROOM", False))
-    """Whether RTC chat-room routes and shared UI are exposed."""
-    extra_app_paths: str | list[str] | None = Field(default=None)
+    expose_compatible_ai_services: bool = Field(default_factory=lambda: _get_bool_env("EXPOSE_COMPATIBLE_AI_SERVICES", _dashboard_mode_env_enabled()))
+    """Whether to expose compatible public AI service endpoints (OpenAI plus Anthropic-compatible completion)."""
+    extra_app_paths: str | list[str] | None = Field(default_factory=lambda: _get_optional_path_list_env("EXTRA_APP_PATHS"))
     """Additional app directories scanned before the project app directory."""
-    extra_public_paths: str | list[str] | None = Field(default=None)
+    extra_public_paths: str | list[str] | None = Field(default_factory=lambda: _get_optional_path_list_env("EXTRA_PUBLIC_PATHS"))
     """Additional public/static file directories to serve (str or list of str)."""
-    extra_resources_paths: str | list[str] | None = Field(default=None)
+    extra_resources_paths: str | list[str] | None = Field(default_factory=lambda: _get_optional_path_list_env("EXTRA_RESOURCES_PATHS"))
     """Additional resource directories (not directly exposed via HTTP) (str or list of str)."""
     valid_locales: str | Language | Sequence[str | Language] | None = Field(default=None)
     """Optional locale prefixes accepted in URLs before route matching."""
@@ -370,6 +424,9 @@ class ServerConfig(_AutoDocstringModel):
 
     def is_ai_service_exposed(self) -> bool:
         return bool(self.expose_ai_service)
+
+    def is_compatible_ai_services_exposed(self) -> bool:
+        return bool(self.expose_compatible_ai_services)
 
     def is_internal_exposed(self) -> bool:
         return bool(self.expose_internal_prefix)
@@ -660,56 +717,6 @@ class LogConfig(_AutoDocstringModel):
             },
         }
 
-class WebRTCRoomConfig(_AutoDocstringModel):
-    """Settings specific to the WebRTC chat-room subsystem.
-
-    On ``apply()`` these values are pushed to
-    ``core.rtc_chat.config.ChatRoomConfig`` so the chat-room
-    module picks them up transparently.
-    """
-
-    rtc_room_enable: bool = Field(default_factory=lambda: _get_bool_env("RTC_ROOM_ENABLE", False))
-    """Whether RTC room UI and APIs are exposed."""
-
-    audio_sample_rate: int = Field(default_factory=lambda: _get_int_env("AUDIO_SAMPLE_RATE", 16000))
-    """Default sample rate (Hz)."""
-    min_silence_ms: int = Field(default_factory=lambda: _get_int_env("MIN_SILENCE_MS", 1000))
-    """Minimum silence duration to end a voice segment (ms)."""
-    min_voice_ms: int = Field(default_factory=lambda: _get_int_env("MIN_VOICE_MS", 200))
-    """Minimum voice duration for a valid segment (ms)."""
-    mid_silence_ms: int = Field(default_factory=lambda: _get_int_env("MID_SILENCE_MS", 500))
-    """Silence inserted between TTS segments (ms)."""
-    max_segment_ms: int = Field(default_factory=lambda: _get_int_env("MAX_SEGMENT_MS", 10000))
-    """Maximum single voice segment duration (ms)."""
-    min_energy_rms: int = Field(default_factory=lambda: _get_int_env("MIN_ENERGY_RMS", 200))
-    """Minimum RMS energy for energy-based VAD."""
-
-    ice_servers: list[WebRTCIceServer] | None = Field(default=None)
-    """Optional list of ICE servers for WebRTC. Validated via :class:`WebRTCIceServer`."""
-    bundle_policy: str = Field(default_factory=lambda: os.getenv("BUNDLE_POLICY", "balanced"))
-    """WebRTC bundle policy: ``balanced``, ``max-compat``, or ``max-bundle``."""
-
-    def apply(self):
-        """Push these values into ``ChatRoomConfig`` singleton."""
-        audio = AudioConfig(
-            audio_sample_rate=self.audio_sample_rate,
-            min_silence_ms=self.min_silence_ms,
-            min_voice_ms=self.min_voice_ms,
-            mid_silence_ms=self.mid_silence_ms,
-            max_segment_ms=self.max_segment_ms,
-            min_energy_rms=self.min_energy_rms,
-        )
-        rtc: WebRTCConfiguration | None = None
-        if self.ice_servers:
-            rtc = WebRTCConfiguration(
-                iceServers=self.ice_servers,
-                bundlePolicy=self.bundle_policy,
-            )
-
-        cfg = ChatRoomConfig(audio_config=audio, rtc_config=rtc)
-        ChatRoomConfig.SetConfig(cfg)
-
-
 # ---- AI services config helpers ----
 
 def _resolve_ai_services_config(raw: str):
@@ -722,8 +729,7 @@ def _resolve_ai_services_config(raw: str):
     except OSError:
         path_exists = False
     if path_exists:
-        data = _load_config_file(candidate)
-        return AIServicesConfig.model_validate(data)
+        return AIServicesConfig.Load(candidate)
     # Treat as serialized text
     data = _load_serialized_config(raw, source_name="--ai-services-config")
     return AIServicesConfig.model_validate(data)
@@ -748,8 +754,12 @@ class Config(_AutoDocstringModel):
     """Server (host, port, workers, …)."""
     log_config: LogConfig = Field(default_factory=LogConfig)
     """Logging configuration."""
-    rtc_room_config: WebRTCRoomConfig = Field(default_factory=WebRTCRoomConfig)
-    """WebRTC chat-room subsystem settings."""
+    plugins: list[PluginEntry] = Field(default_factory=list)
+    """Runtime plugin source entries loaded during startup."""
+    plugin_paths: list[str] = Field(default_factory=list)
+    """Deprecated runtime plugin source paths loaded during startup."""
+    plugin_configs: PluginConfigMapping = Field(default_factory=dict)
+    """Deprecated per-plugin config payloads keyed by plugin key."""
 
     @field_validator("server_config", mode="before")
     @classmethod
@@ -775,26 +785,99 @@ class Config(_AutoDocstringModel):
         except Exception as exc:
             return _warn_and_use_default_subconfig("log_config", exc, LogConfig)
 
-    @field_validator("rtc_room_config", mode="before")
+    @field_validator("plugin_paths", mode="before")
     @classmethod
-    def _validate_rtc_room_config_field(cls, value):
+    def _validate_plugin_paths_field(cls, value):
         if value is None:
-            return _warn_and_use_default_subconfig("rtc_room_config", "received null value", WebRTCRoomConfig)
-        if isinstance(value, WebRTCRoomConfig):
-            return value
-        try:
-            return WebRTCRoomConfig.model_validate(value)
-        except Exception as exc:
-            return _warn_and_use_default_subconfig("rtc_room_config", exc, WebRTCRoomConfig)
+            return []
+        if isinstance(value, str):
+            text = value.strip()
+            return [text] if text else []
+        if isinstance(value, Sequence):
+            return [str(item).strip() for item in value if str(item).strip()]
+        raise TypeError("plugin_paths must be a list[str] or string path.")
+
+    @field_validator("plugins", mode="before")
+    @classmethod
+    def _validate_plugins_field(cls, value):
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            value = [value]
+        if not isinstance(value, Sequence) or isinstance(value, str):
+            raise TypeError("plugins must be a list of plugin entries.")
+        return value
+
+    @field_validator("plugin_configs", mode="before")
+    @classmethod
+    def _validate_plugin_configs_field(cls, value):
+        return _normalize_plugin_config_mapping(value)
+
+    @model_validator(mode="after")
+    def _normalize_plugin_entries(self) -> Self:
+        if self.plugins:
+            self.plugin_paths = [entry.path for entry in self.plugins]
+            self.plugin_configs = self.plugin_config_payloads()
+            return self
+        if not self.plugin_paths:
+            self.plugin_configs = _normalize_plugin_config_mapping(self.plugin_configs)
+            return self
+        self.plugins = [PluginEntry(path=path, config={}) for path in self.plugin_paths]
+        if self.plugin_configs:
+            for plugin_key, payload in self.plugin_configs.items():
+                for entry in self.plugins:
+                    entry.config.setdefault(plugin_key, dict(payload))
+        self.plugin_configs = self.plugin_config_payloads()
+        return self
+
+    def plugin_source_paths(self) -> list[str]:
+        if self.plugins:
+            return [entry.path for entry in self.plugins]
+        return [str(path).strip() for path in self.plugin_paths if str(path).strip()]
+
+    def plugin_config_payloads(self) -> PluginConfigMapping:
+        configs: PluginConfigMapping = {}
+        for entry in self.plugins:
+            configs.update(_normalize_plugin_config_mapping(entry.config))
+        if not configs and self.plugin_configs:
+            configs.update(_normalize_plugin_config_mapping(self.plugin_configs))
+        return configs
+
+    def get_plugin_config(self, plugin_key: str) -> PluginConfigPayload:
+        return dict(self.plugin_config_payloads().get(str(plugin_key).strip(), {}))
+
+    def set_plugin_entry(self, path: str | Path, config_by_plugin_key: Mapping[str, Mapping[str, Any]] | None = None) -> None:
+        path_text = str(path).strip()
+        entry_config = _normalize_plugin_config_mapping(config_by_plugin_key or {})
+        for entry in self.plugins:
+            if entry.path == path_text:
+                entry.config = entry_config
+                break
+        else:
+            self.plugins.append(PluginEntry(path=path_text, config=entry_config))
+        self.plugin_paths = self.plugin_source_paths()
+        self.plugin_configs = self.plugin_config_payloads()
+
+    def remove_plugin_entry(self, path: str | Path) -> None:
+        path_text = str(path).strip()
+        self.plugins = [entry for entry in self.plugins if entry.path != path_text]
+        self.plugin_paths = [entry.path for entry in self.plugins]
+        self.plugin_configs = {}
+        for entry in self.plugins:
+            self.plugin_configs.update(_normalize_plugin_config_mapping(entry.config))
 
     @classmethod
     def SetConfig(cls, config: Self):
         cls.__Instance__ = config
+        from core.server.plugin import configure_plugins, configure_runtime_plugin_paths
+
+        configure_runtime_plugin_paths(config.plugin_source_paths(), load_now=True)
+        configure_plugins(config.plugin_config_payloads())
 
     @classmethod
     def GetConfig(cls) -> Self:
         if cls.__Instance__ is None:
-            cls.__Instance__ = cls.AutoLoad(prefer_mode_specific=_prefer_mode_specific_default_paths()) or cls()
+            cls.SetConfig(cls.AutoLoad(prefer_mode_specific=_prefer_mode_specific_default_paths()) or cls())
         return cls.__Instance__  # type: ignore
 
     @classmethod
@@ -880,7 +963,7 @@ class Config(_AutoDocstringModel):
     def dump_serialized(self, path: str | Path | None = None, *, format_hint: str | None = None) -> str:
         target_path = _normalize_config_path(path) if path is not None else None
         normalized_hint = (format_hint or (target_path.suffix if target_path is not None else ".yaml") or ".yaml").lower().lstrip(".")
-        data = self.model_dump(mode="json", exclude_none=False)
+        data = self.model_dump(mode="json", exclude_none=False, exclude={"plugin_paths", "plugin_configs"})
         if normalized_hint == "json":
             return json.dumps(data, ensure_ascii=False, indent=2)
         if normalized_hint not in {"yaml", "yml"}:
@@ -922,8 +1005,7 @@ class Config(_AutoDocstringModel):
         p.add_argument("--hide-internal-prefix", action="store_true", help="[server] Hide internal routes and admin panel")
         p.add_argument("--internal-path-allowed-ip", type=str, default=None, help="[server] Internal IP allow list: localhost, all, wildcard, or comma-separated patterns")
         p.add_argument("--expose-ai-service", action="store_true", default=None, help="[server] Expose public /ai/* aliases for AI service APIs")
-        p.add_argument("--enable-rtc-chatroom", action="store_true", default=None, help="[server] Enable RTC chat-room routes and UI")
-        p.add_argument("--disable-rtc-chatroom", action="store_true", help="[server] Disable RTC chat-room routes and UI")
+        p.add_argument("--expose-compatible-ai-services", action="store_true", default=None, help="[server] Expose compatible public AI service APIs (OpenAI plus Anthropic-compatible completion)")
 
         # log_config
         p.add_argument("--log-level", type=str, default=default.log_config.log_level, help="[log] Log level [debug|info|warning|error|critical]")
@@ -937,20 +1019,12 @@ class Config(_AutoDocstringModel):
         p.add_argument("--log-rotation-interval", type=int, default=default.log_config.log_rotation_interval, help="[log, file mode] Rotation interval in hours")
         p.add_argument("--log-rotation-time", type=str, default=default.log_config.rotation_time, help="[log, file mode] Daily rotation time HH:MM")
         p.add_argument("--log-zip-old-logs", action="store_true", help="[log, file mode] Compress rotated log files")
-        # rtc_room_config
-        p.add_argument("--rtc-room-enable", action="store_true", default=None, help="[rtc_room] Alias of --enable-rtc-chatroom")
-        p.add_argument("--rtc-room-audio-sample-rate", type=int, default=default.rtc_room_config.audio_sample_rate, help="[rtc_room] Audio sample rate (Hz)")
-        p.add_argument("--rtc-room-min-silence-ms", type=int, default=default.rtc_room_config.min_silence_ms, help="[rtc_room] Min silence duration (ms)")
-        p.add_argument("--rtc-room-min-voice-ms", type=int, default=default.rtc_room_config.min_voice_ms, help="[rtc_room] Min voice segment duration (ms)")
-        p.add_argument("--rtc-room-mid-silence-ms", type=int, default=default.rtc_room_config.mid_silence_ms, help="[rtc_room] Silence inserted between TTS segments (ms)")
-        p.add_argument("--rtc-room-max-segment-ms", type=int, default=default.rtc_room_config.max_segment_ms, help="[rtc_room] Max voice segment duration (ms)")
-        p.add_argument("--rtc-room-min-energy-rms", type=int, default=default.rtc_room_config.min_energy_rms, help="[rtc_room] Min RMS energy for VAD")
-        p.add_argument("--rtc-room-ice-servers-json", type=str, default=None, help="[rtc_room] JSON array of ICE server objects")
-        p.add_argument("--rtc-room-bundle-policy", type=str, default=default.rtc_room_config.bundle_policy, help="[rtc_room] WebRTC bundle policy")
         # storage_config
         p.add_argument("--storage-config-json", type=str, default=None, help="[storage] JSON string for full StorageConfig override")
         # ai_services_config
         p.add_argument("--ai-services-config", type=str, default=None, help="[ai] Path to AI services config file (.json/.yaml/.yml/.toml), or inline JSON string")
+        p.add_argument("--plugin", action="append", default=None, help="[plugin] Plugin path. Can be repeated. Supports .py files, module directories with __main__.py, and .zip/.tar.gz/.tgz/.gz archives.")
+        p.add_argument("--plugin-config", action="append", default=None, help="[plugin] Config file path (.json/.toml/.yaml/.yml) for the preceding --plugin. Can be repeated and order-sensitive.")
         # extra
         p.add_argument("--extra-app-paths", type=str, default=None, help="Comma-separated extra app directory paths")
         p.add_argument("--extra-public-paths", type=str, default=None, help="Comma-separated extra public directory paths")
@@ -996,10 +1070,8 @@ class Config(_AutoDocstringModel):
             config.server_config.internal_path_allowed_ip = raw_internal_allowed_ip
         if getattr(args, "expose_ai_service", None) is not None:
             config.server_config.expose_ai_service = bool(getattr(args, "expose_ai_service", False))
-        if getattr(args, "disable_rtc_chatroom", False):
-            config.server_config.enable_rtc_chatroom = False
-        elif getattr(args, "enable_rtc_chatroom", None) is not None or getattr(args, "rtc_room_enable", None) is not None:
-            config.server_config.enable_rtc_chatroom = bool(getattr(args, "enable_rtc_chatroom", False) or getattr(args, "rtc_room_enable", False))
+        if getattr(args, "expose_compatible_ai_services", None) is not None:
+            config.server_config.expose_compatible_ai_services = bool(getattr(args, "expose_compatible_ai_services", False))
         if getattr(args, "server_reload", False):
             config.server_config.reload = True
         # core_config
@@ -1019,25 +1091,6 @@ class Config(_AutoDocstringModel):
         config.log_config.rotation_time = getattr(args, "log_rotation_time", config.log_config.rotation_time)
         if getattr(args, "log_zip_old_logs", False):
             config.log_config.zip_old_logs = True
-        # rtc_room_config
-        config.rtc_room_config.rtc_room_enable = config.server_config.enable_rtc_chatroom
-        config.rtc_room_config.audio_sample_rate = getattr(args, "rtc_room_audio_sample_rate", config.rtc_room_config.audio_sample_rate)
-        config.rtc_room_config.min_silence_ms = getattr(args, "rtc_room_min_silence_ms", config.rtc_room_config.min_silence_ms)
-        config.rtc_room_config.min_voice_ms = getattr(args, "rtc_room_min_voice_ms", config.rtc_room_config.min_voice_ms)
-        config.rtc_room_config.mid_silence_ms = getattr(args, "rtc_room_mid_silence_ms", config.rtc_room_config.mid_silence_ms)
-        config.rtc_room_config.max_segment_ms = getattr(args, "rtc_room_max_segment_ms", config.rtc_room_config.max_segment_ms)
-        config.rtc_room_config.min_energy_rms = getattr(args, "rtc_room_min_energy_rms", config.rtc_room_config.min_energy_rms)
-        config.rtc_room_config.bundle_policy = getattr(args, "rtc_room_bundle_policy", config.rtc_room_config.bundle_policy)
-        raw_ice = getattr(args, "rtc_room_ice_servers_json", None)
-        if raw_ice:
-            try:
-                servers = [WebRTCIceServer(**s) for s in json.loads(raw_ice)]
-                config.rtc_room_config.ice_servers = servers
-            except Exception as _e:
-                _logger.warning(
-                    "Config.rtc_room_config.ice_servers validation failed: %s. Keeping existing/default config.",
-                    _e,
-                )
         # storage_config
         raw_storage = getattr(args, "storage_config_json", None)
         if raw_storage:
@@ -1059,6 +1112,12 @@ class Config(_AutoDocstringModel):
             try:
                 ai_cfg = _resolve_ai_services_config(raw_ai)
                 os.environ["__AI_SERVICES_CONFIG__"] = ai_cfg.to_serialized_env()
+                if source_path := ai_cfg.source_path():
+                    from core.ai.config import AI_SERVICES_CONFIG_SOURCE_ENV
+                    os.environ[AI_SERVICES_CONFIG_SOURCE_ENV] = str(source_path)
+                else:
+                    from core.ai.config import AI_SERVICES_CONFIG_SOURCE_ENV
+                    os.environ.pop(AI_SERVICES_CONFIG_SOURCE_ENV, None)
                 _logger.info("Loaded AI services config from --ai-services-config.")
             except Exception as _e:
                 _logger.warning(
@@ -1069,6 +1128,33 @@ class Config(_AutoDocstringModel):
             ai_cfg = _auto_discover_ai_services_config()
             if ai_cfg is not None:
                 os.environ["__AI_SERVICES_CONFIG__"] = ai_cfg.to_serialized_env()
+                if source_path := ai_cfg.source_path():
+                    from core.ai.config import AI_SERVICES_CONFIG_SOURCE_ENV
+                    os.environ[AI_SERVICES_CONFIG_SOURCE_ENV] = str(source_path)
+        raw_plugins = getattr(args, "plugin", None)
+        if raw_plugins:
+            from core.server.plugin import configure_runtime_plugin_paths, get_plugin_key, get_plugins_for_path, set_plugin_paths_env
+
+            plugin_paths = list(set_plugin_paths_env(raw_plugins))
+            raw_plugin_configs = list(getattr(args, "plugin_config", None) or [])
+            if len(raw_plugin_configs) > len(plugin_paths):
+                raise ValueError("--plugin-config count cannot exceed --plugin count.")
+            if raw_plugin_configs:
+                configure_runtime_plugin_paths(plugin_paths, load_now=True)
+            entries: list[PluginEntry] = []
+            for plugin_index, plugin_path_text in enumerate(plugin_paths):
+                entry_config: PluginConfigMapping = {}
+                if plugin_index < len(raw_plugin_configs):
+                    plugin_config_payload = _load_config_file(_normalize_config_path(raw_plugin_configs[plugin_index]))
+                    plugin_path = Path(plugin_path_text)
+                    for plugin_class in get_plugins_for_path(plugin_path):
+                        entry_config[get_plugin_key(plugin_class)] = dict(plugin_config_payload)
+                entries.append(PluginEntry(path=plugin_path_text, config=entry_config))
+            config.plugins = entries
+            config.plugin_paths = config.plugin_source_paths()
+            config.plugin_configs = config.plugin_config_payloads()
+        elif getattr(args, "plugin_config", None):
+            raise ValueError("--plugin-config requires a preceding --plugin.")
         # extra_paths
         raw_extra_app = getattr(args, "extra_app_paths", None)
         if raw_extra_app is not None:
@@ -1099,6 +1185,11 @@ class Config(_AutoDocstringModel):
                 config.server_config.extra_resources_paths = list(config.server_config.extra_resources_paths) + paths
         if set_global:
             cls.SetConfig(config)
+        elif raw_plugins:
+            from core.server.plugin import configure_plugins, configure_runtime_plugin_paths
+
+            configure_runtime_plugin_paths(config.plugin_source_paths(), load_now=True)
+            configure_plugins(config.plugin_config_payloads())
         return config
 
 
@@ -1111,7 +1202,6 @@ __all__ = [
     "RuntimeConfigPathInfo",
     "ServerConfig",
     "LogConfig",
-    "WebRTCRoomConfig",
     "JwtIssuanceConfig",
     "Config",
 ]

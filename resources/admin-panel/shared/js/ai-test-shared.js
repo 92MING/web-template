@@ -280,6 +280,158 @@
 		container.innerHTML = items.map(renderItem).join('');
 	}
 
+	async function fetchServiceInfo(kind) {
+		const resp = await fetchAi(`services/${encodeURIComponent(String(kind || '').trim())}`, { cache: 'no-store' });
+		if (!resp.ok) {
+			throw new Error(`load service info failed: ${resp.status}`);
+		}
+		return resp.json();
+	}
+
+	function _sortedKeys(keys, includeDefault) {
+		const unique = Array.from(new Set((keys || []).map((item) => String(item || '').trim()).filter(Boolean)));
+		if (includeDefault && !unique.includes('default')) unique.unshift('default');
+		return unique.sort((a, b) => {
+			if (a === 'default') return -1;
+			if (b === 'default') return 1;
+			return a.localeCompare(b, 'zh-CN');
+		});
+	}
+
+	function _normalizeTargetValue(value, data) {
+		const text = String(value || '').trim();
+		if (text === 'client') return 'client';
+		if (text && text !== 'service' && text.startsWith('client:')) return 'client';
+		if (text && text !== 'service' && data && data.clients && Object.prototype.hasOwnProperty.call(data.clients, text)) {
+			return 'client';
+		}
+		return 'service';
+	}
+
+	function _resolveTargetKeys(data, targetValue, includeDefault) {
+		const normalizedTarget = _normalizeTargetValue(targetValue, data);
+		if (normalizedTarget === 'client') {
+			return _sortedKeys(Object.keys((data && data.clients) || {}), false);
+		}
+		return _sortedKeys(Object.keys((data && data.instances) || {}), includeDefault);
+	}
+
+	async function initServiceTargetControls(kind, targetSelectOrId, instanceSelectOrId, options = {}) {
+		const targetSelect = typeof targetSelectOrId === 'string' ? document.getElementById(targetSelectOrId) : targetSelectOrId;
+		const instanceSelect = typeof instanceSelectOrId === 'string' ? document.getElementById(instanceSelectOrId) : instanceSelectOrId;
+		const includeDefault = options.includeDefault !== false;
+		const serviceLabel = String(options.serviceLabel || 'service');
+		let data = null;
+
+		const getSelection = () => {
+			const targetValue = _normalizeTargetValue(targetSelect?.value, data);
+			const targetKey = String(instanceSelect?.value || '').trim();
+			const clientKey = targetValue === 'client' ? (targetKey || null) : null;
+			const serviceKey = targetValue === 'service' ? (targetKey || 'default') : null;
+			return {
+				kind: String(kind || '').trim(),
+				target_value: targetValue,
+				target_type: clientKey ? 'client' : 'service',
+				target_key: clientKey || serviceKey || null,
+				service_key: serviceKey,
+				client_key: clientKey,
+			};
+		};
+
+		const notifyChange = () => {
+			if (typeof options.onSelectionChange === 'function') {
+				options.onSelectionChange(getSelection());
+			}
+		};
+
+		const renderTargetOptions = (preferredTargetValue) => {
+			if (!targetSelect) return 'service';
+			const clientKeys = _sortedKeys(Object.keys((data && data.clients) || {}), false);
+			targetSelect.innerHTML = [
+				`<option value="service">${escapeHtml(serviceLabel)}</option>`,
+				...(clientKeys.length ? [`<option value="client">client</option>`] : []),
+			].join('');
+			const nextTargetValue = _normalizeTargetValue(preferredTargetValue, data);
+			targetSelect.value = nextTargetValue;
+			return nextTargetValue;
+		};
+
+		const renderInstanceOptions = (targetValue, preferredInstanceValue) => {
+			const keys = _resolveTargetKeys(data, targetValue, includeDefault);
+			if (instanceSelect) {
+				instanceSelect.innerHTML = keys.map((key) => `<option value="${escapeHtml(key)}">${escapeHtml(key)}</option>`).join('');
+				const defaultValue = _normalizeTargetValue(targetValue, data) === 'service' ? 'default' : '';
+				const nextValue = String(preferredInstanceValue || instanceSelect.value || defaultValue).trim() || defaultValue;
+				instanceSelect.value = keys.includes(nextValue) ? nextValue : (keys[0] || '');
+				instanceSelect.disabled = keys.length <= 1;
+			}
+			notifyChange();
+			return keys;
+		};
+
+		const refresh = async () => {
+			data = await fetchServiceInfo(kind);
+			const selectedTargetValue = options.selectedTargetValue ?? targetSelect?.value ?? 'service';
+			const selectedInstanceValue = options.selectedKeyValue ?? options.selectedInstanceValue ?? instanceSelect?.value ?? 'default';
+			const targetValue = renderTargetOptions(selectedTargetValue);
+			renderInstanceOptions(targetValue, selectedInstanceValue);
+			return data;
+		};
+
+		if (targetSelect && !targetSelect.dataset.aiTargetBound) {
+			targetSelect.dataset.aiTargetBound = '1';
+			targetSelect.addEventListener('change', () => {
+				const targetValue = _normalizeTargetValue(targetSelect.value, data);
+				renderInstanceOptions(targetValue, instanceSelect?.value || 'default');
+			});
+		}
+		if (instanceSelect && !instanceSelect.dataset.aiTargetBound) {
+			instanceSelect.dataset.aiTargetBound = '1';
+			instanceSelect.addEventListener('change', () => {
+				notifyChange();
+			});
+		}
+
+		await refresh();
+
+		return {
+			kind: String(kind || '').trim(),
+			getData: () => data,
+			getSelection,
+			getRequestFields() {
+				const selection = getSelection();
+				const fields = {};
+				if (selection.service_key) fields.service_key = selection.service_key;
+				if (selection.client_key) fields.client_key = selection.client_key;
+				return fields;
+			},
+			buildPath(operation) {
+				return buildTargetPath(getSelection(), operation);
+			},
+			applyTo(payload) {
+				const fields = this.getRequestFields();
+				if (payload instanceof FormData) {
+					Object.entries(fields).forEach(([key, value]) => {
+						payload.delete(key);
+						payload.append(key, value);
+					});
+					return payload;
+				}
+				return Object.assign(payload || {}, fields);
+			},
+			refresh,
+		};
+	}
+
+	function buildTargetPath(selection, operation) {
+		const kind = encodeURIComponent(String(selection?.kind || '').trim());
+		const targetType = selection?.target_type === 'client' ? 'client' : 'service';
+		const targetKey = targetType === 'client' ? selection?.client_key : selection?.service_key;
+		const key = encodeURIComponent(String(targetKey || 'default').trim() || 'default');
+		const suffix = String(operation || '').trim().replace(/^\/+/, '');
+		return suffix ? `${kind}/${targetType}/${key}/${suffix}` : `${kind}/${targetType}/${key}`;
+	}
+
 	async function loadServiceInstances(kind, selectOrId, options = {}) {
 		const select = typeof selectOrId === 'string' ? document.getElementById(selectOrId) : selectOrId;
 		const includeDefault = options.includeDefault !== false;
@@ -314,12 +466,15 @@
 		aiApiPath,
 		applyI18n,
 		bindFormState,
+		buildTargetPath,
 		copyText,
 		createHistoryStore,
 		escapeHtml,
 		formatDuration,
 		fetchAi,
+		fetchServiceInfo,
 		getCurrentLang,
+		initServiceTargetControls,
 		mergeI18n,
 		nowIso,
 		resolveAiApiBase,

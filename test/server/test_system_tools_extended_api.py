@@ -317,11 +317,24 @@ class TestSystemFilesExtendedApi(FullAppTestBase):
 
                 pdf_resp = await self._client.get(data["pdf_url"])
                 thumb_resp = await self._client.get(data["pages"][0]["thumbnail_url"])
+                self.assertEqual(pdf_resp.status_code, 200)
+                self.assertEqual(pdf_resp.headers.get("content-type"), "application/pdf")
+                self.assertEqual(thumb_resp.status_code, 200)
+                self.assertEqual(thumb_resp.headers.get("content-type"), "image/png")
 
-            self.assertEqual(pdf_resp.status_code, 200)
-            self.assertEqual(pdf_resp.headers.get("content-type"), "application/pdf")
-            self.assertEqual(thumb_resp.status_code, 200)
-            self.assertEqual(thumb_resp.headers.get("content-type"), "image/png")
+
+class TestSystemOverviewExtendedApi(FullAppTestBase):
+    async def test_build_extended_host_info_exposes_local_and_global_ip(self):
+        from core.server.routes.system import monitoring as monitoring_module
+
+        with (
+            patch("core.server.routes.system.monitoring.get_local_ip", return_value="192.168.1.20"),
+            patch("core.server.routes.system.monitoring.get_global_ip_sync", return_value="203.0.113.8"),
+        ):
+            info = await asyncio.to_thread(monitoring_module._build_extended_host_info)
+
+        self.assertEqual(info.local_ip, "192.168.1.20")
+        self.assertEqual(info.global_ip, "203.0.113.8")
 
 
 if __name__ == "__main__":

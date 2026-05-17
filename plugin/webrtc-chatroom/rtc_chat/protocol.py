@@ -13,7 +13,7 @@ from typing import Literal, Annotated, TYPE_CHECKING, ClassVar
 
 from av import AudioFrame, VideoFrame
 
-from ..utils.type_utils import getattr_raw, get_pydantic_type_adapter
+from core.utils.type_utils import getattr_raw, get_pydantic_type_adapter
 from .config import _AutoDocstringModel
 
 if TYPE_CHECKING:

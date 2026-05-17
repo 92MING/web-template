@@ -26,7 +26,7 @@
  *   /shared/components/visualization.js — Charts, clouds, QR, diagrams
  *   /shared/components/workflow.js      — Calendars, kanban, flow designers
  *   /shared/components/editors.js       — Code, JSON, markdown, rich text editors
- *   /shared/components/creative-tools.js — Audio/video editors, whiteboard, advanced painter
+ *   /shared/components/creative-tools.js — Audio/video editors and whiteboard
  *   /shared/components/utilities.js     — Upload zones, previewers, terminals
  *   /shared/components/cloud-admin.js   — File browsers, dashboard tiles, members
  *

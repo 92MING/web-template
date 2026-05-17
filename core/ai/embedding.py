@@ -3,16 +3,27 @@ import json
 import time
 import asyncio
 import hashlib
+import base64
+import struct
 import logging
 import inspect
+import importlib.util
+import sys
+import types
+import aiohttp
 
 from functools import cache
+from pathlib import Path
+from urllib.parse import urlparse, unquote
+from urllib.request import url2pathname, urlopen
 from dataclasses import dataclass
 from typing_extensions import Unpack
-from typing import TYPE_CHECKING, Callable, ClassVar, Literal, Sequence, cast, TypedDict, overload
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Literal, Protocol, Sequence, Self, cast, TypedDict, overload
 from thinkthinksyn import ThinkThinkSyn
 
+from core.storage.object import OBS_Object
 from core.utils.data_structs import Audio, Image, Video, LLMDocumentMixin
+from core.utils.concurrent_utils import run_any_func
 from core.utils.text_utils import (
     split_text_by_word_count, 
     truncate_text_by_word_count, 
@@ -33,12 +44,20 @@ from .base import (
     _AnnotateDefault,
     _apply_service_param_defaults,
     _patch_thinkthinksyn_proxy,
+    _create_proxied_thinkthinksyn,
     _apply_ssh_tunnel_to_tts_client,
     _resolve_ssh_tunnel_config,
     thinkthinksyn_client,
     get_inference_context,
     enter_service_context,
     exit_service_context,
+    OpenAILikedClientCreateParams,
+    OpenRouterClientCreateParams,
+    OpenAILikedClientMixin,
+    _resolve_openai_liked_client_params,
+    _resolve_openrouter_client_params,
+    _append_default_client,
+    _append_env_default_client,
 )
 from .shared import AIServiceKind
 from ._multimodal_token_utils import (
@@ -52,12 +71,19 @@ from ._multimodal_token_utils import (
 )
 
 if TYPE_CHECKING:
+    from core.utils.network_utils.ssh_tunnel import SSHTunnelConfig
     from .completion import CompletionService
     from .s2t import S2TService
 
 _logger = logging.getLogger(__name__)
 _DEFAULT_EMBEDDING_TIMEOUT = 60.0
 '''默认 embedding 请求超时（秒）。'''
+
+def _decode_base64_embedding(b64_str: str) -> list[float]:
+    '''Decode OpenAI base64-encoded little-endian float32 embeddings.'''
+    decoded = base64.b64decode(b64_str)
+    count = len(decoded) // 4
+    return list(struct.unpack(f'{count}f', decoded))
 
 EmbeddingCachePayload = dict[str, object]
 EmbeddingModelLookup = dict[str, tuple[str, type[object]]]
@@ -373,6 +399,8 @@ class _EmbeddingRequestParams(ServiceParamsBase, total=False):
     '''是否读取 embedding 缓存（默认 ``True``）。'''
     save_cache: _AnnotateDefault[bool, True]
     '''是否将新结果写入 embedding 缓存（默认 ``True``）。'''
+    client_key: str | None
+    '''固定使用指定的 service-attached client key；``None`` 表示仍由 service 自动调度。'''
 
 if TYPE_CHECKING:
     class EmbeddingRequestParams(_EmbeddingRequestParams, extra_items=object):
@@ -411,6 +439,17 @@ class EmbeddingClientInitParams(ServiceClientInitParams, total=False):
     support_video: bool
     '''客户端是否原生支持视频输入。'''
 
+class OpenAILikedEmbeddingClientCreateParams(OpenAILikedClientCreateParams, EmbeddingClientInitParams, total=False):
+    '''OpenAI-Liked embedding 客户端创建参数。'''
+
+class OpenRouterEmbeddingClientCreateParams(OpenRouterClientCreateParams, EmbeddingClientInitParams, total=False):
+    '''OpenRouter embedding 客户端创建参数。'''
+
+class ThinkThinkSynEmbeddingClientCreateParams(EmbeddingClientInitParams, total=False):
+    '''ThinkThinkSyn embedding 客户端创建参数。'''
+    apikey: str | None
+    base_url: str | None
+
 class EmbeddingClient(ServiceClientBase[EmbeddingHealthProbeInput]):
 
     ServiceKind: ClassVar['AIServiceKind'] = 'embedding'
@@ -445,6 +484,28 @@ class EmbeddingClient(ServiceClientBase[EmbeddingHealthProbeInput]):
             priority=kwargs.get('priority', 0.0),
             strategy_lvl=kwargs.get('strategy_lvl', StrategyLevel.LOAD_BALANCE),
         )
+
+    def update(self, **new_params: object) -> bool:
+        '''原地更新 embedding 客户端自己的可变配置。'''
+        params = dict(new_params)
+        own_params: dict[str, object] = {}
+        for key in ('max_tokens', 'token_counter', 'support_image', 'support_audio', 'support_video'):
+            if key in params:
+                own_params[key] = params.pop(key)
+        if not super().update(**params):
+            return False
+        if 'max_tokens' in own_params:
+            value = own_params['max_tokens']
+            self.max_tokens = None if value is None else int(cast(Any, value))
+        if 'token_counter' in own_params:
+            self.token_counter = cast(Any, own_params['token_counter'])
+        if 'support_image' in own_params:
+            self.support_image = bool(own_params['support_image'])
+        if 'support_audio' in own_params:
+            self.support_audio = bool(own_params['support_audio'])
+        if 'support_video' in own_params:
+            self.support_video = bool(own_params['support_video'])
+        return True
 
     def count_tokens(self, value: str | Image | Audio | Video) -> int:
         '''估算文本/多模态输入的 token 数量。
@@ -512,6 +573,53 @@ class EmbeddingClient(ServiceClientBase[EmbeddingHealthProbeInput]):
         except Exception:
             return False
 
+    @staticmethod
+    def _extract_common_client_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            'key': kwargs.get('key'),
+            'max_concurrent': kwargs.get('max_concurrent'),
+            'priority': kwargs.get('priority', 0.0),
+            'strategy_lvl': kwargs.get('strategy_lvl', StrategyLevel.LOAD_BALANCE),
+        }
+        for key in ('max_tokens', 'token_counter', 'support_image', 'support_audio', 'support_video'):
+            if key in kwargs:
+                result[key] = kwargs[key]
+        return result
+
+    @classmethod
+    def CreateOpenAILikedEmbeddingClient(
+        cls,
+        **kwargs: Unpack[OpenAILikedEmbeddingClientCreateParams],
+    ) -> 'EmbeddingClient':
+        client_kwargs = cls._extract_common_client_kwargs(cast(dict[str, Any], kwargs))
+        client_kwargs.update(_resolve_openai_liked_client_params(kwargs, service_name='embedding'))
+        return OpenAILikedEmbeddingClient(**client_kwargs)
+
+    @classmethod
+    def CreateThinkThinkSynEmbeddingClient(
+        cls,
+        **kwargs: Unpack[ThinkThinkSynEmbeddingClientCreateParams],
+    ) -> 'EmbeddingClient':
+        init_params: dict[str, Any] = {}
+        apikey = kwargs.get('apikey')
+        base_url = kwargs.get('base_url')
+        if apikey:
+            init_params['apikey'] = apikey
+        if base_url:
+            init_params['base_url'] = base_url
+        tts_client = _create_proxied_thinkthinksyn(**init_params) if init_params else thinkthinksyn_client()
+        client_kwargs = cls._extract_common_client_kwargs(cast(dict[str, Any], kwargs))
+        return ThinkThinkSynEmbeddingClient(tts_client=tts_client, **client_kwargs)
+
+    @classmethod
+    def CreateOpenRouterEmbeddingClient(
+        cls,
+        **kwargs: Unpack[OpenRouterEmbeddingClientCreateParams],
+    ) -> 'EmbeddingClient':
+        client_kwargs = cls._extract_common_client_kwargs(cast(dict[str, Any], kwargs))
+        client_kwargs.update(_resolve_openrouter_client_params(kwargs, service_name='embedding'))
+        return OpenRouterEmbeddingClient(**client_kwargs)
+
     async def embedding(self, inputs: Sequence[str | Image | Audio | Video], **kwargs: Unpack[EmbeddingRequestParams]) -> list[list[float]]:
         '''执行向量嵌入。
 
@@ -544,11 +652,39 @@ class EmbeddingClient(ServiceClientBase[EmbeddingHealthProbeInput]):
             ),
         )
 
+    async def embedding_raw(
+        self,
+        inputs: Sequence[str | Image | Audio | Video | list[int] | list[list[int]]],
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        text_inputs = [str(item) if not isinstance(item, str) else item for item in inputs]
+        vectors = await self.embedding(text_inputs, **cast(EmbeddingRequestParams, kwargs))
+        return {
+            'object': 'list',
+            'data': [
+                {
+                    'object': 'embedding',
+                    'embedding': vector,
+                    'index': index,
+                }
+                for index, vector in enumerate(vectors)
+            ],
+            'model': getattr(self, '_model', None),
+            'usage': {
+                'prompt_tokens': 0,
+                'total_tokens': 0,
+            },
+        }
+
     async def _embedding_impl(self, inputs: Sequence[str | Image | Audio | Video], **kwargs: object) -> list[list[float]]:
         raise NotImplementedError
 
-class ThinkThinkSynEmbeddingClient(EmbeddingClient, type='tts-embedding'):
+class ThinkThinkSynEmbeddingClient(EmbeddingClient, type='thinkthinksyn'):
     '''ThinkThinkSyn 向量嵌入客户端。'''
+
+    @classmethod
+    def CreateFromConfig(cls, **kwargs: object) -> 'Self':
+        return cast(Self, EmbeddingClient.CreateThinkThinkSynEmbeddingClient(**cast(Any, kwargs)))
 
     _DEFAULT_MODEL = 'zpoint'
     _REQUEST_MODEL_ALIASES = {
@@ -569,6 +705,20 @@ class ThinkThinkSynEmbeddingClient(EmbeddingClient, type='tts-embedding'):
         self._model = self._normalize_request_model_name(kwargs.get('model') or self._DEFAULT_MODEL) or self._DEFAULT_MODEL
         self._resolved_embedding_model: object | None = None  # cached EmbeddingModel instance
         self._request_model_name: str | None = None
+
+    def update(self, **new_params: object) -> bool:
+        params = dict(new_params)
+        model = params.pop('model', None) if 'model' in params else None
+        old_model = self._model
+        if not super().update(**params):
+            return False
+        if 'model' in new_params:
+            self._model = self._normalize_request_model_name(cast(str | None, model) or self._DEFAULT_MODEL) or self._DEFAULT_MODEL
+            self._resolved_embedding_model = None
+            self._request_model_name = None
+            if self._model != old_model:
+                self.reset_health_state()
+        return True
 
     @property
     def model(self) -> str | None:
@@ -712,6 +862,170 @@ class ThinkThinkSynEmbeddingClient(EmbeddingClient, type='tts-embedding'):
             return [float(v) for v in data]
         return []
 
+
+class OpenAILikedEmbeddingClient(EmbeddingClient, OpenAILikedClientMixin, type='openai'):
+    '''OpenAI 协议兼容的向量嵌入客户端实现。'''
+
+    @classmethod
+    def CreateFromConfig(cls, **kwargs: object) -> 'Self':
+        return cast(Self, EmbeddingClient.CreateOpenAILikedEmbeddingClient(**cast(Any, kwargs)))
+
+    def __init__(
+        self,
+        apikey: str | None,
+        base_url: str,
+        model: str | None = None,
+        ssh_tunnel: 'SSHTunnelConfig | dict[str, Any] | str | None' = None,
+        **kwargs: Unpack[EmbeddingClientInitParams],
+    ):
+        super().__init__(**kwargs)
+        self._init_openai_liked_client(apikey=apikey, base_url=base_url, model=model, ssh_tunnel=ssh_tunnel)
+
+    def update(self, **new_params: object) -> bool:
+        params = dict(new_params)
+        openai_params = {key: params.pop(key) for key in ('apikey', 'base_url', 'model') if key in params}
+        old_identity = (self._apikey, self._base_url, self._model)
+        if not super().update(**params):
+            return False
+        if 'apikey' in openai_params:
+            self._apikey = '' if openai_params['apikey'] is None else str(openai_params['apikey'])
+        if 'base_url' in openai_params and openai_params['base_url'] is not None:
+            self._base_url = str(openai_params['base_url']).rstrip('/')
+        if 'model' in openai_params:
+            self._model = None if openai_params['model'] is None else str(openai_params['model'])
+        if openai_params and (self._apikey, self._base_url, self._model) != old_identity:
+            self.reset_health_state()
+        return True
+
+    def _embedding_url(self) -> str:
+        return self._openai_liked_endpoint('/embeddings')
+
+    def _embedding_urls(self) -> list[str]:
+        return self._openai_liked_endpoint_candidates('/embeddings')
+
+    def _headers(self) -> dict[str, str]:
+        return self._openai_liked_headers()
+
+    async def embedding_raw(
+        self,
+        inputs: Sequence[str | Image | Audio | Video | list[int] | list[list[int]]],
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        payload_input: Any
+        if len(inputs) == 1 and isinstance(inputs[0], str):
+            payload_input = inputs[0]
+        elif all(isinstance(item, str) for item in inputs):
+            payload_input = list(inputs)
+        elif len(inputs) == 1 and isinstance(inputs[0], list) and all(isinstance(token, int) for token in cast(list[Any], inputs[0])):
+            payload_input = list(cast(list[Any], inputs[0]))
+        elif all(isinstance(item, list) and all(isinstance(token, int) for token in cast(list[Any], item)) for item in inputs):
+            payload_input = [list(cast(list[Any], item)) for item in inputs]
+        else:
+            payload_input = [str(item) if not isinstance(item, str) else item for item in inputs]
+
+        payload: dict[str, Any] = {
+            'input': payload_input,
+            'model': kwargs.get('model') or self._model or 'text-embedding-ada-002',
+        }
+        if (encoding_format := kwargs.get('encoding_format')) is not None:
+            payload['encoding_format'] = str(encoding_format)
+        if (dimensions := kwargs.get('dimensions')) is not None:
+            payload['dimensions'] = int(dimensions)
+        if (user := kwargs.get('user')) is not None:
+            payload['user'] = str(user)
+
+        timeout = aiohttp.ClientTimeout(total=float(kwargs.get('timeout', _DEFAULT_EMBEDDING_TIMEOUT)))
+        last_not_found: aiohttp.ClientResponseError | None = None
+        urls = self._embedding_urls()
+        for url_index, url in enumerate(urls):
+            for attempt in range(2):
+                session = await self._get_session()
+                try:
+                    async with session.post(url, json=payload, headers=self._headers(), timeout=timeout) as response:
+                        try:
+                            response.raise_for_status()
+                        except aiohttp.ClientResponseError as exc:
+                            if exc.status == 404 and url_index < len(urls) - 1:
+                                last_not_found = exc
+                                break
+                            raise
+                        return cast(dict[str, Any], await response.json())
+                except (aiohttp.ServerDisconnectedError, aiohttp.ClientPayloadError, aiohttp.ClientConnectionError):
+                    await self._close_session()
+                    if attempt == 0:
+                        continue
+                    raise
+        if last_not_found is not None:
+            raise last_not_found
+        raise RuntimeError('OpenAI-liked embedding request failed without response.')
+
+    async def _embedding_impl(self, inputs: Sequence[str | Image | Audio | Video], **kwargs: object) -> list[list[float]]:
+        raw = await self.embedding_raw(inputs, **kwargs)
+        return self._parse_openai_embedding_response(raw, len(inputs), str(kwargs.get('encoding_format', 'float')))
+
+    @staticmethod
+    def _parse_openai_embedding_response(data: dict[str, Any], expected_count: int, encoding_format: str = 'float') -> list[list[float]]:
+        rows = data.get('data')
+        if not isinstance(rows, list):
+            raise ValueError('Embedding response missing "data" array')
+
+        indexed: dict[int, list[float]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            idx = row.get('index')
+            if not isinstance(idx, int):
+                continue
+            emb = row.get('embedding')
+            if isinstance(emb, list):
+                indexed[idx] = [float(value) for value in emb]
+            elif isinstance(emb, str) and encoding_format == 'base64':
+                indexed[idx] = _decode_base64_embedding(emb)
+
+        result: list[list[float]] = []
+        for index in range(expected_count):
+            vector = indexed.get(index)
+            if vector is None:
+                raise ValueError(f'Missing embedding for input index {index}')
+            result.append(vector)
+        return result
+
+
+class OpenRouterEmbeddingClient(OpenAILikedEmbeddingClient, type='openrouter'):
+    '''OpenRouter 向量嵌入客户端。'''
+
+    @classmethod
+    def CreateFromConfig(cls, **kwargs: object) -> 'Self':
+        return cast(Self, EmbeddingClient.CreateOpenRouterEmbeddingClient(**cast(Any, kwargs)))
+
+    def __init__(
+        self,
+        apikey: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        ssh_tunnel: 'SSHTunnelConfig | dict[str, Any] | str | None' = None,
+        **kwargs: Unpack[EmbeddingClientInitParams],
+    ):
+        resolved = _resolve_openrouter_client_params(
+            {
+                'apikey': apikey,
+                'base_url': base_url,
+                'model': model,
+                'ssh_tunnel': ssh_tunnel,
+            },
+            service_name='embedding',
+        )
+        super().__init__(
+            apikey=cast(str, resolved['apikey']),
+            base_url=cast(str, resolved['base_url']),
+            model=cast(str | None, resolved['model']),
+            ssh_tunnel=cast('SSHTunnelConfig | dict[str, Any] | str | None', resolved['ssh_tunnel']),
+            **kwargs,
+        )
+
+    def _headers(self) -> dict[str, str]:
+        return self._openrouter_headers()
+
 class EmbeddingService(ServiceBase):
     '''向量嵌入聚合服务，支持缓存、文本整理、多模态回退、以及高级方法（rerank / chunking / diversity_rerank）。'''
 
@@ -738,13 +1052,10 @@ class EmbeddingService(ServiceBase):
             s2t_service: 可选的 S2TService，用于语音转文字回退。
             **kwargs: 服务初始化参数，结构见 `ServiceInitParams`。
         '''
-        if not clients:
-            raise ValueError('EmbeddingService requires at least one client.')
         super().__init__(*clients, **kwargs)
         self._completion_service = completion_service
         self._s2t_service = s2t_service
         self._cache = _ORMEmbeddingCache()
-        self._start_init_probe()
 
     @classmethod
     def Default(cls) -> 'EmbeddingService':
@@ -763,16 +1074,41 @@ class EmbeddingService(ServiceBase):
         if cfg is not None:
             svc = cfg.embedding.get_default()
             if svc is not None:
-                for ek in cfg.embedding.extras:
-                    cfg.embedding.get_service(ek)
+                cfg.embedding.preload_service_instances()
                 return cast('EmbeddingService', svc)
 
-        # ── Hardcoded fallback ───────────────────────────────────────────
-        client = ThinkThinkSynEmbeddingClient(
-            tts_client=thinkthinksyn_client(),
-            **cls.ThinkThinkSynDefaultClientParams.ZPoint,
+        # ── Hardcoded / env fallback ────────────────────────────────────
+        clients: list[EmbeddingClient] = []
+        _append_default_client(
+            clients,
+            lambda: ThinkThinkSynEmbeddingClient(
+                tts_client=thinkthinksyn_client(),
+                **cls.ThinkThinkSynDefaultClientParams.ZPoint,
+            ),
+            logger=_logger,
+            description='ThinkThinkSyn embedding',
         )
-        return cls(client, key='default')
+        _append_env_default_client(
+            clients,
+            EmbeddingClient.CreateOpenAILikedEmbeddingClient,
+            logger=_logger,
+            description='OpenAI-compatible embedding',
+            env_keys=('OPENAI_APIKEY', 'OPENAI_API_KEY'),
+        )
+        _append_env_default_client(
+            clients,
+            EmbeddingClient.CreateOpenRouterEmbeddingClient,
+            logger=_logger,
+            description='OpenRouter embedding',
+            env_keys=('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY'),
+        )
+
+        if not clients:
+            raise RuntimeError(
+                'Cannot create default EmbeddingService: no client could be initialized. '
+                'Please ensure thinkthinksyn is installed or set OPENAI_APIKEY / OPENAI_API_KEY / OPENROUTER_APIKEY / OPENROUTER_API_KEY.'
+            )
+        return cls(*clients, key='default')
 
     # ── Input normalization ───────────────────────────────────────────────
 
@@ -1047,6 +1383,7 @@ class EmbeddingService(ServiceBase):
         on_overflow: OverflowHandleMode = cast(OverflowHandleMode, kwargs.pop('on_overflow'))
         use_cache: bool = bool(kwargs.pop('use_cache'))
         save_cache: bool = bool(kwargs.pop('save_cache'))
+        selected_client_key = cast(str | None, kwargs.pop('client_key', None))
         kwargs.pop('timeout', None)  # timeout is consumed at client level, not service level
         single_input = isinstance(inputs, (str, Image, Audio, Video, LLMDocumentMixin))
 
@@ -1118,7 +1455,36 @@ class EmbeddingService(ServiceBase):
             return vectors
 
         try:
-            return await self._run_with_failover(self.clients, _action, error_prefix='All embedding clients failed')
+            candidate_clients = self._resolve_service_client_candidates(self._clients, selected_client_key)
+            return await self._run_with_failover(candidate_clients, _action, error_prefix='All embedding clients failed')
+        finally:
+            exit_service_context(_ctx_token)
+
+    async def embedding_raw(
+        self,
+        inputs: Sequence[str | Image | Audio | Video | list[int] | list[list[int]]] | str | Image | Audio | Video,
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        '''通过故障转移机制执行 raw embedding 请求。'''
+        _apply_service_param_defaults(kwargs, _EmbeddingRequestParams)
+        selected_client_key = cast(str | None, kwargs.pop('client_key', None))
+        kwargs.pop('zh_tw_to_cn', None)
+        kwargs.pop('on_overflow', None)
+        kwargs.pop('use_cache', None)
+        kwargs.pop('save_cache', None)
+        if isinstance(inputs, (str, Image, Audio, Video)):
+            normalized_inputs: Sequence[str | Image | Audio | Video | list[int] | list[list[int]]] = [inputs]
+        else:
+            normalized_inputs = inputs
+
+        _ctx, _ctx_token = enter_service_context('embedding')
+
+        async def _action(client: EmbeddingClient) -> dict[str, Any]:
+            return await client.embedding_raw(normalized_inputs, **kwargs)
+
+        try:
+            candidate_clients = self._resolve_service_client_candidates(self._clients, selected_client_key)
+            return await self._run_with_failover(candidate_clients, _action, error_prefix='All embedding raw clients failed')
         finally:
             exit_service_context(_ctx_token)
 
@@ -1329,15 +1695,263 @@ def _weighted_average_normalize(
     return result
 
 
+class CustomEmbeddingAdapterProtocol(Protocol):
+    '''Embedding custom adapter 协议。'''
+
+    max_tokens: int | None
+    support_image: bool
+    support_audio: bool
+    support_video: bool
+
+    def embedding(
+        self,
+        inputs: Sequence[str | Image | Audio | Video],
+        **kwargs: Unpack[EmbeddingRequestParams],
+    ) -> Any: ...
+
+
+def _is_custom_embedding_adapter(adapter: object) -> bool:
+    return callable(getattr(adapter, 'embedding', None))
+
+
+def _custom_embedding_adapter_cache_key(adapter: str | OBS_Object) -> str:
+    if isinstance(adapter, OBS_Object):
+        payload = adapter.model_dump(mode='python')
+        return json.dumps(payload, sort_keys=True, ensure_ascii=True, default=str)
+    return str(adapter or '').strip()
+
+
+def _normalize_custom_embedding_adapter(adapter: str | OBS_Object) -> tuple[str, str | Path | OBS_Object]:
+    if isinstance(adapter, OBS_Object):
+        return 'obs', adapter
+
+    raw = str(adapter or '').strip()
+    if not raw:
+        raise ValueError('Custom embedding adapter requires a non-empty adapter.')
+
+    parsed = urlparse(raw)
+    if parsed.scheme in ('', 'file'):
+        if parsed.scheme == 'file':
+            file_path = url2pathname(unquote(parsed.path))
+            if parsed.netloc and parsed.netloc not in ('', 'localhost'):
+                file_path = f'//{parsed.netloc}{file_path}'
+            path = Path(file_path)
+        else:
+            path = Path(raw)
+        return 'file', path.expanduser().resolve()
+    return 'url', raw
+
+
+def _custom_embedding_module_name(adapter: str | OBS_Object) -> str:
+    digest = hashlib.md5(_custom_embedding_adapter_cache_key(adapter).encode('utf-8')).hexdigest()
+    return f'core.ai.custom_embedding_adapter_{digest}'
+
+
+def _load_embedding_module_from_file(path: Path, module_name: str) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, str(path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f'Failed to load custom embedding adapter module from {path}')
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_embedding_module_from_source(source: str, *, module_name: str, origin: str) -> types.ModuleType:
+    module = types.ModuleType(module_name)
+    module.__file__ = origin
+    sys.modules[module_name] = module
+    exec(compile(source, origin, 'exec'), module.__dict__)
+    return module
+
+
+def _load_embedding_module_from_url(adapter: str, module_name: str) -> types.ModuleType:
+    with urlopen(adapter, timeout=15) as response:
+        source = response.read().decode('utf-8')
+    return _load_embedding_module_from_source(source, module_name=module_name, origin=adapter)
+
+
+def _load_embedding_module_from_obs_object(adapter: OBS_Object, module_name: str) -> types.ModuleType:
+    source = run_any_func(adapter._get_bytes)
+    if source is None:
+        raise FileNotFoundError(f'Custom embedding adapter object not found: {adapter.storage_name}:{adapter.path}')
+    if isinstance(source, str):
+        source_text = source
+    else:
+        source_text = bytes(source).decode('utf-8')
+    origin = f'obs://{adapter.storage_name}/{adapter.path.lstrip("/")}'
+    return _load_embedding_module_from_source(source_text, module_name=module_name, origin=origin)
+
+
+def load_custom_embedding_adapter_module(adapter: str | OBS_Object) -> types.ModuleType:
+    module_name = _custom_embedding_module_name(adapter)
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+
+    source_kind, source = _normalize_custom_embedding_adapter(adapter)
+    if source_kind == 'file':
+        path = cast(Path, source)
+        if not path.is_file():
+            raise FileNotFoundError(f'Custom embedding adapter script not found: {path}')
+        return _load_embedding_module_from_file(path, module_name)
+    if source_kind == 'obs':
+        return _load_embedding_module_from_obs_object(cast(OBS_Object, source), module_name)
+    return _load_embedding_module_from_url(cast(str, source), module_name)
+
+
+def instantiate_custom_embedding_adapter(
+    *,
+    adapter: str | OBS_Object,
+    init_kwargs: dict[str, object],
+) -> CustomEmbeddingAdapterProtocol:
+    module = load_custom_embedding_adapter_module(adapter)
+    errors: list[str] = []
+
+    for name, value in sorted(module.__dict__.items(), key=lambda item: item[0]):
+        if name.startswith('_'):
+            continue
+        if not inspect.isclass(value):
+            continue
+        if getattr(value, '__module__', None) != module.__name__:
+            continue
+        try:
+            instance = value(**init_kwargs)
+        except Exception as exc:
+            errors.append(f'{name}: init failed with {type(exc).__name__}: {exc}')
+            continue
+        if _is_custom_embedding_adapter(instance):
+            return cast(CustomEmbeddingAdapterProtocol, instance)
+        errors.append(f'{name}: does not satisfy {CustomEmbeddingAdapterProtocol.__name__}')
+
+    detail = '; '.join(errors) if errors else 'no top-level class found in module'
+    raise TypeError(f'No class in {adapter!r} satisfies {CustomEmbeddingAdapterProtocol.__name__}: {detail}')
+
+
+async def _resolve_custom_embedding_awaitable(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def _call_custom_embedding_override(adapter: object, method_name: str, *args: object, **kwargs: object) -> Any:
+    method = getattr(adapter, method_name, None)
+    if not callable(method):
+        return None
+    return await _resolve_custom_embedding_awaitable(method(*args, **kwargs))
+
+
+def _copy_custom_embedding_attr_if_present(target: object, adapter: object, attr_name: str) -> None:
+    if hasattr(adapter, attr_name):
+        setattr(target, attr_name, getattr(adapter, attr_name))
+
+
+def _normalize_custom_embedding_result(result: Any) -> list[list[float]]:
+    if not isinstance(result, list):
+        raise TypeError(f'Custom embedding adapter must return list, got {type(result).__name__}')
+    if result and all(isinstance(value, (int, float)) for value in result):
+        return [[float(value) for value in result]]
+
+    vectors: list[list[float]] = []
+    for row in result:
+        if not isinstance(row, Sequence) or isinstance(row, (str, bytes, bytearray, memoryview)):
+            raise TypeError('Custom embedding adapter must return list[list[float]]')
+        vectors.append([float(value) for value in row])
+    return vectors
+
+
+class CustomEmbeddingClient(EmbeddingClient, type='custom'):
+    '''Embedding 自定义 adapter 包装器。'''
+
+    _WRAPPER_INIT_FIELDS: ClassVar[frozenset[str]] = frozenset({'key', 'max_concurrent', 'priority', 'strategy_lvl'})
+
+    def __init__(
+        self,
+        adapter: CustomEmbeddingAdapterProtocol | str | OBS_Object | None = None,
+        **kwargs: Any,
+    ):
+        if isinstance(adapter, (str, OBS_Object)):
+            adapter_kwargs = {k: v for k, v in kwargs.items() if k not in self._WRAPPER_INIT_FIELDS}
+            wrapper_kwargs = {k: v for k, v in kwargs.items() if k in self._WRAPPER_INIT_FIELDS}
+            adapter = instantiate_custom_embedding_adapter(adapter=adapter, init_kwargs=adapter_kwargs)
+        else:
+            if adapter is None:
+                raise ValueError('Custom embedding client requires adapter when adapter instance is not provided.')
+            wrapper_kwargs = kwargs
+            if not _is_custom_embedding_adapter(adapter):
+                raise TypeError(f'Custom embedding adapter instance must define embedding(), got {type(adapter).__name__}')
+            adapter = cast(CustomEmbeddingAdapterProtocol, adapter)
+
+        super().__init__(**wrapper_kwargs)
+        self._adapter = adapter
+        for attr_name in ('max_tokens', 'support_image', 'support_audio', 'support_video'):
+            _copy_custom_embedding_attr_if_present(self, adapter, attr_name)
+        token_counter = getattr(adapter, 'token_counter', None)
+        if callable(token_counter):
+            self.token_counter = cast(Callable[[object], int], token_counter)
+
+    @classmethod
+    def TestingInput(cls) -> dict[str, object]:
+        return {
+            'inputs': ['ping'],
+            'kwargs': {'use_cache': False, 'save_cache': False, 'timeout': 8.0},
+        }
+
+    async def probe_min_health(self) -> bool:
+        override = await _call_custom_embedding_override(self._adapter, 'probe_min_health')
+        if override is not None:
+            return bool(override)
+
+        testing_input = getattr(type(self._adapter), 'TestingInput', None)
+        if callable(testing_input):
+            probe = cast(dict[str, Any], testing_input())
+            vectors = await self.embedding(__skip_log__=True, **probe)  # type: ignore[arg-type]
+            return bool(vectors)
+        return await super().probe_min_health()
+
+    def count_tokens(self, value: str | Image | Audio | Video) -> int:
+        count_tokens = getattr(self._adapter, 'count_tokens', None)
+        if callable(count_tokens):
+            try:
+                counted = int(count_tokens(value))
+                if counted >= 0:
+                    return counted
+            except Exception:
+                pass
+        return super().count_tokens(value)
+
+    async def _embedding_impl(self, inputs: Sequence[str | Image | Audio | Video], **kwargs: object) -> list[list[float]]:
+        result = await _resolve_custom_embedding_awaitable(self._adapter.embedding(inputs, **cast(dict[str, Any], kwargs)))
+        return _normalize_custom_embedding_result(result)
+
+    def close(self, reason: str | None = None) -> None:
+        close_func = getattr(self._adapter, 'close', None)
+        if callable(close_func):
+            try:
+                run_any_func(close_func)
+            except Exception:
+                pass
+        super().close(reason=reason)
+
+
 __all__ += [
     'OverflowHandleMode',
     'EmbeddingRequestParams',
     'EmbeddingHealthProbeInput',
     'EmbeddingClientInitParams',
+    'OpenAILikedEmbeddingClientCreateParams',
+    'OpenRouterEmbeddingClientCreateParams',
+    'ThinkThinkSynEmbeddingClientCreateParams',
     'EmbeddingClient',
     'ThinkThinkSynEmbeddingClient',
+    'OpenAILikedEmbeddingClient',
+    'OpenRouterEmbeddingClient',
     'EmbeddingService',
     'EmbeddedChunk',
     'EmbeddingRerankItem',
     'DiversityRerankItem',
+    'CustomEmbeddingAdapterProtocol',
+    'CustomEmbeddingClient',
+    'instantiate_custom_embedding_adapter',
+    'load_custom_embedding_adapter_module',
 ]

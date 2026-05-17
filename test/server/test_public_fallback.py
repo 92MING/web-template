@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for cached public fallback after route miss."""
 
+import os
 import sys
 import tempfile
 import unittest
@@ -204,6 +205,68 @@ class GalleryTestMediaRouteTest(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/test-media/sample-video.mp4")
         self.assertEqual(response.status_code, 200)
         self.assertIn("video", response.headers.get("content-type", ""))
+
+
+class DashboardModePublicFallbackTest(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        import core.server.app as core_app_module
+
+        core_app_module._app = None
+        cls._old_dashboard_mode = os.environ.get("__DASHBOARD_MODE__")
+        os.environ["__DASHBOARD_MODE__"] = "1"
+        cls._tmp_dir_obj = tempfile.TemporaryDirectory(prefix="proj_dashboard_mode_fallback_")
+        root = Path(cls._tmp_dir_obj.name)
+        cls._extra_app_dir = root / "extra-app"
+        cls._extra_public_dir = root / "extra-public"
+        (cls._extra_app_dir / "posts" / "_slug_").mkdir(parents=True)
+        (cls._extra_public_dir / "posts" / "_slug_").mkdir(parents=True)
+
+        (cls._extra_app_dir / "posts" / "_slug_" / "index.html").write_text(
+            "<html><body>APP DASHBOARD POST</body></html>",
+            encoding="utf-8",
+        )
+        (cls._extra_public_dir / "posts" / "_slug_" / "index.html").write_text(
+            "<html><body>PUBLIC DASHBOARD POST</body></html>",
+            encoding="utf-8",
+        )
+
+        cfg = Config()
+        cfg.server_config.extra_app_paths = [str(cls._extra_app_dir)]
+        cfg.server_config.extra_public_paths = [str(cls._extra_public_dir)]
+        cls.app = create_app(config=cfg)
+
+    @classmethod
+    def tearDownClass(cls):
+        import core.server.app as core_app_module
+
+        core_app_module._app = None
+        if cls._old_dashboard_mode is None:
+            os.environ.pop("__DASHBOARD_MODE__", None)
+        else:
+            os.environ["__DASHBOARD_MODE__"] = cls._old_dashboard_mode
+        if getattr(cls, "_tmp_dir_obj", None) is not None:
+            cls._tmp_dir_obj.cleanup()
+
+    async def asyncSetUp(self):
+        self.transport = httpx.ASGITransport(app=self.app)
+        self.client = httpx.AsyncClient(transport=self.transport, base_url="http://testserver")
+
+    async def asyncTearDown(self):
+        await self.client.aclose()
+
+    async def test_root_redirects_to_admin_panel_in_dashboard_mode(self):
+        response = await self.client.get("/", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers.get("location"), "/_internal/admin/panel")
+
+    async def test_dashboard_mode_ignores_app_html_fallback(self):
+        response = await self.client.get("/posts/hello-dashboard")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PUBLIC DASHBOARD POST", response.text)
+        self.assertNotIn("APP DASHBOARD POST", response.text)
 
 
 if __name__ == "__main__":

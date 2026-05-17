@@ -13,7 +13,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, ClassVar, Literal, Self, Sequence, TYPE_CHECKING, Coroutine, TypeAlias
 from pydantic_core import core_schema
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageColor as PILImageColor
 
 from ....type_utils import bytes_to_base64
 from ....concurrent_utils import run_any_func, is_async_callable
@@ -195,7 +195,7 @@ _IMAGE_OWN_ATTRS = frozenset({
     'load', '_ensure_loaded',
     'pixel_count', 'channel_count', 'size_in_bytes',
     'tobytes', 'to_bytes', 'to_base64', 'to_md5_hash',
-    'copy', 'crop', 'crop_into', 'New', 'CastPILImage',
+    'copy', 'crop', 'crop_into', 'replace_background', 'New', 'CastPILImage',
     'pydantic_dump', 'to_llm', 'save',
     '__init__', '__repr__', '__class__', '__dict__',
     '__getattr__', '__getattribute__', '__setattr__',
@@ -456,6 +456,50 @@ class Image(_ImageBase):
             return [self.crop(box) for box in boxes]
         else:
             raise ValueError(f'Invalid method: {method}')
+
+    def replace_background(
+        self,
+        background: str | tuple[int, int, int] | tuple[int, int, int, int] | None,
+        *,
+        tolerance: int = 8,
+    ) -> Self:
+        """Replace the flat corner background with a color or transparency."""
+        if background is None:
+            return self.copy()
+        img = self._ensure_loaded().convert('RGBA')
+        arr = np.array(img)
+        if arr.size == 0:
+            return self.__class__.CastPILImage(img)
+
+        corners = np.array([
+            arr[0, 0, :3],
+            arr[0, -1, :3],
+            arr[-1, 0, :3],
+            arr[-1, -1, :3],
+        ])
+        values, counts = np.unique(corners, axis=0, return_counts=True)
+        corner_rgb = values[int(np.argmax(counts))]
+        diff = np.abs(arr[:, :, :3].astype(np.int16) - corner_rgb.astype(np.int16)).max(axis=2)
+        mask = diff <= max(0, int(tolerance))
+
+        text = str(background).strip().lower() if isinstance(background, str) else ''
+        if text in {'transparent', 'none', 'alpha'}:
+            arr[:, :, 3] = np.where(mask, 0, arr[:, :, 3])
+            return self.__class__.CastPILImage(PILImage.fromarray(arr, 'RGBA'))
+
+        if isinstance(background, tuple):
+            color = tuple(int(max(0, min(255, item))) for item in background)
+        else:
+            color = PILImageColor.getrgb(str(background))
+        if len(color) == 3:
+            fill_rgba = (*color, 255)
+        else:
+            fill_rgba = color[:4]
+        arr[mask] = fill_rgba
+        out = PILImage.fromarray(arr, 'RGBA')
+        if fill_rgba[3] == 255 and np.all(arr[:, :, 3] == 255):
+            out = out.convert('RGB')
+        return self.__class__.CastPILImage(out)
 
     @classmethod
     def New(

@@ -411,25 +411,17 @@ def build_frontend_bootstrap_script() -> str:
             "ui_translate": server_cfg.get_internal_admin_path("api/ui_translate"),
             "ui_translate_all": server_cfg.get_internal_admin_path("api/ui_translate/all"),
         }
-        rtc_room_urls = {
-            "room": server_cfg.get_internal_path("rtc_room/room"),
-            "create": server_cfg.get_internal_path("rtc_room/create"),
-            "join": server_cfg.get_internal_path("rtc_room/join"),
-            "test_audio": server_cfg.get_internal_path("rtc_room/test-audio"),
-        }
         ai_api_base = server_cfg.get_internal_path("ai")
     except Exception:
         admin_urls = {}
-        rtc_room_urls = {}
         ai_api_base = ""
-    admin_urls_signature = json.dumps({"admin": admin_urls, "rtc_room": rtc_room_urls, "ai_api_base": ai_api_base}, sort_keys=True)
+    admin_urls_signature = json.dumps({"admin": admin_urls, "ai_api_base": ai_api_base}, sort_keys=True)
     if _bootstrap_cache is not None and _bootstrap_cache[0] == baseurl and _bootstrap_cache[1] == admin_urls_signature:
         return _bootstrap_cache[2]
 
     payload = {
         "frontend_baseurl": baseurl,
         "admin_urls": admin_urls,
-        "rtc_room_urls": rtc_room_urls,
         "ai_api_base": ai_api_base,
     }
     payload_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
@@ -467,7 +459,6 @@ def build_frontend_bootstrap_script() -> str:
     resolveUrl: resolveUrl,
   }});
   window.__ADMIN_URLS__ = Object.assign({{}}, window.__ADMIN_URLS__ || {{}}, payload.admin_urls || {{}});
-  window.__RTC_ROOM_URLS__ = Object.assign({{}}, window.__RTC_ROOM_URLS__ || {{}}, payload.rtc_room_urls || {{}});
   window.__AI_API_BASE__ = typeof payload.ai_api_base === 'string' ? payload.ai_api_base : '';
   window.projResolveUrl = resolveUrl;
 

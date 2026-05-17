@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebRTC Room</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --bg-accent: #e6dcc8;
+      --card: rgba(255, 252, 246, 0.86);
+      --card-border: rgba(92, 63, 33, 0.12);
+      --text: #24180f;
+      --muted: #705947;
+      --brand: #d36b2c;
+      --brand-dark: #9f4312;
+      --ink: #1b120d;
+      --shadow: 0 30px 80px rgba(73, 46, 23, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(211, 107, 44, 0.20), transparent 28%),
+        radial-gradient(circle at right center, rgba(122, 96, 64, 0.16), transparent 24%),
+        linear-gradient(180deg, var(--bg), #fbf7ef 48%, #efe7d9 100%);
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .hero {
+      width: min(100%, 1040px);
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .stage,
+    .panel {
+      border: 1px solid var(--card-border);
+      background: var(--card);
+      backdrop-filter: blur(20px);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .stage {
+      padding: 40px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .stage::before,
+    .stage::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+
+    .stage::before {
+      width: 220px;
+      height: 220px;
+      right: -46px;
+      top: -60px;
+      background: radial-gradient(circle, rgba(211, 107, 44, 0.36), rgba(211, 107, 44, 0));
+    }
+
+    .stage::after {
+      width: 180px;
+      height: 180px;
+      left: -40px;
+      bottom: -70px;
+      background: radial-gradient(circle, rgba(78, 56, 39, 0.22), rgba(78, 56, 39, 0));
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(40px, 6vw, 72px);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+      max-width: 8ch;
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 34rem;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.75;
+    }
+
+    .cta-row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .primary,
+    .secondary,
+    .ghost {
+      border: 0;
+      border-radius: 18px;
+      padding: 15px 18px;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--brand), #ef9a54);
+      color: #fff7ef;
+      box-shadow: 0 18px 34px rgba(211, 107, 44, 0.28);
+    }
+
+    .secondary {
+      background: rgba(36, 24, 15, 0.08);
+      color: var(--ink);
+    }
+
+    .ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid rgba(36, 24, 15, 0.12);
+    }
+
+    .primary:hover,
+    .secondary:hover,
+    .ghost:hover { transform: translateY(-1px); }
+
+    .tiles {
+      margin-top: auto;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .tile {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(36, 24, 15, 0.08);
+    }
+
+    .tile strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .tile span {
+      display: block;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .panel {
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      justify-content: space-between;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .quick-box {
+      padding: 16px 18px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.64), rgba(248,241,231,0.7));
+      border: 1px solid rgba(36, 24, 15, 0.08);
+      display: grid;
+      gap: 8px;
+    }
+
+    .quick-box code {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(27, 18, 13, 0.92);
+      color: #f8ede0;
+      overflow-wrap: anywhere;
+      font-family: "Consolas", "SFMono-Regular", monospace;
+      font-size: 12px;
+    }
+
+    dialog {
+      width: min(460px, calc(100vw - 24px));
+      border: 0;
+      padding: 0;
+      border-radius: 26px;
+      box-shadow: 0 30px 80px rgba(35, 22, 13, 0.24);
+      background: #fffaf2;
+      color: var(--text);
+    }
+
+    dialog::backdrop { background: rgba(20, 13, 8, 0.4); }
+
+    .dialog-body {
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .dialog-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .dialog-title h3 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    input {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(36, 24, 15, 0.14);
+      padding: 13px 14px;
+      font: inherit;
+      background: rgba(255,255,255,0.9);
+      color: var(--ink);
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .checkbox-row input {
+      width: 18px;
+      height: 18px;
+      padding: 0;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .feedback {
+      min-height: 22px;
+      font-size: 13px;
+      color: var(--brand-dark);
+    }
+
+    @media (max-width: 920px) {
+      .hero { grid-template-columns: 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .stage { padding: 28px; }
+      h1 { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="stage">
+        <div class="eyebrow">WebRTC Room</div>
+        <h1>One click. One room. Ready to talk.</h1>
+        <p class="lead">这是一个直接复用内置 webrtc-room 插件的极简会议示例。首页只有创建与加入两个动作，创建后会立刻进入会议界面，同时生成可直接分享的加入链接。</p>
+        <div class="cta-row">
+          <button class="primary" id="open-create" type="button">创建房间</button>
+          <button class="secondary" id="open-join" type="button">加入房间</button>
+        </div>
+        <div class="tiles">
+          <div class="tile"><strong>直接分享</strong><span>创建成功后会自动生成分享链接，别人点开即可进入。</span></div>
+          <div class="tile"><strong>房号 + 密码</strong><span>如果你不想发链接，也可以只发房号和密码给对方。</span></div>
+          <div class="tile"><strong>纯插件驱动</strong><span>音视频、房间状态、候选人管理全部走内置 webrtc-room 插件。</span></div>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <div>
+          <h2>这套例子适合什么场景</h2>
+          <p>快速做一个类似 Zoom 的“创建会议 / 加入会议”入口页，外层保留自己的品牌与分享体验，房间内部则继续使用框架现成的 RTC 组件。</p>
+        </div>
+        <div class="quick-box">
+          <strong>推荐测试方式</strong>
+          <p>打开两个浏览器窗口，创建房间后复制分享链接到另一个窗口；或者在首页直接输入房号和密码加入。</p>
+          <code id="remember-name">显示名称会保存在当前浏览器，下一次自动带出。</code>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="create-dialog">
+    <form method="dialog" class="dialog-body" id="create-form">
+      <div class="dialog-title">
+        <h3>创建房间</h3>
+        <button class="ghost" value="cancel" type="submit">关闭</button>
+      </div>
+      <div class="form-grid">
+        <label>你的显示名称
+          <input id="create-user-name" name="user_name" maxlength="40" placeholder="例如：Alice" required />
+        </label>
+        <label>房间标题
+          <input id="create-room-name" name="room_name" maxlength="60" placeholder="例如：产品设计评审" />
+        </label>
+        <label>房间密码（可选）
+          <input id="create-room-password" name="room_password" maxlength="64" placeholder="留空则任何拿到房号的人都能加入" />
+        </label>
+        <label class="checkbox-row"><input id="create-close-on-leave" type="checkbox" checked /> 创建者离开后自动关闭房间</label>
+      </div>
+      <div class="feedback" id="create-feedback"></div>
+      <div class="dialog-actions">
+        <button class="secondary" value="cancel" type="submit">取消</button>
+        <button class="primary" id="create-submit" value="default" type="button">进入房间</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="join-dialog">
+    <form method="dialog" class="dialog-body" id="join-form">
+      <div class="dialog-title">
+        <h3>加入房间</h3>
+        <button class="ghost" value="cancel" type="submit">关闭</button>
+      </div>
+      <div class="form-grid">
+        <label>你的显示名称
+          <input id="join-user-name" name="user_name" maxlength="40" placeholder="例如：Bob" required />
+        </label>
+        <label>房间号码
+          <input id="join-room-id" name="room_id" placeholder="粘贴房间号" required />
+        </label>
+        <label>房间密码
+          <input id="join-room-password" name="room_password" maxlength="64" placeholder="没有密码就留空" />
+        </label>
+      </div>
+      <div class="feedback" id="join-feedback"></div>
+      <div class="dialog-actions">
+        <button class="secondary" value="cancel" type="submit">取消</button>
+        <button class="primary" id="join-submit" value="default" type="button">进入房间</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = 'webrtc-room.example.display-name';
+
+    const createDialog = document.getElementById('create-dialog');
+    const joinDialog = document.getElementById('join-dialog');
+    const createFeedback = document.getElementById('create-feedback');
+    const joinFeedback = document.getElementById('join-feedback');
+
+    const createNameInput = document.getElementById('create-user-name');
+    const createRoomNameInput = document.getElementById('create-room-name');
+    const createRoomPasswordInput = document.getElementById('create-room-password');
+    const createCloseCheckbox = document.getElementById('create-close-on-leave');
+
+    const joinNameInput = document.getElementById('join-user-name');
+    const joinRoomIdInput = document.getElementById('join-room-id');
+    const joinRoomPasswordInput = document.getElementById('join-room-password');
+
+    function getSavedDisplayName() {
+      return String(localStorage.getItem(STORAGE_KEY) || '').trim();
+    }
+
+    function saveDisplayName(name) {
+      const normalized = String(name || '').trim();
+      if (normalized) localStorage.setItem(STORAGE_KEY, normalized);
+    }
+
+    function openDialog(dialog, input) {
+      const remembered = getSavedDisplayName();
+      createNameInput.value = remembered;
+      joinNameInput.value = remembered;
+      dialog.showModal();
+      requestAnimationFrame(() => input.focus());
+    }
+
+    function buildJoinUrl({ roomId, password, userName }) {
+      const params = new URLSearchParams({
+        mode: 'join',
+        room_id: roomId,
+        user_name: userName,
+      });
+      if (password) params.set('password', password);
+      return `/room.html?${params.toString()}`;
+    }
+
+    async function createRoom() {
+      const userName = String(createNameInput.value || '').trim();
+      if (!userName) {
+        createFeedback.textContent = '请输入显示名称';
+        return;
+      }
+      createFeedback.textContent = '正在创建房间…';
+      try {
+        const response = await fetch('/api/meeting/create', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            user_name: userName,
+            room_name: String(createRoomNameInput.value || '').trim() || null,
+            room_password: String(createRoomPasswordInput.value || '').trim() || null,
+            close_room_on_creator_left: !!createCloseCheckbox.checked,
+          }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok || !payload?.room_url) {
+          throw new Error(payload?.error || `HTTP ${response.status}`);
+        }
+        saveDisplayName(userName);
+        location.href = payload.room_url;
+      } catch (error) {
+        createFeedback.textContent = String(error?.message || error || '创建失败');
+      }
+    }
+
+    function joinRoom() {
+      const userName = String(joinNameInput.value || '').trim();
+      const roomId = String(joinRoomIdInput.value || '').trim();
+      const password = String(joinRoomPasswordInput.value || '').trim();
+      if (!userName || !roomId) {
+        joinFeedback.textContent = '请填写显示名称和房间号码';
+        return;
+      }
+      saveDisplayName(userName);
+      location.href = buildJoinUrl({ roomId, password, userName });
+    }
+
+    document.getElementById('open-create').addEventListener('click', () => openDialog(createDialog, createNameInput));
+    document.getElementById('open-join').addEventListener('click', () => openDialog(joinDialog, joinNameInput));
+    document.getElementById('create-submit').addEventListener('click', () => { void createRoom(); });
+    document.getElementById('join-submit').addEventListener('click', joinRoom);
+
+    const remembered = getSavedDisplayName();
+    if (remembered) {
+      createNameInput.value = remembered;
+      joinNameInput.value = remembered;
+      document.getElementById('remember-name').textContent = `当前默认显示名称：${remembered}`;
+    }
+  </script>
+</body>
+</html>

@@ -26,13 +26,9 @@ from typing import (
 
 from core.ai.shared import AIServiceKind
 from core.storage.config import close_global_storage_clients
-from core.rtc_chat.room import close_all_rooms, RoomInfo
 from core.utils.concurrent_utils.shared_obj import CrossProcessSharedObject, _close_all_managers
 
 from .app import on_app_shutdown, on_uvicorn_close
-
-# close rooms per-worker (safe to call from each worker)
-on_app_shutdown(close_all_rooms)
 
 # close storage clients per-worker so sqlite/aiosqlite background threads do not hang interpreter shutdown
 on_app_shutdown(close_global_storage_clients)
@@ -88,6 +84,14 @@ class AIServiceRuntimeUpdateResult(TypedDict):
     version: int
     service_kinds: list[AIServiceKind]
     error: NotRequired[str | None]
+
+class AIServiceClientValueUpdateRow(TypedDict):
+    version: int
+    service_type: str
+    service_key: str
+    client_key: str
+    values: dict[str, object]
+    updated_at: str
 
 class DiskSnapshotPayload(TypedDict):
     used_gb: float
@@ -222,6 +226,19 @@ def _iso_from_time_ns(value: int) -> str | None:
 
 def _monotonic_seconds_int() -> int:
     return int(time.monotonic())
+
+def _process_is_alive(pid: int) -> bool:
+    try:
+        import psutil
+
+        process = psutil.Process(int(pid))
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+    except Exception:
+        try:
+            os.kill(int(pid), 0)
+            return True
+        except Exception:
+            return False
 
 def _pack_worker_slot(
     buf: memoryview,
@@ -490,12 +507,7 @@ class WorkerAIServiceClientValueMessage(WorkerMessage):
     service_type: str
     service_key: str
     client_key: str
-    update_max_concurrent: bool = False
-    max_concurrent: int | None = None
-    update_priority: bool = False
-    priority: float | None = None
-    update_strategy_lvl: bool = False
-    strategy_lvl: int | None = None
+    values: dict[str, object] = field(default_factory=dict)
 
     async def handle(self, app: FastAPI) -> dict[str, object]:
         from .routes.ai_services.panel import apply_ai_service_client_value_update
@@ -503,12 +515,7 @@ class WorkerAIServiceClientValueMessage(WorkerMessage):
             service_type=self.service_type,
             service_key=self.service_key,
             client_key=self.client_key,
-            update_max_concurrent=self.update_max_concurrent,
-            max_concurrent=self.max_concurrent,
-            update_priority=self.update_priority,
-            priority=self.priority,
-            update_strategy_lvl=self.update_strategy_lvl,
-            strategy_lvl=self.strategy_lvl,
+            values=self.values,
         )
         return result.model_dump(mode='python')
 
@@ -546,6 +553,36 @@ class WorkerStorageForgetMessage(WorkerMessage):
             client_name=self.client_name,
             collection=self.collection,
         )
+
+
+@dataclass(kw_only=True)
+class WorkerPluginRuntimeMessage(WorkerMessage):
+    event: Literal['plugin-runtime'] = 'plugin-runtime'
+    action: Literal['register', 'delete', 'restart']
+    path: str
+    plugin_key: str = ''
+    config: dict[str, object] | None = None
+    plugin_configs: dict[str, dict[str, object]] = field(default_factory=dict)
+
+    async def handle(self, app: FastAPI) -> dict[str, object]:
+        from .plugin import _apply_local_worker_plugin_action, _apply_local_worker_registered_plugin_action
+
+        if self.plugin_key:
+            result = await _apply_local_worker_registered_plugin_action(
+                cast(Literal['restart', 'delete'], self.action),
+                self.plugin_key,
+                app,
+                shared_config=self.config,
+            )
+        else:
+            result = await _apply_local_worker_plugin_action(
+                self.action,
+                self.path,
+                app,
+                shared_config=self.config,
+                plugin_configs=self.plugin_configs,
+            )
+        return result.model_dump(mode='python')
 
 # endregion
 
@@ -631,11 +668,12 @@ class AppSharedData(CrossProcessSharedObject):
     if TYPE_CHECKING:
         workers: dict[int, WorkerInfo]
         worker_generations: dict[int, int]
-        room_worker_map: dict[str, int]  # {room_id: worker_pid}
         ai_services_config_json: str | None
         ai_services_config_version: int
         ai_services_config_updated_at: str | None
         ai_services_reload_state: dict[int, AIServiceReloadStateRow]
+        ai_service_client_value_version: int
+        ai_service_client_value_updates: dict[int, AIServiceClientValueUpdateRow]
         instance_uuid: str
         server_start_time: str | None
         cache_scope: CacheScope
@@ -644,11 +682,12 @@ class AppSharedData(CrossProcessSharedObject):
         # ``id`` is required by CrossProcessSharedObject but unused here.
         self.workers: dict[int, WorkerInfo] = {}
         self.worker_generations: dict[int, int] = {}
-        self.room_worker_map: dict[str, int] = {}
         self.ai_services_config_json: str | None = None
         self.ai_services_config_version: int = 0
         self.ai_services_config_updated_at: str | None = None
         self.ai_services_reload_state: dict[int, AIServiceReloadStateRow] = {}
+        self.ai_service_client_value_version: int = 0
+        self.ai_service_client_value_updates: dict[int, AIServiceClientValueUpdateRow] = {}
         self.instance_uuid = os.getenv("__SERVER_INSTANCE_ID__") or str(uuid.uuid4())
         os.environ.setdefault("__SERVER_INSTANCE_ID__", self.instance_uuid)
         self.server_start_time = os.getenv("__SERVER_START_TIME__")
@@ -711,20 +750,27 @@ class AppSharedData(CrossProcessSharedObject):
         row = _read_worker_slot(self._worker_shm.buf, slot)
         status = row["status"]
         alive_at = int(row["alive_at_monotonic"])
-        if int(row["pid"]) <= 0:
+        pid = int(row["pid"])
+        if pid <= 0:
             return True
         if status == "dead":
-            return True
+            return not _process_is_alive(pid)
         if alive_at <= 0:
             return False
         now = _monotonic_seconds_int() if now_monotonic is None else now_monotonic
-        return now - alive_at > _WORKER_SHM_DEAD_AFTER_SECONDS
+        if now - alive_at <= _WORKER_SHM_DEAD_AFTER_SECONDS:
+            return False
+        return not _process_is_alive(pid)
 
     def _worker_info_from_slot(self, info: WorkerInfo) -> WorkerInfo:
         if info.shm_slot is None:
             return info
         row = _read_worker_slot(self._worker_shm.buf, info.shm_slot)
         if int(row["pid"]) != info.pid or int(row["generation"]) != info.generation:
+            if _process_is_alive(info.pid):
+                info.dead = False
+                info.status = "running"
+                return info
             info.dead = True
             info.status = "dead"
             return info
@@ -775,7 +821,6 @@ class AppSharedData(CrossProcessSharedObject):
                 _other_worker_socket_locks.pop(key, None)
 
     def _cleanup_dead_worker(self, pid: int, info: WorkerInfo) -> None:
-        self.cleanup_worker_rooms(pid)
         self._invalidate_worker_client_cache(pid, info.generation)
 
     def sweep_dead_workers(self) -> int:
@@ -903,7 +948,11 @@ class AppSharedData(CrossProcessSharedObject):
                 generation=info.generation,
                 request_count=int(existing_row["request_count"]) if preserve_existing else info.request_count,
                 last_request_at_ns=int(existing_row["last_request_at_ns"]) if preserve_existing else 0,
-                alive_at_monotonic=int(existing_row["alive_at_monotonic"]) if preserve_existing else 0,
+                alive_at_monotonic=(
+                    int(existing_row["alive_at_monotonic"])
+                    if preserve_existing and int(existing_row["alive_at_monotonic"]) > 0
+                    else _monotonic_seconds_int()
+                ),
                 msg_port=info.msg_port,
                 lifespan_ready=bool(existing_row["lifespan_ready"]) if preserve_existing else info.lifespan_ready,
                 status=info.status,
@@ -999,78 +1048,6 @@ class AppSharedData(CrossProcessSharedObject):
             "slots": self._worker_shm_slots,
         }
 
-    # ---- WebRTC room-to-worker mapping ----
-    def update_room_worker(self, room_id: str, worker_pid: int) -> None:
-        '''Map a room to the worker handling it.'''
-        try:
-            self.get_worker(worker_pid)
-        except Exception as exc:
-            raise ValueError(f"Cannot map room {room_id} to dead worker {worker_pid}") from exc
-        self.room_worker_map[room_id] = worker_pid
-
-    def delete_room_worker(self, room_id: str) -> int | None:
-        '''Remove the room-to-worker mapping.'''
-        return self.room_worker_map.pop(room_id, None)
-
-    def get_room_worker(self, room_id: str) -> int | None:
-        '''Get the worker PID assigned to a room.'''
-        worker_pid = self.room_worker_map.get(room_id)
-        if worker_pid is None:
-            return None
-        try:
-            self.get_worker(worker_pid)
-        except Exception:
-            self.room_worker_map.pop(room_id, None)
-            return None
-        return worker_pid
-
-    def cleanup_worker_rooms(self, worker_pid: int) -> int:
-        '''Remove all room mappings owned by a worker.'''
-        room_ids = [room_id for room_id, pid in self.room_worker_map.items() if pid == worker_pid]
-        for room_id in room_ids:
-            self.room_worker_map.pop(room_id, None)
-        return len(room_ids)
-
-    def get_all_room_info(self) -> list[RoomInfo]:
-        '''Return a list of all room info entries.'''
-        self.sweep_dead_workers()
-        infos: list[RoomInfo] = []
-        for room_id, worker_id in list(self.room_worker_map.items()):
-            try:
-                self.get_worker(worker_id)
-            except Exception:
-                self.room_worker_map.pop(room_id, None)
-                continue
-            infos.append(RoomInfo(id=room_id, worker=worker_id))
-        return infos
-
-    def worker_running_room_count(self, worker_pid: int) -> int:
-        '''Count how many rooms are running on a given worker.'''
-        count = 0
-        for wid in self.room_worker_map.values():
-            if wid == worker_pid:
-                count += 1
-        return count
-
-    def pick_least_room_running_worker(self, prefer_pid: int | None = None) -> int | None:
-        '''Pick the worker with the fewest rooms; fallback to prefer_pid if all equal.'''
-        workers = self.get_workers_snapshot()
-        if not workers:
-            return prefer_pid
-        min_count: int | None = None
-        candidates: list[int] = []
-        for worker in workers:
-            pid = worker["pid"]
-            room_count = self.worker_running_room_count(pid)
-            if min_count is None or room_count < min_count:
-                min_count = room_count
-                candidates = [pid]
-            elif room_count == min_count:
-                candidates.append(pid)
-        if prefer_pid is not None and prefer_pid in candidates:
-            return prefer_pid
-        return candidates[0] if candidates else prefer_pid
-
     # ---- Exam task/session worker mapping ----
     def set_ai_services_config(self, serialized_config: str | None, *, version: int | None = None) -> AIServiceConfigSnapshot:
         next_version = int(version) if version is not None else (int(self.ai_services_config_version) + 1)
@@ -1114,6 +1091,43 @@ class AppSharedData(CrossProcessSharedObject):
             dict(self.ai_services_reload_state[pid])
             for pid in sorted(self.ai_services_reload_state)
         ]   # type: ignore
+
+    def record_ai_service_client_value_update(
+        self,
+        *,
+        service_type: str,
+        service_key: str,
+        client_key: str,
+        values: dict[str, object] | None = None,
+    ) -> AIServiceClientValueUpdateRow:
+        if not hasattr(self, 'ai_service_client_value_version'):
+            self.ai_service_client_value_version = 0
+        if not hasattr(self, 'ai_service_client_value_updates'):
+            self.ai_service_client_value_updates = {}
+        self.ai_service_client_value_version = int(self.ai_service_client_value_version) + 1
+        row: AIServiceClientValueUpdateRow = {
+            'version': int(self.ai_service_client_value_version),
+            'service_type': str(service_type),
+            'service_key': str(service_key),
+            'client_key': str(client_key),
+            'values': dict(values or {}),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }
+        self.ai_service_client_value_updates[row['version']] = row
+        if len(self.ai_service_client_value_updates) > 512:
+            for old_version in sorted(self.ai_service_client_value_updates)[:-512]:
+                self.ai_service_client_value_updates.pop(old_version, None)
+        return dict(row)  # type: ignore[return-value]
+
+    def get_ai_service_client_value_updates_since(self, version: int = 0) -> list[AIServiceClientValueUpdateRow]:
+        if not hasattr(self, 'ai_service_client_value_updates'):
+            self.ai_service_client_value_updates = {}
+        min_version = int(version or 0)
+        return [
+            dict(self.ai_service_client_value_updates[row_version])
+            for row_version in sorted(self.ai_service_client_value_updates)
+            if int(row_version) > min_version
+        ]  # type: ignore[return-value]
 
     # ---- Lightweight cache helpers ----
     @overload
@@ -1382,7 +1396,11 @@ def touch_current_worker_runtime(status: WorkerRuntimeStatus = "running") -> boo
 
 def mark_current_worker_lifespan_ready() -> bool:
     """Mark current worker lifespan ready without RPC."""
-    return _write_current_worker_slot(lifespan_ready=True, status="running")
+    return _write_current_worker_slot(
+        alive_at_monotonic=_monotonic_seconds_int(),
+        lifespan_ready=True,
+        status="running",
+    )
 
 def update_current_worker_msg_port(msg_port: int) -> bool:
     """Update current worker message port in SharedMemory without RPC."""
@@ -1435,11 +1453,11 @@ def _worker_info_from_shared_row(
 ) -> WorkerInfo | None:
     if int(row["pid"]) != pid or int(row["generation"]) != generation:
         return None
-    if row["status"] == "dead":
+    if row["status"] == "dead" and not _process_is_alive(pid):
         return None
     alive_at = int(row["alive_at_monotonic"])
     dead = alive_at > 0 and _monotonic_seconds_int() - alive_at > _WORKER_SHM_DEAD_AFTER_SECONDS
-    if dead:
+    if dead and not _process_is_alive(pid):
         return None
     return WorkerInfo(
         pid=pid,
@@ -1479,6 +1497,14 @@ def get_worker_info(pid: int) -> WorkerInfo | None:
     except Exception:
         with _worker_info_cache_lock:
             _worker_info_cache.pop(pid, None)
+        if _process_is_alive(pid):
+            try:
+                fallback = AppSharedData.Get().get_worker(pid)
+                fallback.dead = False
+                fallback.status = "running"
+                return fallback
+            except Exception:
+                pass
         return None
     info = _worker_info_from_shared_row(
         pid=pid,
@@ -1490,6 +1516,14 @@ def get_worker_info(pid: int) -> WorkerInfo | None:
     )
     if info is not None:
         return info
+    if _process_is_alive(pid):
+        try:
+            fallback = AppSharedData.Get().get_worker(pid)
+            fallback.dead = False
+            fallback.status = "running"
+            return fallback
+        except Exception:
+            pass
     with _worker_info_cache_lock:
         _worker_info_cache.pop(pid, None)
     try:
@@ -1508,7 +1542,7 @@ def get_worker_info(pid: int) -> WorkerInfo | None:
         row = _read_worker_slot(shm.buf, fresh.shm_slot)
     except Exception:
         return None
-    return _worker_info_from_shared_row(
+    info = _worker_info_from_shared_row(
         pid=pid,
         generation=fresh.generation,
         shm_slot=fresh.shm_slot,
@@ -1516,6 +1550,13 @@ def get_worker_info(pid: int) -> WorkerInfo | None:
         shm_name=fresh_name,
         row=row,
     )
+    if info is not None:
+        return info
+    if _process_is_alive(pid):
+        fresh.dead = False
+        fresh.status = "running"
+        return fresh
+    return None
 
 def drop_worker_client_cache(pid: int, generation: int | None = None) -> None:
     """Drop process-local worker info/socket/lock caches."""
@@ -1540,6 +1581,7 @@ def drop_worker_client_cache(pid: int, generation: int | None = None) -> None:
 
 __all__ = [
     "AIServiceConfigSnapshot",
+    "AIServiceClientValueUpdateRow",
     "AIServiceReloadStateRow",
     "AIServiceRuntimeUpdateResult",
     "CacheEntry",
@@ -1554,6 +1596,7 @@ __all__ = [
     "WorkerRedirectStreamChunk",
     "WorkerRedirectStreamEnd",
     "WorkerAIServiceClientValueMessage",
+    "WorkerPluginRuntimeMessage",
     "WorkerStorageBootstrapMessage",
     "WorkerStorageForgetMessage",
     "WorkerSnapshot",

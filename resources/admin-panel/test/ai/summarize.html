@@ -36,7 +36,7 @@
 <div class="ai-shell">
   <div class="ai-header">
     <div class="ai-header-main">
-      <a href="/admin/test/ai" class="ai-back-link">
+      <a href="../ai" class="ai-back-link">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
         <span>返回 AI 测试中心</span>
       </a>
@@ -44,7 +44,7 @@
       <p>用于验证长文本压缩质量、流式开关、参数调节和原文摘要对照效果。</p>
     </div>
     <div class="ai-pills">
-      <span class="ai-pill">POST /ai/summarize</span>
+      <span class="ai-pill">POST /ai/completion/{service|client}/{key}/summarize</span>
       <span class="ai-pill"><strong>长文本压缩</strong></span>
     </div>
   </div>
@@ -62,6 +62,14 @@
   <section class="ai-card" style="margin-top:16px;">
     <div class="ai-card-title"><h2>请求参数</h2></div>
     <div class="ai-grid-4">
+      <div class="ai-field">
+        <label for="service-target">Service/Client</label>
+        <select id="service-target" class="ai-select"><option value="service">service</option></select>
+      </div>
+      <div class="ai-field">
+        <label for="service-instance">Key</label>
+        <select id="service-instance" class="ai-select"><option value="default">default</option></select>
+      </div>
       <div class="ai-field">
         <label for="chunk-size">分块大小</label>
         <input id="chunk-size" type="number" class="ai-input" placeholder="自动" min="64" step="64"/>
@@ -130,8 +138,14 @@
 
 <div id="copy-toast" class="summary-copy-toast">已复制到剪贴板</div>
 
+<script src="/html-assets/js/ai-test-shared.js"></script>
 <script>
 'use strict';
+let targetController = null;
+
+function selectedTargetPath(operation) {
+  return targetController ? targetController.buildPath(operation) : `completion/service/default/${operation}`;
+}
 
 // ── Sample texts ──────────────────────────────────────────────────────────────
 const SAMPLES = {
@@ -243,7 +257,7 @@ async function doSummarize() {
   if (promptVal) body.prompt = promptVal;
 
   try {
-    const resp = await fetch(window.projAiApiPath('/ai/summarize'), {
+    const resp = await fetch(window.projAiApiPath(`/ai/${selectedTargetPath('summarize')}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -285,6 +299,7 @@ async function doSummarize() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+AITestShared.initServiceTargetControls('completion', 'service-target', 'service-instance').then((controller) => { targetController = controller; });
 updateCounts();
 setLayout('side');
 </script>

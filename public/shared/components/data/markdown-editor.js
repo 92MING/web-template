@@ -277,22 +277,7 @@ export class BuiltinMarkdownEditor extends BuiltinBaseElement {
     this._schedulePreviewEnhancement();
   }
 
-  connectedCallback() {
-    super.connectedCallback();
-    if (window.IntersectionObserver) {
-      this._visibilityObserver = new IntersectionObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && this._editor) {
-            requestAnimationFrame(() => this._editor?.codemirror?.refresh?.());
-          }
-        }
-      });
-      this._visibilityObserver.observe(this);
-    }
-  }
-
   disconnectedCallback() {
-    this._visibilityObserver?.disconnect();
     this._stopSplitDrag();
     this._editor?.toTextArea?.();
     this._editor = null;
@@ -366,17 +351,7 @@ export class BuiltinMarkdownEditor extends BuiltinBaseElement {
       const htmlValue = this._previewHtml();
       this.dispatchEvent(new CustomEvent("builtin-change", { detail: { value: this.value, html: htmlValue }, bubbles: true, composed: true }));
     });
-    // CodeMirror can fail to render content when initialized inside a hidden or
-    // zero-dimension container. Refresh repeatedly at staggered timings.
-    const refreshCm = () => this._editor?.codemirror?.refresh?.();
-    refreshCm();
-    requestAnimationFrame(() => {
-      refreshCm();
-      requestAnimationFrame(() => {
-        refreshCm();
-        setTimeout(refreshCm, 120);
-      });
-    });
+    requestAnimationFrame(() => this._editor?.codemirror?.refresh?.());
   }
 
   async _ensureMarked() {

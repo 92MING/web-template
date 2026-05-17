@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from ..storage.kv import KVClientBase
 
 
-AIServiceKind = Literal['completion', 'embedding', 's2t', 't2s']
+AIServiceKind = Literal['completion', 'embedding', 's2t', 't2s', 't2img']
 '''AI 服务的四种预定义 kind。'''
 
 ClientStatusValue = str | int | float | bool | None
@@ -545,7 +545,10 @@ def compute_client_hash(client: "ServiceClientBase") -> str:
     if cached is not None:
         return cached  # type: ignore[return-value]
 
-    params: dict[str, object] = {'__class__': type(client).__qualname__}
+    params: dict[str, object] = {
+        '__class__': type(client).__qualname__,
+        'key': getattr(client, 'key', None),
+    }
     for k in sorted(vars(client)):
         if k.startswith('_'):
             continue

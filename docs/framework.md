@@ -8,7 +8,7 @@
 - `/_internal/admin/openapi.json` 作为 internal 管理侧 OpenAPI 入口。
 - `SharedDict` / `GlobalSharedDict` 作为共享状态能力。
 - `KV`、`ORM`、`Object`、`Vector` 四类存储抽象。
-- `completion`、`embedding`、`s2t`、`t2s` 四类 AI service 抽象。
+- `completion`、`embedding`、`s2t`、`t2s`、`t2img` 五类 AI service 抽象。
 
 ## 项目结构
 
@@ -17,7 +17,6 @@ app/
   api/              # 业务 API，自动发现 Route
   core/
     ai/             # AI service 抽象与实现
-    rtc_chat/       # RTC / chat 基础模块
     server/         # FastAPI app、Route、管理面板、共享状态
     storage/        # KV / ORM / Object / Vector
     utils/          # 通用工具
@@ -26,6 +25,7 @@ app/
 config/             # 本地配置目录
 docs/               # 开发文档
 example/            # 示例项目
+plugin/             # 可插拔功能模块，例如 webrtc-chatroom
 resources/
   admin-panel/      # internal 管理面板资源
 scripts/            # 安装、运行、重启等脚本
@@ -96,7 +96,7 @@ AI 的公开别名 `/ai/*` 默认不会暴露。只有 `server_config.expose_ai_
 
 当前仓库不是“所有配置都塞进一个文件”的模式，而是三套独立配置：
 
-1. 服务主配置：`Config`，由 `server_config`、`log_config`、`rtc_room_config` 组成。
+1. 服务主配置：`Config`，由 `server_config`、`log_config`、`plugin_paths`、`plugin_configs` 组成。
 2. 存储配置：`StorageConfig`，由存储模块单独自动发现。
 3. AI 配置：`AIServicesConfig`，由 AI 模块单独自动发现。
 

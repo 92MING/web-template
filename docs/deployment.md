@@ -23,7 +23,8 @@ python -m app --production --server-port 8000 --server-worker 4
 
 - `server_config`
 - `log_config`
-- `rtc_room_config`
+- `plugin_paths`
+- `plugin_configs`
 
 一个可用的最小示例：
 
@@ -38,20 +39,14 @@ server_config:
   internal_path_allowed_ip:
     - 10.0.*
   expose_ai_service: false
-  enable_rtc_chatroom: false
 
 log_config:
   log_method:
     - db
 
-rtc_room_config:
-  audio_sample_rate: 16000
-  min_silence_ms: 1000
-  min_voice_ms: 200
-  mid_silence_ms: 500
-  max_segment_ms: 10000
-  min_energy_rms: 200
-  bundle_policy: balanced
+plugin_configs:
+  webrtc-chatroom:
+    enabled: false
 ```
 
 对应的完整示例见 [config/server_example.yaml](config/server_example.yaml)。
@@ -115,7 +110,6 @@ python -m app --production --ai-services-config config/ai_services.yaml
 | internal 路由暴露 | `server_config.expose_internal_prefix` | `--expose-internal-prefix` / `--hide-internal-prefix` | `EXPOSE_INTERNAL_PREFIX` |
 | internal IP 白名单 | `server_config.internal_path_allowed_ip` | `--internal-path-allowed-ip` | `INTERNAL_PATH_ALLOWED_IP` |
 | AI 公开别名 | `server_config.expose_ai_service` | `--expose-ai-service` | `EXPOSE_AI_SERVICE` |
-| RTC chatroom | `server_config.enable_rtc_chatroom` | `--enable-rtc-chatroom` / `--disable-rtc-chatroom` | `ENABLE_RTC_CHATROOM` |
 | 额外 app 目录 | `server_config.extra_app_paths` | `--extra-app-paths` | 无 |
 | 额外 public 目录 | `server_config.extra_public_paths` | `--extra-public-paths` | 无 |
 | 额外 resources 目录 | `server_config.extra_resources_paths` | `--extra-resources-paths` | 无 |

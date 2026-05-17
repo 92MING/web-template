@@ -23,9 +23,9 @@ server_config:
 
   # 是否公开 /ai/* 别名；/_internal/ai/* 始终是 internal 入口
   expose_ai_service: false
-
-  # 是否启用 RTC chatroom 功能；路由始终挂在 /_internal/rtc_room/*
-  enable_rtc_chatroom: false
+  # 是否公开兼容 AI 接口（OpenAI + Anthropic completion），例如 /ai/completion/service/default/openai/v1/chat/completions
+  # 以及 /ai/completion/service/default/anthropic/v1/messages
+  expose_compatible_ai_services: false
 
   # 可选：注入前端页面的 base URL
   frontend_baseurl: null
@@ -64,16 +64,22 @@ log_config:
   system_metrics_interval: 2
   system_metrics_retention_hours: 72
 
-rtc_room_config:
-  audio_sample_rate: 16000
-  min_silence_ms: 1000
-  min_voice_ms: 200
-  mid_silence_ms: 500
-  max_segment_ms: 10000
-  min_energy_rms: 200
-  bundle_policy: balanced
+plugins:
+  - path: plugin/webrtc-chatroom
+    config:
+      webrtc-chatroom:
+        enabled: false
+        audio_config:
+          audio_sample_rate: 16000
+          min_silence_ms: 1000
+          min_voice_ms: 200
+          mid_silence_ms: 500
+          max_segment_ms: 10000
+          min_energy_rms: 200
 
-  # 可选：显式指定 ICE servers
-  # ice_servers:
-  #   - urls:
-  #       - stun:stun.l.google.com:19302
+        # 可选：显式指定 RTC 配置
+        # rtc_config:
+        #   bundlePolicy: balanced
+        #   iceServers:
+        #     - urls:
+        #         - stun:stun.l.google.com:19302

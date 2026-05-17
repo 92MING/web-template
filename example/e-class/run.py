@@ -1,6 +1,9 @@
+import atexit
+import json
 import os
 import runpy
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -13,6 +16,15 @@ for p in (str(PROJECT_DIR), str(APP_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+
+def _write_chatroom_plugin_config() -> str:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json", delete=False) as file:
+        json.dump({"enabled": True}, file, ensure_ascii=False)
+        file.write("\n")
+        temp_path = file.name
+    atexit.register(lambda: Path(temp_path).unlink(missing_ok=True))
+    return temp_path
+
 def main() -> None:
     import argparse
     parser = argparse.ArgumentParser()
@@ -22,13 +34,16 @@ def main() -> None:
 
     extra_app = ",".join([str(HERE / "public"), str(HERE)])
     extra_public = str(HERE / "public")
+    plugin_path = str(PROJECT_DIR / "plugin" / "webrtc-chatroom")
+    plugin_config_path = _write_chatroom_plugin_config()
 
     cmd = [
         sys.executable,
         str(MAIN_PY),
         "--server-port", str(args.server_port),
         "--server-worker", str(args.server_worker),
-        "--enable-rtc-chatroom",
+        "--plugin", plugin_path,
+        "--plugin-config", plugin_config_path,
         "--extra-app-paths", extra_app,
         "--extra-public-paths", extra_public,
     ]

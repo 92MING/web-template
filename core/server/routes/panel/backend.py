@@ -13,7 +13,7 @@ from pydantic.fields import FieldInfo
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from core.server.translate import _register_internal_translation
+from core.server.translate import register_internal_translation
 from core.utils.type_utils import AdvancedBaseModel
 from core.server.constants import SERVER_DIR
 from core.server.data_types.config import Config
@@ -27,6 +27,19 @@ HK_TZ = timezone(timedelta(hours=8), name="Asia/Hong_Kong")
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient", "testserver"}
 logger = logging.getLogger(__name__)
 _shared_runtime_sync_failures: set[str] = set()
+
+def _process_is_alive(pid: int) -> bool:
+    try:
+        import psutil
+
+        process = psutil.Process(int(pid))
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+    except Exception:
+        try:
+            os.kill(int(pid), 0)
+            return True
+        except Exception:
+            return False
 
 class BackendRuntimeState(TypedDict):
     shared_manager_pid: int
@@ -55,7 +68,6 @@ class BackendWorkerInfo(BackendResponseModel):
     started_at: str | None = None
     last_request_at: str | None = None
     request_count: int | None = None
-    rooms_running: int | None = None
     dead: bool | None = None
 
 class BackendServerInfo(BackendResponseModel):
@@ -109,7 +121,6 @@ class BackendRuntimeResponse(AdvancedBaseModel):
     git: BackendGitInfo | None = None
     control: BackendResponseModel | None = None
     start_args: str | None = None
-    open_rooms: int | None = None
     runtime_warning: str | None = None
 
 class BackendSettingsResponse(AdvancedBaseModel):
@@ -172,18 +183,6 @@ def _zh_field_label(name: str) -> str:
         "zip_old_logs": "zip_old_logs",
         "log_rotation_interval": "log_rotation_interval",
         "rotation_time": "rotation_time",
-        "rtc_room_config": "rtc_room_config",
-        "audio_sample_rate": "audio_sample_rate",
-        "min_silence_ms": "min_silence_ms",
-        "min_voice_ms": "min_voice_ms",
-        "mid_silence_ms": "mid_silence_ms",
-        "max_segment_ms": "max_segment_ms",
-        "min_energy_rms": "min_energy_rms",
-        "ice_servers": "ice_servers",
-        "urls": "urls",
-        "username": "username",
-        "credential": "credential",
-        "bundle_policy": "bundle_policy",
     }
     return mapping.get(name, _humanize_label(name))
 
@@ -207,7 +206,6 @@ def _zh_field_description(path: str, description: str | None) -> str | None:
         "server_config": "server_config",
         "core_config": "core_config",
         "log_config": "log_config",
-        "rtc_room_config": "rtc_room_config",
         "server_config.reload": "server_config.reload",
         "log_config.zip_old_logs": "log_config.zip_old_logs",
     }
@@ -248,7 +246,7 @@ def _register_backend_settings_translations() -> None:
             ('zh-tw', zh_tw),
         ):
             if text is not None:
-                _register_internal_translation(alias, language, text, aliases=[alias])
+                register_internal_translation(alias, language, text, aliases=[alias])
 _register_backend_settings_translations()
 
 def _now_iso() -> str:
@@ -486,7 +484,7 @@ def _build_ui_field(name: str, field_info: FieldInfo, *, path_prefix: str = "") 
         ('zh-tw', _zh_field_label(name)),
     ):
         if text is not None:
-            _register_internal_translation(descriptor.label_key, language, text, aliases=[descriptor.label_key, descriptor.path])
+            register_internal_translation(descriptor.label_key, language, text, aliases=[descriptor.label_key, descriptor.path])
     if descriptor.description:
         for language, text in (
             ('en', descriptor.description),
@@ -494,7 +492,7 @@ def _build_ui_field(name: str, field_info: FieldInfo, *, path_prefix: str = "") 
             ('zh-tw', _zh_field_description(path, descriptor.description)),
         ):
             if text is not None:
-                _register_internal_translation(
+                register_internal_translation(
                     descriptor.description_key or descriptor.description,
                     language,
                     text,
@@ -606,26 +604,6 @@ def _fallback_runtime_meta(runtime: BackendRuntimeState) -> RuntimeMeta:
         "config_file_path": os.getenv("__CONFIG_FILE_PATH__") or None,
     }
 
-def _safe_worker_room_count(shared: AppSharedData | None, pid: int, warnings: list[str]) -> int:
-    if shared is None or pid <= 0:
-        return 0
-    try:
-        return shared.worker_running_room_count(pid)
-    except Exception as exc:
-        _log_shared_runtime_sync_failure("worker-room-count", exc)
-        warnings.append(f"worker {pid} error: {exc}")
-        return 0
-
-def _safe_open_room_count(shared: AppSharedData | None, warnings: list[str]) -> int:
-    if shared is None:
-        return 0
-    try:
-        return len(shared.get_all_room_info())
-    except Exception as exc:
-        _log_shared_runtime_sync_failure("open-room-count", exc)
-        warnings.append(f"")
-        return 0
-
 def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
     runtime = _ensure_backend_runtime_state(app)
     warnings: list[str] = []
@@ -643,7 +621,11 @@ def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
     uptime_seconds = _compute_uptime_seconds(start_time)
     workers: list[BackendWorkerInfo] = []
     for worker in shared_meta["workers"]:
+        if worker.get("dead") or worker.get("status") == "dead":
+            continue
         pid = worker["pid"]
+        if not _process_is_alive(pid):
+            continue
         workers.append(BackendWorkerInfo(
             pid=pid,
             generation=worker.get("generation"),
@@ -653,7 +635,6 @@ def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
             started_at=worker["started_at"],
             last_request_at=worker["last_request_at"],
             request_count=worker["request_count"],
-            rooms_running=_safe_worker_room_count(shared, pid, warnings),
             dead=worker.get("dead"),
         ))
     return BackendRuntimeResponse(
@@ -664,8 +645,8 @@ def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
         current_shared_manager_pid=runtime["shared_manager_pid"],
         app_request_count=runtime["request_count"],
         app_last_request_at=runtime["last_request_at"],
-        worker_count=shared_meta["worker_count"],
-        request_count_total=shared_meta["request_count_total"],
+        worker_count=len(workers),
+        request_count_total=sum(int(worker.request_count or 0) for worker in workers),
         workers=workers,
         cache_scope=shared_meta["cache_scope"],
         server=BackendServerInfo(
@@ -678,7 +659,6 @@ def _build_runtime_payload(app: FastAPI) -> BackendRuntimeResponse:
         git=_read_git_info(SERVER_DIR.parent),
         control=BackendResponseModel.model_validate(runtime_control.get_control_status()),
         start_args=os.getenv("__START_ARGS__", "[]"),
-        open_rooms=_safe_open_room_count(shared, warnings),
         runtime_warning="; ".join(warnings) or None,
     )
 

@@ -50,60 +50,8 @@ class _FakeHttpResponse:
         return self._payload
 
 
-class TestAITempClientFactory(unittest.TestCase):
-    def test_check_temp_client_env_key_accepts_tts_aliases(self):
-        from core.server.routes.ai_services import api as ai_api
-
-        with patch.dict(os.environ, {"TTS_APIKEY": "tk"}, clear=True):
-            self.assertTrue(ai_api._check_temp_client_env_key("thinkthinksyn"))
-        with patch.dict(os.environ, {"TTS_API_KEY": "tk"}, clear=True):
-            self.assertTrue(ai_api._check_temp_client_env_key("thinkthinksyn"))
-
-    def test_check_temp_client_env_key_accepts_openrouter_aliases(self):
-        from core.server.routes.ai_services import api as ai_api
-
-        with patch.dict(os.environ, {"OPENROUTER_APIKEY": "ork"}, clear=True):
-            self.assertTrue(ai_api._check_temp_client_env_key("openrouter"))
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "ork"}, clear=True):
-            self.assertTrue(ai_api._check_temp_client_env_key("openrouter"))
-
-    def test_make_temp_openrouter_client_imports_public_completion_client(self):
-        from core.server.routes.ai_services import api as ai_api
-
-        temp_client = object()
-        with patch("core.ai.CompletionClient.CreateOpenRouterClient", return_value=temp_client) as create_client:
-            client = ai_api._make_temp_completion_client(
-                "openrouter",
-                base_url="https://example.com/v1",
-                apikey="explicit-key",
-                model="openrouter/mock-model",
-            )
-
-        self.assertIs(client, temp_client)
-        create_client.assert_called_once()
-        self.assertEqual(create_client.call_args.kwargs["base_url"], "https://example.com/v1")
-        self.assertEqual(create_client.call_args.kwargs["apikey"], "explicit-key")
-        self.assertEqual(create_client.call_args.kwargs["model"], "openrouter/mock-model")
-
 
 class TestAIProviderAndModelEndpoints(FullAppTestBase):
-    async def test_has_env_key_thinkthinksyn_true(self):
-        with patch.dict(os.environ, {"TTS_APIKEY": "tk"}, clear=False):
-            resp = await self._client.get("/ai/clients/thinkthinksyn/has-env-key")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"has_env_key": True})
-
-    async def test_has_env_key_openrouter_missing(self):
-        env = {k: v for k, v in os.environ.items() if k not in {"OPENROUTER_APIKEY", "OPENROUTER_API_KEY"}}
-        with patch.dict(os.environ, env, clear=True):
-            resp = await self._client.get("/ai/clients/openrouter/has-env-key")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"has_env_key": False})
-
-    async def test_has_env_key_unknown_provider_422(self):
-        resp = await self._client.get("/ai/clients/unknown/has-env-key")
-        self.assertEqual(resp.status_code, 422)
-
     async def test_completion_status_returns_lightweight_service_state(self):
         client_a = SimpleNamespace(
             _state_cooldown_until=0.0,
@@ -120,7 +68,7 @@ class TestAIProviderAndModelEndpoints(FullAppTestBase):
         service = SimpleNamespace(clients=[client_a, client_b])
 
         with patch("core.server.routes.ai_services.api._get_completion_service", return_value=service):
-            resp = await self._client.get("/ai/completion-status")
+            resp = await self._client.get("/_internal/ai/completion-status")
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
@@ -135,13 +83,12 @@ class TestAIProviderAndModelEndpoints(FullAppTestBase):
             },
         )
 
-    async def test_models_thinkthinksyn_missing_apikey_returns_400(self):
-        env = {k: v for k, v in os.environ.items() if k not in {"TTS_APIKEY", "TTS_API_KEY"}}
-        with patch.dict(os.environ, env, clear=True):
-            resp = await self._client.post("/ai/clients/thinkthinksyn/list-models", json={})
+    async def test_models_openai_missing_apikey_returns_400(self):
+        with patch.dict(os.environ, {"OPENAI_APIKEY": "env-key", "OPENAI_API_KEY": "env-key"}, clear=False):
+            resp = await self._client.post("/_internal/ai/clients/openai/list-models", json={})
         self.assertEqual(resp.status_code, 400)
 
-    async def test_models_openrouter_proxy_success(self):
+    async def test_models_openai_proxy_success(self):
         seen: dict[str, object] = {}
 
         class _FakeAsyncClient:
@@ -157,20 +104,20 @@ class TestAIProviderAndModelEndpoints(FullAppTestBase):
             async def get(self, url, headers=None):
                 seen["url"] = url
                 seen["headers"] = headers or {}
-                return _FakeHttpResponse({"data": [{"id": "openrouter/mock-model"}]})
+                return _FakeHttpResponse({"data": [{"id": "openai/mock-model"}]})
 
-        with (
-            patch("httpx.AsyncClient", _FakeAsyncClient),
-            patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-token"}, clear=False),
-        ):
-            resp = await self._client.post("/ai/clients/openrouter/list-models", json={})
+        with patch("httpx.AsyncClient", _FakeAsyncClient):
+            resp = await self._client.post(
+                "/_internal/ai/clients/openai/list-models",
+                json={"apikey": "secret-token"},
+            )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["data"][0]["id"], "openrouter/mock-model")
+        self.assertEqual(resp.json()["data"][0]["id"], "openai/mock-model")
         self.assertEqual(seen["url"], "https://openrouter.ai/api/v1/models")
         self.assertEqual(seen["headers"], {"Authorization": "Bearer secret-token"})
 
-    async def test_models_openrouter_explicit_credentials_override_env(self):
+    async def test_models_openai_explicit_credentials_override_env(self):
         seen: dict[str, object] = {}
 
         class _FakeAsyncClient:
@@ -190,7 +137,7 @@ class TestAIProviderAndModelEndpoints(FullAppTestBase):
 
         with patch("httpx.AsyncClient", _FakeAsyncClient):
             resp = await self._client.post(
-                "/ai/clients/openrouter/list-models",
+                "/_internal/ai/clients/openai/list-models",
                 json={"base_url": "https://example.com/v1", "apikey": "explicit"},
             )
 
@@ -224,6 +171,7 @@ class TestAIServiceDiscoveryDetails(FullAppTestBase):
                     cooldown_until=0.0,
                     last_error=None,
                     last_success_at=123.0,
+                    last_probe_at=234.0,
                     fail_count=0,
                     success_count=5,
                     score=1.0,
@@ -233,7 +181,7 @@ class TestAIServiceDiscoveryDetails(FullAppTestBase):
         )
 
         with patch('core.server.routes.ai_services.api.build_service_info', return_value=fake_info):
-            resp = await self._client.get('/ai/services/completion/instances/default')
+            resp = await self._client.get('/_internal/ai/services/completion/instances/default')
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
@@ -263,6 +211,7 @@ class TestAIServiceDiscoveryDetails(FullAppTestBase):
                     cooldown_until=456.0,
                     last_error='cooling',
                     last_success_at=123.0,
+                    last_probe_at=234.0,
                     fail_count=2,
                     success_count=7,
                     score=0.75,
@@ -272,7 +221,7 @@ class TestAIServiceDiscoveryDetails(FullAppTestBase):
         )
 
         with patch('core.server.routes.ai_services.api.build_service_info', return_value=fake_info):
-            resp = await self._client.get('/ai/services/completion/clients/client-a')
+            resp = await self._client.get('/_internal/ai/services/completion/clients/client-a')
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
@@ -288,6 +237,7 @@ class TestAIServiceDiscoveryDetails(FullAppTestBase):
                 'cooldown_until': 456.0,
                 'last_error': 'cooling',
                 'last_success_at': 123.0,
+                'last_probe_at': 234.0,
                 'fail_count': 2,
                 'success_count': 7,
                 'score': 0.75,
@@ -297,6 +247,74 @@ class TestAIServiceDiscoveryDetails(FullAppTestBase):
 
 
 class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
+    async def test_complete_forwards_client_key_to_service(self):
+        async def _complete(**kwargs):
+            self.assertEqual(kwargs.get('client_key'), 'completion:client-b')
+            return 'hello from pinned client'
+
+        service = SimpleNamespace(
+            complete=_complete,
+            _peek_latest_token_usage=lambda: {'total_tokens': 3},
+        )
+
+        with patch('core.server.routes.ai_services.api._resolve_ai_service_instance', return_value=service):
+            resp = await self._client.post(
+                '/_internal/ai/completion/service/default/complete',
+                json={
+                    'messages': [{'role': 'user', 'content': 'Say hello'}],
+                    'stream': False,
+                    'client_key': 'completion:client-b',
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['text'], 'hello from pinned client')
+
+    async def test_complete_client_route_calls_direct_client(self):
+        async def _complete(**kwargs):
+            self.assertNotIn('client_key', kwargs)
+            return 'hello from direct client'
+
+        client_instance = SimpleNamespace(
+            complete=_complete,
+            _peek_latest_token_usage=lambda: {'total_tokens': 3},
+        )
+
+        with patch('core.server.routes.ai_services.api._resolve_ai_client_instance', return_value=client_instance) as resolve_client:
+            resp = await self._client.post(
+                '/_internal/ai/completion/client/completion:client-b/complete',
+                json={
+                    'messages': [{'role': 'user', 'content': 'Say hello'}],
+                    'stream': False,
+                    'client_key': 'completion:should-not-forward',
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['text'], 'hello from direct client')
+        resolve_client.assert_called_once_with('completion', 'completion:client-b')
+
+    async def test_embedding_client_route_wraps_single_text_for_direct_client(self):
+        async def _embedding(inputs, **kwargs):
+            self.assertEqual(inputs, ['hello'])
+            self.assertNotIn('client_key', kwargs)
+            return [[0.1, 0.2]]
+
+        client_instance = SimpleNamespace(embedding=_embedding)
+
+        with patch('core.server.routes.ai_services.api._resolve_ai_client_instance', return_value=client_instance) as resolve_client:
+            resp = await self._client.post(
+                '/_internal/ai/embedding/client/embedding:client-a/embedding',
+                json={
+                    'text': 'hello',
+                    'client_key': 'embedding:should-not-forward',
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['vector'], [0.1, 0.2])
+        resolve_client.assert_called_once_with('embedding', 'embedding:client-a')
+
     async def test_complete_stream_returns_sse_chunks_and_meta(self):
         async def _stream_complete(**kwargs):
             yield {"data": "hello", "type": "text"}
@@ -307,9 +325,9 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
             _peek_latest_token_usage=lambda: {"total_tokens": 2},
         )
 
-        with patch("core.server.routes.ai_services.api._get_completion_service", return_value=service):
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
             resp = await self._client.post(
-                "/ai/complete",
+                "/_internal/ai/completion/service/default/complete",
                 json={
                     "messages": [{"role": "user", "content": "Say hello"}],
                     "stream": True,
@@ -321,92 +339,23 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         self.assertIn("hello", resp.text)
         self.assertIn('"done": true', resp.text)
 
-    async def test_test_openrouter_complete_maps_factory_value_error_to_400(self):
-        with patch(
-            "core.server.routes.ai_services.api._make_temp_completion_client",
-            side_effect=ValueError("OpenRouter apikey not provided."),
-        ) as make_temp_client:
-            resp = await self._client.post(
-                "/ai/test_openrouter_complete",
-                json={"messages": [{"role": "user", "content": "Say hello"}]},
-            )
-
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("apikey", resp.text.lower())
-        make_temp_client.assert_called_once_with(
-            "openrouter",
-            base_url=None,
-            apikey=None,
-            model=None,
+    async def test_openai_complete_test_backend_route_is_not_registered(self):
+        resp = await self._client.post(
+            "/_internal/ai/test_openai_liked_complete",
+            json={"messages": [{"role": "user", "content": "Say hello"}]},
         )
 
-    async def test_test_thinkthinksyn_complete_non_stream_uses_special_request_body(self):
-        async def _complete(**kwargs):
-            return "temp ok"
-
-        client = SimpleNamespace(
-            complete=_complete,
-            _peek_latest_token_usage=lambda: {"total_tokens": 1},
-        )
-
-        with patch("core.server.routes.ai_services.api._make_temp_completion_client", return_value=client) as make_temp_client:
-            resp = await self._client.post(
-                "/ai/test_thinkthinksyn_complete",
-                json={
-                    "model": "qwen-omni",
-                    "base_url": " https://example.com/v1 ",
-                    "apikey": " explicit-key ",
-                    "messages": [{"role": "user", "content": "Say hello"}],
-                },
-            )
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["text"], "temp ok")
-        make_temp_client.assert_called_once_with(
-            "thinkthinksyn",
-            base_url="https://example.com/v1",
-            apikey="explicit-key",
-            model="qwen-omni",
-        )
-
-    async def test_test_openrouter_complete_stream_returns_sse_chunks_and_meta(self):
-        async def _stream_complete(**kwargs):
-            yield {"data": "temp", "type": "text"}
-
-        client = SimpleNamespace(
-            stream_complete=_stream_complete,
-            _peek_latest_token_usage=lambda: {"total_tokens": 1},
-        )
-
-        with patch("core.server.routes.ai_services.api._make_temp_completion_client", return_value=client) as make_temp_client:
-            resp = await self._client.post(
-                "/ai/test_openrouter_complete",
-                json={
-                    "apikey": "explicit-key",
-                    "stream": True,
-                    "messages": [{"role": "user", "content": "Say hello"}],
-                },
-            )
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("temp", resp.text)
-        self.assertIn('"done": true', resp.text)
-        make_temp_client.assert_called_once_with(
-            "openrouter",
-            base_url=None,
-            apikey="explicit-key",
-            model=None,
-        )
+        self.assertEqual(resp.status_code, 404)
 
     async def test_ocr_success_returns_text_and_request_echo(self):
         service = SimpleNamespace(ocr=AsyncMock(return_value="recognized text"))
 
         with (
-            patch("core.server.routes.ai_services.api._get_completion_service", return_value=service),
+            patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service),
             patch("core.server.routes.ai_services.api.Image", return_value=object()),
         ):
             resp = await self._client.post(
-                "/ai/ocr",
+                "/_internal/ai/completion/service/default/ocr",
                 files={"file": ("sample.png", b"fake-image", "image/png")},
             )
 
@@ -419,11 +368,11 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         service = SimpleNamespace(asr=AsyncMock(return_value="speech text"))
 
         with (
-            patch("core.server.routes.ai_services.api._get_completion_service", return_value=service),
+            patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service),
             patch("core.server.routes.ai_services.api.Audio", return_value=object()),
         ):
             resp = await self._client.post(
-                "/ai/asr",
+                "/_internal/ai/completion/service/default/asr",
                 files={"file": ("sample.wav", b"fake-audio", "audio/wav")},
                 data={"expected_languages": "en,zh", "prompt": "listen carefully"},
             )
@@ -438,11 +387,11 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         service = SimpleNamespace(s2t=AsyncMock(return_value="transcribed"))
 
         with (
-            patch("core.server.routes.ai_services.api._get_s2t_service", return_value=service),
+            patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service),
             patch("core.server.routes.ai_services.api.Audio", return_value=object()),
         ):
             resp = await self._client.post(
-                "/ai/s2t",
+                "/_internal/ai/s2t/service/default/s2t",
                 files={"file": ("sample.wav", b"fake-audio", "audio/wav")},
             )
 
@@ -453,8 +402,8 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         wav = _fake_wav_bytes()
         service = SimpleNamespace(t2s=AsyncMock(return_value=_FakeAudioPayload(wav)))
 
-        with patch("core.server.routes.ai_services.api._get_t2s_service", return_value=service):
-            resp = await self._client.post("/ai/t2s", json={"text": "hello voice"})
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
+            resp = await self._client.post("/_internal/ai/t2s/service/default/t2s", json={"text": "hello voice"})
 
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -463,14 +412,15 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         self.assertEqual(data["format"], "wav")
 
     async def test_t2s_stream_returns_audio_bytes(self):
-        async def _stream_audio(text: str, chunk_size: int = 16384):
+        async def _stream_audio(text: str, chunk_size: int = 16384, **kwargs):
+            self.assertIsNone(kwargs.get('client_key'))
             yield b"chunk-1-"
             yield b"chunk-2"
 
         service = SimpleNamespace(t2s_stream=_stream_audio)
 
-        with patch("core.server.routes.ai_services.api._get_t2s_service", return_value=service):
-            resp = await self._client.post("/ai/t2s/stream", json={"text": "hello voice", "chunk_size": 8})
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
+            resp = await self._client.post("/_internal/ai/t2s/service/default/stream", json={"text": "hello voice", "chunk_size": 8})
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.content, b"chunk-1-chunk-2")
@@ -480,11 +430,11 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         service = SimpleNamespace(transcript=AsyncMock(return_value=_FakeTranscriptResult()))
 
         with (
-            patch("core.server.routes.ai_services.api._get_completion_service", return_value=service),
+            patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service),
             patch("core.server.routes.ai_services.api.Audio", return_value=object()),
         ):
             resp = await self._client.post(
-                "/ai/transcript",
+                "/_internal/ai/completion/service/default/transcript",
                 files={"file": ("sample.wav", b"fake-audio", "audio/wav")},
                 data={"roles": "teacher,student", "expected_languages": "en", "prompt": "separate speakers"},
             )
@@ -504,11 +454,11 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
         )
 
         with (
-            patch("core.server.routes.ai_services.api._get_completion_service", return_value=service),
+            patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service),
             patch("core.server.routes.ai_services.api.Audio", return_value=object()),
         ):
             resp = await self._client.post(
-                "/ai/transcript",
+                "/_internal/ai/completion/service/default/transcript",
                 files={"file": ("sample.wav", b"fake-audio", "audio/wav")},
             )
 
@@ -524,9 +474,9 @@ class TestAIStreamingAndMediaEndpoints(FullAppTestBase):
             _peek_latest_token_usage=lambda: {"total_tokens": 8},
         )
 
-        with patch("core.server.routes.ai_services.api._get_completion_service", return_value=service):
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
             resp = await self._client.post(
-                "/ai/rerank",
+                "/_internal/ai/completion/service/default/rerank",
                 json={"query": "rank this", "candidates": ["first", "second"], "stream": False},
             )
 
@@ -542,9 +492,9 @@ class TestAIEmbeddingExtendedEndpoints(FullAppTestBase):
             rerank=AsyncMock(return_value=[SimpleNamespace(index=1, score=0.91, candidate="beta")])
         )
 
-        with patch("core.server.routes.ai_services.api._get_embedding_service", return_value=service):
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
             resp = await self._client.post(
-                "/ai/embedding/rerank",
+                "/_internal/ai/embedding/service/default/rerank",
                 json={"query": "topic", "candidates": ["alpha", "beta"]},
             )
 
@@ -556,9 +506,9 @@ class TestAIEmbeddingExtendedEndpoints(FullAppTestBase):
             chunking=AsyncMock(return_value=[SimpleNamespace(text="chunk-1", vector=[0.1, 0.2], index=0, offset=0)])
         )
 
-        with patch("core.server.routes.ai_services.api._get_embedding_service", return_value=service):
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
             resp = await self._client.post(
-                "/ai/embedding/chunking",
+                "/_internal/ai/embedding/service/default/chunking",
                 json={"content": "Long text for chunking", "max_word_count": 128},
             )
 
@@ -570,29 +520,21 @@ class TestAIEmbeddingExtendedEndpoints(FullAppTestBase):
             diversity_rerank=AsyncMock(return_value=[SimpleNamespace(index=0, candidate="alpha", min_distance=0.42)])
         )
 
-        with patch("core.server.routes.ai_services.api._get_embedding_service", return_value=service):
+        with patch("core.server.routes.ai_services.api._resolve_ai_service_instance", return_value=service):
             resp = await self._client.post(
-                "/ai/embedding/diversity",
+                "/_internal/ai/embedding/service/default/diversity",
                 json={"candidates": ["alpha", "beta"], "top_k": 1},
             )
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["items"][0]["min_distance"], 0.42)
 
-    async def test_embedding_cache_endpoints_return_mocked_payloads(self):
-        service = SimpleNamespace(
-            cache_stats=AsyncMock(return_value={"items": 3, "bytes": 1024}),
-            cache_clear=AsyncMock(return_value=2),
-        )
+    async def test_embedding_cache_routes_are_not_registered(self):
+        stats_resp = await self._client.get("/_internal/ai/embedding/cache-stats")
+        clear_resp = await self._client.post("/_internal/ai/embedding/cache-clear")
 
-        with patch("core.server.routes.ai_services.api._get_embedding_service", return_value=service):
-            stats_resp = await self._client.get("/ai/embedding/cache-stats")
-            clear_resp = await self._client.post("/ai/embedding/cache-clear")
-
-        self.assertEqual(stats_resp.status_code, 200)
-        self.assertEqual(stats_resp.json()["items"], 3)
-        self.assertEqual(clear_resp.status_code, 200)
-        self.assertEqual(clear_resp.json()["deleted"], 2)
+        self.assertEqual(stats_resp.status_code, 404)
+        self.assertEqual(clear_resp.status_code, 404)
 
 
 class TestAIOpenAPISchemas(FullAppTestBase):
@@ -603,16 +545,12 @@ class TestAIOpenAPISchemas(FullAppTestBase):
         paths = payload["paths"]
         schemas = payload["components"]["schemas"]
 
-        provider_schema = paths["/ai/clients/{provider}/has-env-key"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
-        completion_request_schema = paths["/ai/complete"]["post"]["requestBody"]["content"]["application/json"]["schema"]
-        thinkthinksyn_request_schema = paths["/ai/test_thinkthinksyn_complete"]["post"]["requestBody"]["content"]["application/json"]["schema"]
-        openrouter_request_schema = paths["/ai/test_openrouter_complete"]["post"]["requestBody"]["content"]["application/json"]["schema"]
-        rerank_schema = paths["/ai/rerank"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
+        completion_request_schema = paths["/_internal/ai/completion/service/{service_key}/complete"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+        rerank_schema = paths["/_internal/ai/completion/service/{service_key}/rerank"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
 
-        self.assertEqual(provider_schema["$ref"], "#/components/schemas/HasEnvKeyResponse")
+        self.assertNotIn("/_internal/ai/clients/{provider}/has-env-key", paths)
+        self.assertNotIn("/_internal/ai/test_openai_liked_complete", paths)
         self.assertEqual(completion_request_schema["$ref"], "#/components/schemas/CompletionRequest")
-        self.assertEqual(thinkthinksyn_request_schema["$ref"], "#/components/schemas/ThinkThinkSynCompleteRequest")
-        self.assertEqual(openrouter_request_schema["$ref"], "#/components/schemas/OpenRouterCompleteRequest")
         self.assertEqual(rerank_schema["$ref"], "#/components/schemas/RankedItemsResponse")
 
         completion_props = schemas["CompletionRequest"]["properties"]
@@ -620,16 +558,7 @@ class TestAIOpenAPISchemas(FullAppTestBase):
         self.assertNotIn("model", completion_props)
         self.assertNotIn("base_url", completion_props)
         self.assertNotIn("apikey", completion_props)
-
-        thinkthinksyn_props = schemas["ThinkThinkSynCompleteRequest"]["properties"]
-        self.assertIn("model", thinkthinksyn_props)
-        self.assertIn("base_url", thinkthinksyn_props)
-        self.assertIn("apikey", thinkthinksyn_props)
-
-        openrouter_props = schemas["OpenRouterCompleteRequest"]["properties"]
-        self.assertIn("model", openrouter_props)
-        self.assertIn("base_url", openrouter_props)
-        self.assertIn("apikey", openrouter_props)
+        self.assertNotIn("OpenAILikedCompleteRequest", schemas)
 
 if __name__ == "__main__":
     unittest.main()

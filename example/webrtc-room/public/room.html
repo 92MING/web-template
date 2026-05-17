@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room</title>
+  <style>
+    :root {
+      --bg: #15161c;
+      --panel: rgba(26, 30, 40, 0.92);
+      --panel-soft: rgba(255, 255, 255, 0.06);
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f6f7fb;
+      --muted: #aeb4c8;
+      --brand: #ff8b3d;
+      --brand-soft: rgba(255, 139, 61, 0.14);
+      --ok: #5be7a9;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #0f1117; color: var(--text); }
+    body {
+      font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(255, 139, 61, 0.12), transparent 20%),
+        radial-gradient(circle at left center, rgba(79, 111, 255, 0.10), transparent 18%),
+        linear-gradient(180deg, #171922, #101218 56%, #0c0d12);
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .sidebar {
+      padding: 24px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(18, 20, 28, 0.96), rgba(18, 20, 28, 0.9));
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-weight: 900;
+      color: var(--muted);
+    }
+
+    .title {
+      margin: 0;
+      font-size: 32px;
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+    }
+
+    .copy {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: #ffd7bc;
+      font-size: 13px;
+      width: fit-content;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--panel-soft);
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    .value {
+      font-size: 13px;
+      color: var(--text);
+      word-break: break-all;
+      line-height: 1.7;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button, a.button {
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 14px;
+      font: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.16s ease, background 0.16s ease;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--brand), #ffab70);
+      color: #2d1608;
+      font-weight: 800;
+    }
+
+    .secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    button:hover, a.button:hover { transform: translateY(-1px); }
+
+    .main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    .frame-shell {
+      flex: 1;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      overflow: hidden;
+      background: #0a0b10;
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.25);
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      min-height: calc(100vh - 32px);
+      border: 0;
+      display: block;
+      background: #0a0b10;
+    }
+
+    .error-state {
+      display: none;
+      place-items: center;
+      min-height: calc(100vh - 32px);
+      text-align: center;
+      color: var(--muted);
+      padding: 24px;
+    }
+
+    .error-state.is-visible { display: grid; }
+
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+      iframe, .error-state { min-height: 70vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="eyebrow">Meeting Room</div>
+      <h1 class="title">A simple Zoom-style room wrapper</h1>
+      <p class="copy">这个页面只负责创建、分享和引导加入；真正的会议画面复用内置 webrtc-room 组件。</p>
+      <div class="status-pill" id="status-pill">正在准备房间…</div>
+      <div class="stack">
+        <section class="card">
+          <h2>房间号码</h2>
+          <div class="value" id="room-id">等待连接…</div>
+          <div class="actions">
+            <button class="secondary" id="copy-room-id" type="button">复制房号</button>
+          </div>
+        </section>
+        <section class="card">
+          <h2>房间密码</h2>
+          <div class="value" id="room-password">无</div>
+          <div class="actions">
+            <button class="secondary" id="copy-room-password" type="button">复制密码</button>
+          </div>
+        </section>
+        <section class="card">
+          <h2>分享链接</h2>
+          <div class="value" id="share-url">连接成功后自动生成</div>
+          <div class="hint">创建者进入房间后，这里会变成一个可直接发送给别人的加入链接。</div>
+          <div class="actions">
+            <button class="primary" id="copy-share-url" type="button">复制邀请链接</button>
+            <a class="button secondary" href="/index.html">返回首页</a>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <section class="main">
+      <div class="frame-shell" id="frame-shell">
+        <iframe id="room-frame" title="WebRTC Room"></iframe>
+      </div>
+      <div class="error-state" id="error-state">
+        <div>
+          <h2>缺少房间参数</h2>
+          <p>请从首页重新创建房间，或粘贴分享链接进入。</p>
+          <p><a class="button primary" href="/index.html">回到首页</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'webrtc-room.example.display-name';
+    const params = new URLSearchParams(location.search);
+    const frame = document.getElementById('room-frame');
+    const frameShell = document.getElementById('frame-shell');
+    const errorState = document.getElementById('error-state');
+    const statusPill = document.getElementById('status-pill');
+    const roomIdEl = document.getElementById('room-id');
+    const roomPasswordEl = document.getElementById('room-password');
+    const shareUrlEl = document.getElementById('share-url');
+
+    function savedName() {
+      return String(localStorage.getItem(STORAGE_KEY) || '').trim();
+    }
+
+    function rememberName(name) {
+      const normalized = String(name || '').trim();
+      if (normalized) localStorage.setItem(STORAGE_KEY, normalized);
+    }
+
+    function resolveUserName() {
+      const fromQuery = String(params.get('user_name') || '').trim();
+      if (fromQuery) {
+        rememberName(fromQuery);
+        return fromQuery;
+      }
+      const fromStorage = savedName();
+      if (fromStorage) return fromStorage;
+      const typed = String(window.prompt('请输入你在房间里显示的名称', '') || '').trim();
+      if (typed) rememberName(typed);
+      return typed;
+    }
+
+    function buildComponentSrc(userName) {
+      const next = new URLSearchParams(params);
+      if (userName) next.set('user_name', userName);
+      next.set('showLanguageButton', 'false');
+      next.set('showDarkButton', 'false');
+      return `/shared/components/rtc_room.html?${next.toString()}`;
+    }
+
+    function buildShareUrl(roomId, password) {
+      const next = new URLSearchParams({ mode: 'join', room_id: roomId });
+      if (password) next.set('password', password);
+      return `${location.origin}/room.html?${next.toString()}`;
+    }
+
+    function updateRoomMeta(roomId, password) {
+      roomIdEl.textContent = roomId || '等待连接…';
+      roomPasswordEl.textContent = password || '无';
+      if (roomId) {
+        const shareUrl = buildShareUrl(roomId, password);
+        shareUrlEl.textContent = shareUrl;
+        statusPill.textContent = '房间已连接，可分享邀请';
+        statusPill.style.color = '#e6ffef';
+        statusPill.style.background = 'rgba(91, 231, 169, 0.16)';
+        const nextUrl = new URL(location.href);
+        nextUrl.search = '';
+        nextUrl.searchParams.set('mode', 'join');
+        nextUrl.searchParams.set('room_id', roomId);
+        if (password) nextUrl.searchParams.set('password', password);
+        const currentName = savedName();
+        if (currentName) nextUrl.searchParams.set('user_name', currentName);
+        history.replaceState(null, '', `${nextUrl.pathname}?${nextUrl.searchParams.toString()}`);
+      }
+    }
+
+    function copyText(value, emptyMessage) {
+      const text = String(value || '').trim();
+      if (!text) {
+        statusPill.textContent = emptyMessage;
+        return;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        statusPill.textContent = '已复制到剪贴板';
+      }).catch(() => {
+        statusPill.textContent = '复制失败，请手动复制';
+      });
+    }
+
+    document.getElementById('copy-room-id').addEventListener('click', () => copyText(roomIdEl.textContent, '房号还没有准备好'));
+    document.getElementById('copy-room-password').addEventListener('click', () => copyText(roomPasswordEl.textContent === '无' ? '' : roomPasswordEl.textContent, '这个房间没有密码'));
+    document.getElementById('copy-share-url').addEventListener('click', () => copyText(shareUrlEl.textContent, '分享链接还没有准备好'));
+
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || data.type !== 'event' || data.event !== 'connected') return;
+      updateRoomMeta(String(data.room_id || ''), String(data.room_password || ''));
+    });
+
+    (function init() {
+      const mode = String(params.get('mode') || (params.get('create_token') ? 'create' : 'join'));
+      const userName = resolveUserName();
+      const createToken = String(params.get('create_token') || '').trim();
+      const roomId = String(params.get('room_id') || '').trim();
+      const password = String(params.get('password') || '').trim();
+      const joinToken = String(params.get('join_token') || '').trim();
+      if (!userName) {
+        frameShell.hidden = true;
+        errorState.classList.add('is-visible');
+        errorState.querySelector('p').textContent = '需要先填写显示名称，再进入房间。';
+        return;
+      }
+      if (roomId) updateRoomMeta(roomId, password);
+      const canOpen = (mode === 'create' && createToken) || (mode !== 'create' && (roomId || joinToken));
+      if (!canOpen) {
+        frameShell.hidden = true;
+        errorState.classList.add('is-visible');
+        return;
+      }
+      rememberName(userName);
+      frame.src = buildComponentSrc(userName);
+    })();
+  </script>
+</body>
+</html>

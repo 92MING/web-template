@@ -1,13 +1,31 @@
 import os
 import re
 import atexit
+import shlex
+import socket
+import time
 import logging
+import subprocess
 
 from pathlib import Path
 from functools import cache
 from typing import overload
+import paramiko
 from paramiko import SSHConfig
 from pydantic import model_validator
+
+if not hasattr(paramiko, 'DSSKey'):
+    class _UnsupportedDSSKey:
+        @classmethod
+        def from_private_key_file(cls, *args, **kwargs):
+            raise paramiko.SSHException('DSSKey is not supported by this Paramiko version.')
+
+        @classmethod
+        def from_private_key(cls, *args, **kwargs):
+            raise paramiko.SSHException('DSSKey is not supported by this Paramiko version.')
+
+    paramiko.DSSKey = _UnsupportedDSSKey  # type: ignore[attr-defined]
+
 from sshtunnel import SSHTunnelForwarder
 
 from .helper_funcs import get_available_port, is_own_ip
@@ -19,7 +37,25 @@ def _get_env(key, default=None)->str|None:
 
 _logger = logging.getLogger(__name__)
 
-_remote_tunnels: dict[tuple[str, str, int, int|None], SSHTunnelForwarder] = {}   # {(ssh_ip, remote_ip, remote_port, target_local_port): SSHTunnelForwarder}
+
+class _OpenSSHTunnelProcess:
+
+    def __init__(self, process: subprocess.Popen[bytes], local_bind_port: int):
+        self.process = process
+        self.local_bind_port = local_bind_port
+
+    def stop(self) -> None:
+        if self.process.poll() is not None:
+            return
+        self.process.terminate()
+        try:
+            self.process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=3)
+
+
+_remote_tunnels: dict[tuple[str, str, int, int|None], SSHTunnelForwarder | _OpenSSHTunnelProcess] = {}
 _LOCALHOST = '127.0.0.1'
 try:
     _DEFAULT_SSH_PORT = _get_env('SSH_PORT', '22')  # type: ignore
@@ -52,10 +88,17 @@ def _get_default_ssh_key_path() -> str|None:
         return default_key
     return None
 
-@cache
-def _get_default_ssh_config():
+
+def _get_default_ssh_config_path() -> str | None:
     ssh_config_path = os.path.expanduser("~/.ssh/config")
     if not os.path.exists(ssh_config_path):
+        return None
+    return ssh_config_path
+
+@cache
+def _get_default_ssh_config():
+    ssh_config_path = _get_default_ssh_config_path()
+    if ssh_config_path is None:
         return None
     with open(ssh_config_path) as f:
         config = SSHConfig()
@@ -66,25 +109,142 @@ def _get_default_ssh_config():
             _logger.warning(f'Failed to parse SSH config file. {type(e).__name__}: {e}')
             return None
 
-def _find_ssh_config(ssh_ip: str)->tuple[int, str, str|None]|None:    # (port, username, key_path)
-    # find ssh config from .ssh/config file
+
+def _lookup_ssh_host_settings(ssh_host: str) -> dict[str, str | int | None] | None:
     config = _get_default_ssh_config()
     if not config:
         return None
-    host_config = config.lookup(ssh_ip)
+    host_config = config.lookup(ssh_host)
     if not host_config:
         return None
-    if len(host_config) ==1 and 'hostname' in host_config:
+    if len(host_config) == 1 and 'hostname' in host_config:
         return None
     try:
-        port = int(host_config.get('port', _DEFAULT_SSH_PORT))  # type: ignore
-    except:
+        port = int(host_config.get('port', _DEFAULT_SSH_PORT))  # type: ignore[arg-type]
+    except Exception:
         port = _DEFAULT_SSH_PORT
-    username = host_config.get('user', _DEFAULT_SSH_USERNAME)
-    key_path = host_config.get('identityfile', [None])[0]
+    username = str(host_config.get('user', _DEFAULT_SSH_USERNAME) or _DEFAULT_SSH_USERNAME)
+    identity_files = host_config.get('identityfile', [None])
+    key_path = identity_files[0] if identity_files else None
     if not key_path:
         key_path = _get_default_ssh_key_path()
-    return port, username, key_path
+    hostname = str(host_config.get('hostname', ssh_host) or ssh_host)
+    proxyjump = str(host_config.get('proxyjump', '') or '').strip() or None
+    proxycommand = str(host_config.get('proxycommand', '') or '').strip() or None
+    return {
+        'hostname': hostname,
+        'port': port,
+        'username': username,
+        'key_path': key_path,
+        'proxyjump': proxyjump,
+        'proxycommand': proxycommand,
+    }
+
+def _find_ssh_config(ssh_ip: str)->tuple[int, str, str|None]|None:    # (port, username, key_path)
+    # find ssh config from .ssh/config file
+    settings = _lookup_ssh_host_settings(ssh_ip)
+    if not settings:
+        return None
+    return int(settings['port']), str(settings['username']), settings['key_path'] if isinstance(settings['key_path'], str) or settings['key_path'] is None else str(settings['key_path'])
+
+
+def _format_proxy_target(host: str, port: int) -> str:
+    normalized_host = str(host).strip()
+    if ':' in normalized_host and not normalized_host.startswith('['):
+        normalized_host = f'[{normalized_host}]'
+    return f'{normalized_host}:{int(port)}'
+
+
+def _build_proxyjump_proxy_command(target_host: str, target_port: int, proxyjump: str) -> str:
+    ssh_executable = _get_env('SSH_EXECUTABLE') or 'ssh'
+    command_parts = [ssh_executable]
+    ssh_config_path = _get_default_ssh_config_path()
+    if ssh_config_path:
+        command_parts.extend(['-F', ssh_config_path.replace('\\', '/')])
+    command_parts.extend(['-W', _format_proxy_target(target_host, target_port), str(proxyjump)])
+    return ' '.join(shlex.quote(part) for part in command_parts)
+
+
+def _should_use_openssh_forward_process(proxycommand: str | None, proxyjump: str | None) -> bool:
+    return os.name == 'nt' and bool(proxycommand or proxyjump)
+
+
+def _build_openssh_forward_command(
+    ssh_host: str,
+    ssh_remote_ip: str,
+    ssh_remote_port: int,
+    local_port: int,
+    ssh_port: int | None = None,
+    ssh_user: str | None = None,
+    ssh_key_path: str | Path | None = None,
+) -> list[str]:
+    ssh_executable = _get_env('SSH_EXECUTABLE') or 'ssh'
+    command_parts = [ssh_executable]
+    ssh_config_path = _get_default_ssh_config_path()
+    if ssh_config_path:
+        command_parts.extend(['-F', ssh_config_path])
+    if ssh_port:
+        command_parts.extend(['-p', str(ssh_port)])
+    if ssh_user:
+        command_parts.extend(['-l', ssh_user])
+    if ssh_key_path:
+        command_parts.extend(['-i', os.fspath(ssh_key_path)])
+    command_parts.extend([
+        '-o', 'ExitOnForwardFailure=yes',
+        '-o', 'BatchMode=yes',
+        '-o', 'StrictHostKeyChecking=no',
+        '-N',
+        '-L', f'{_LOCALHOST}:{local_port}:{ssh_remote_ip}:{ssh_remote_port}',
+        ssh_host,
+    ])
+    return command_parts
+
+
+def _start_openssh_forward_tunnel(
+    ssh_host: str,
+    ssh_remote_port: int,
+    ssh_remote_ip: str,
+    local_port: int,
+    ssh_port: int | None = None,
+    ssh_user: str | None = None,
+    ssh_key_path: str | Path | None = None,
+) -> _OpenSSHTunnelProcess:
+    command_parts = _build_openssh_forward_command(
+        ssh_host=ssh_host,
+        ssh_remote_ip=ssh_remote_ip,
+        ssh_remote_port=ssh_remote_port,
+        local_port=local_port,
+        ssh_port=ssh_port,
+        ssh_user=ssh_user,
+        ssh_key_path=ssh_key_path,
+    )
+    creation_flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    process = subprocess.Popen(
+        command_parts,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=creation_flags,
+    )
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            _, stderr_bytes = process.communicate()
+            stderr_text = stderr_bytes.decode('utf-8', errors='replace').strip()
+            raise RuntimeError(f'Failed to establish OpenSSH port forward. {stderr_text or "ssh exited unexpectedly."}')
+        try:
+            with socket.create_connection((_LOCALHOST, local_port), timeout=0.2):
+                return _OpenSSHTunnelProcess(process=process, local_bind_port=local_port)
+        except OSError:
+            time.sleep(0.1)
+    process.terminate()
+    try:
+        _, stderr_bytes = process.communicate(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        _, stderr_bytes = process.communicate(timeout=2)
+    stderr_text = stderr_bytes.decode('utf-8', errors='replace').strip()
+    raise TimeoutError(f'OpenSSH port forward did not become ready in time. {stderr_text}'.strip())
 
 def _start_ssh_tunnel_server(
     ssh_ip:str,
@@ -96,36 +256,65 @@ def _start_ssh_tunnel_server(
     ssh_key_path: str|Path|None=None,
     local_port:int|None=None
 ):  # type: ignore
+    connect_host = ssh_ip
+    ssh_proxy = None
+    use_openssh_forward = False
     if not ssh_port or not ssh_user or (not ssh_key_path or not ssh_pw):
-        if config:=_find_ssh_config(ssh_ip):
-            ssh_port_config, ssh_user_config, ssh_key_path_config = config
+        if config := _lookup_ssh_host_settings(ssh_ip):
+            ssh_port_config = int(config['port'])
+            ssh_user_config = str(config['username'])
+            ssh_key_path_config = config['key_path'] if isinstance(config['key_path'], str) or config['key_path'] is None else str(config['key_path'])
+            connect_host = str(config['hostname'] or ssh_ip)
             if not ssh_port:
                 ssh_port = ssh_port_config
             if not ssh_user:
                 ssh_user = ssh_user_config
             if not ssh_key_path and not ssh_pw:
                 ssh_key_path = ssh_key_path_config
+            proxycommand = config['proxycommand'] if isinstance(config['proxycommand'], str) or config['proxycommand'] is None else str(config['proxycommand'])
+            proxyjump = config['proxyjump'] if isinstance(config['proxyjump'], str) or config['proxyjump'] is None else str(config['proxyjump'])
+            if _should_use_openssh_forward_process(proxycommand, proxyjump):
+                use_openssh_forward = True
+            elif proxycommand:
+                ssh_proxy = paramiko.ProxyCommand(proxycommand)
+            elif proxyjump and ssh_port:
+                ssh_proxy = paramiko.ProxyCommand(_build_proxyjump_proxy_command(connect_host, int(ssh_port), proxyjump))
         else:
             ssh_port = ssh_port or _DEFAULT_SSH_PORT
             ssh_user = ssh_user or _DEFAULT_SSH_USERNAME
             if not ssh_key_path and not ssh_pw:
                 ssh_key_path = _get_default_ssh_key_path()
-    
+
+    if tunnel:=_remote_tunnels.get((ssh_ip, ssh_remote_ip, ssh_remote_port, local_port)):
+        return tunnel.local_bind_port
+
+    target_port = local_port if local_port is not None else get_available_port()
+
+    if use_openssh_forward:
+        tunnel_process = _start_openssh_forward_tunnel(
+            ssh_host=ssh_ip,
+            ssh_remote_port=ssh_remote_port,
+            ssh_remote_ip=ssh_remote_ip,
+            local_port=target_port,
+            ssh_port=ssh_port,
+            ssh_user=ssh_user,
+            ssh_key_path=ssh_key_path,
+        )
+        _remote_tunnels[(ssh_ip, ssh_remote_ip, ssh_remote_port, local_port)] = tunnel_process
+        return tunnel_process.local_bind_port
+
     if not ssh_key_path and not ssh_pw:
         if env_pw:= _get_env('SSH_PW'):
             ssh_pw = env_pw
         else:
             raise ValueError('No SSH key path or password provided, and none found in SSH config or environment variables.')
-    
-    if tunnel:=_remote_tunnels.get((ssh_ip, ssh_remote_ip, ssh_remote_port, local_port)):
-        return tunnel.local_bind_port
-    
-    target_port = local_port if local_port is not None else get_available_port()
+
     t = SSHTunnelForwarder(
-        ssh_address_or_host=(ssh_ip, ssh_port),
+        ssh_address_or_host=(connect_host, ssh_port),
         ssh_username=ssh_user,
         ssh_password=ssh_pw,
         ssh_pkey=ssh_key_path,
+        ssh_proxy=ssh_proxy,
         remote_bind_address=(ssh_remote_ip, ssh_remote_port),
         local_bind_address=(_LOCALHOST, target_port),
     )

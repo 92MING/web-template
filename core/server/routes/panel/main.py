@@ -12,16 +12,11 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from core.rtc_chat.room import (
-    RoomInfo,
-    WebRTCRoom,
-)
 from core.utils.type_utils import AdvancedBaseModel
 from core.server.constants import ADMIN_PANEL_SHARED_DIR, PUBLIC_DIR
 from core.server.data_types.config import Config
 from ...html_injection import html_response_from_path
-from ...app import get_resources, on_before_app_created, ensure_openapi_customization, redirect_to_worker
-from ...shared import AppSharedData
+from ...app import get_resources, on_before_app_created, ensure_openapi_customization
 from ...translate import get_all_public_translations, get_internal_translation, get_internal_translation_catalog, normalize_language
 from .backend import register_backend_panel_routes
 
@@ -647,8 +642,8 @@ def register_panel_routes(app: FastAPI):
             if candidate is not None:
                 return candidate
         return None
+    
     @app.get(_internal_path("html-assets/{file_path:path}"))
-
     async def serve_html_assets(file_path: str):
         """Serve shared HTML-layer assets from server/html/shared/."""
         full = _resolve_html_shared_file(file_path)
@@ -657,14 +652,14 @@ def register_panel_routes(app: FastAPI):
         media_type, _ = mimetypes.guess_type(str(full))
         return FileResponse(full, media_type=media_type or "application/octet-stream")
     # ---- Panel pages ----
+    
     @app.get(_internal_admin_path("panel"), response_class=HTMLResponse)
-
     async def panel_html():
         """Management panel."""
         panel_path = get_resources("admin-panel", "panel.html") or Path("panel.html")
         return html_response_from_path(panel_path, not_found_message="panel.html not found")
+    
     @app.get(_internal_admin_path("panel/api"), response_class=HTMLResponse)
-
     async def panel_api_docs() -> HTMLResponse:
         swagger_response = get_swagger_ui_html(
             openapi_url=_internal_admin_path("openapi.json"),
@@ -675,8 +670,8 @@ def register_panel_routes(app: FastAPI):
             _inject_panel_api_doc_tools(swagger_response.body.decode("utf-8")),
             status_code=swagger_response.status_code,
         )
+        
     @app.get(_internal_admin_path("panel/api/export/full"), response_class=HTMLResponse, include_in_schema=False)
-
     async def panel_api_docs_export_full() -> HTMLResponse:
         spec = copy.deepcopy(app.openapi())
         html_body = _build_swagger_export_html(
@@ -687,8 +682,8 @@ def register_panel_routes(app: FastAPI):
             html_body,
             headers={"Content-Disposition": 'attachment; filename="proj-template-api-docs.html"'},
         )
+        
     @app.get(_internal_admin_path("panel/api/export/public"), response_class=HTMLResponse, include_in_schema=False)
-
     async def panel_api_docs_export_public() -> HTMLResponse:
         spec = _prune_internal_paths_from_openapi(copy.deepcopy(app.openapi()))
         html_body = _build_swagger_export_html(
@@ -712,8 +707,8 @@ def register_panel_routes(app: FastAPI):
         """Internal path prefix (e.g. /_internal)."""
         expose_ai_service: bool = False
         """Whether public AI service routes are exposed."""
+        
     @app.get(_internal_admin_path("api/server/config"), response_model=ServerConfigInfo)
-
     async def server_config_info() -> ServerConfigInfo:
         cfg = Config.GetConfig().server_config
         mode = "prod" if os.getenv("PRODUCTION") else "dev"
@@ -721,71 +716,19 @@ def register_panel_routes(app: FastAPI):
             host=cfg.get_host(mode),
             port=cfg.port if cfg.port > 0 else 8000,
             frontend_baseurl=cfg.get_frontend_baseurl(),
-            internal_path_prefix=cfg.internal_path_prefix,
+            internal_path_prefix=cfg.internal_path_prefix or "",
             expose_ai_service=cfg.expose_ai_service,
         )
-    # ---- Room list (panel needs it) ----
+    
     @app.get(_internal_admin_path("test/ai"), response_class=HTMLResponse)
-
     async def admin_test_ai_index() -> HTMLResponse:
         return _resolve_admin_test_html("ai")
+    
     @app.get(_internal_admin_path("test/ai/{page_path:path}"), response_class=HTMLResponse)
-
     async def admin_test_ai_page(page_path: str) -> HTMLResponse:
         return _resolve_admin_test_html("ai", page_path)
 
-    class PaginatedRooms(AdvancedBaseModel):
-        items: list[dict]
-        """Room items list."""
-        total: int
-        """Total count."""
-        page: int
-        """Current page."""
-        page_size: int = 10
-        """Items per page."""
-    @app.get(_internal_admin_path("api/rooms"), response_model=PaginatedRooms)
-
-    async def list_rooms(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100)) -> PaginatedRooms:
-        """List all active rooms (paginated)."""
-        all_rooms = AppSharedData.Get().get_all_room_info()
-        total = len(all_rooms)
-        start = (page - 1) * page_size
-        items = [r.model_dump() for r in all_rooms[start : start + page_size]]
-        return PaginatedRooms(items=items, total=total, page=page, page_size=page_size)
-    @app.get(_internal_admin_path("api/rooms/{room_id}"), response_model=RoomInfo)
-
-    async def get_room_detail(room_id: str, request: Request) -> RoomInfo:
-        """Return full room details for the requested room."""
-        shared = AppSharedData.Get()
-        worker_id = shared.get_room_worker(room_id)
-        if worker_id is None:
-            raise HTTPException(404, f"Room not found: {room_id}")
-        if worker_id != os.getpid():
-            return await redirect_to_worker(worker_id, request, {"room_id": room_id})
-        room = WebRTCRoom.GetRoom(room_id)
-        if room is None:
-            shared.delete_room_worker(room_id)
-            raise HTTPException(404, f"Room not found: {room_id}")
-        return room.dump_info()
-    @app.delete(_internal_admin_path("api/rooms/{room_id}"))
-
-    async def delete_room(room_id: str, request: Request) -> dict[str, object]:
-        """Force-close a room and remove its worker mapping."""
-        shared = AppSharedData.Get()
-        worker_id = shared.get_room_worker(room_id)
-        if worker_id is None:
-            raise HTTPException(404, f"Room not found: {room_id}")
-        if worker_id != os.getpid():
-            return await redirect_to_worker(worker_id, request, {"room_id": room_id})
-        room = WebRTCRoom.GetRoom(room_id)
-        if room is None:
-            shared.delete_room_worker(room_id)
-            raise HTTPException(404, f"Room not found: {room_id}")
-        await room.close()
-        shared.delete_room_worker(room_id)
-        return {"ok": True, "id": room_id}
     # ---- UI translation ----
-
     class TranslateResponse(AdvancedBaseModel):
         translations: dict[str, str | None]
         """key -> translation, None if not found."""
@@ -807,7 +750,6 @@ def register_panel_routes(app: FastAPI):
         return {**file_payload, **registered_payload}
 
     @app.get(_internal_admin_path("api/ui_translate"), response_model=TranslateResponse)
-
     async def ui_translate(
         keys: str = Query(..., description="Comma-separated translation keys."),
         lang: str = Query('zh-tw', description="目标语言代码 (en / zh-cn / zh-tw)"),
@@ -819,8 +761,8 @@ def register_panel_routes(app: FastAPI):
             if key:
                 results[key] = get_internal_translation(key, lang)
         return TranslateResponse(translations=results)
+    
     @app.get(_internal_admin_path("api/ui_translate/all"), response_model=AllTranslationsResponse)
-
     async def ui_translate_all() -> AllTranslationsResponse:
         """Return all available translations."""
         return AllTranslationsResponse(translations=get_internal_translation_catalog())

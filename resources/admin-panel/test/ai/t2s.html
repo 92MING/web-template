@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>T2S 文字转语音</title>
+  <title>文字转语音</title>
   <link rel="stylesheet" href="/vendor/tailwindcss/tailwind.css"/>
   <link rel="stylesheet" href="/html-assets/css/ai-test-shared.css"/>
   <style>
@@ -24,14 +24,14 @@
 </head>
 <body class="ai-page">
   <div class="ai-shell">
-    <a href="/admin/test/ai" class="ai-back-link">
+    <a href="../ai" class="ai-back-link">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
       <span data-i18n="t2s.backLink">返回 AI 测试中心</span>
     </a>
 
     <div class="ai-header">
       <div class="ai-header-main">
-        <h1 data-i18n="t2s.title">T2S 文字转语音</h1>
+        <h1 data-i18n="t2s.title">文字转语音</h1>
       </div>
       <div class="ai-pills">
         <span class="ai-pill"><strong id="mode-pill">普通模式</strong></span>
@@ -61,7 +61,13 @@
           <textarea id="input-text" class="ai-textarea" data-i18n-placeholder="t2s.input.placeholder" placeholder="请输入要合成的文本"></textarea>
         </div>
         <div class="ai-field">
-          <label for="service-instance" data-i18n="t2s.serviceInstance">Service Instance</label>
+          <label for="service-target" data-i18n="t2s.serviceTarget">Service/Client</label>
+          <select id="service-target" class="ai-select">
+            <option value="service">service</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="service-instance" data-i18n="t2s.instance">Key</label>
           <select id="service-instance" class="ai-select">
             <option value="default">default</option>
           </select>
@@ -79,8 +85,8 @@
         <div class="ai-field">
           <label for="mode-select" data-i18n="t2s.requestMode">请求方式</label>
           <select id="mode-select" class="ai-select">
-            <option value="normal" selected data-i18n="t2s.mode.option.normal">普通接口 /ai/t2s</option>
-            <option value="stream" data-i18n="t2s.mode.option.stream">流式接口 /ai/t2s/stream</option>
+            <option value="normal" selected data-i18n="t2s.mode.option.normal">普通接口 /ai/t2s/{service|client}/{key}/t2s</option>
+            <option value="stream" data-i18n="t2s.mode.option.stream">流式接口 /ai/t2s/{service|client}/{key}/stream</option>
           </select>
         </div>
         <div class="ai-field">
@@ -155,15 +161,15 @@
 
   const I18N = {
     'common.emptyHistory': { 'zh-cn': '暂无历史记录', 'zh-tw': '暫無歷史記錄', en: 'No history yet' },
-    't2s.docTitle': { 'zh-cn': 'T2S 文字转语音', 'zh-tw': 'T2S 文字轉語音', en: 'T2S Text to Speech' },
+    't2s.docTitle': { 'zh-cn': '文字转语音', 'zh-tw': '文字轉語音', en: 'Text to Speech' },
     't2s.backLink': { 'zh-cn': '返回 AI 测试中心', 'zh-tw': '返回 AI 測試中心', en: 'Back to AI Test Hub' },
-    't2s.title': { 'zh-cn': 'T2S 文字转语音', 'zh-tw': 'T2S 文字轉語音', en: 'T2S Text to Speech' },
+    't2s.title': { 'zh-cn': '文字转语音', 'zh-tw': '文字轉語音', en: 'Text to Speech' },
     't2s.mode.normal': { 'zh-cn': '普通模式', 'zh-tw': '普通模式', en: 'Normal Mode' },
     't2s.mode.stream': { 'zh-cn': '流式模式', 'zh-tw': '流式模式', en: 'Streaming Mode' },
     't2s.mode.short.normal': { 'zh-cn': '普通', 'zh-tw': '普通', en: 'Normal' },
     't2s.mode.short.stream': { 'zh-cn': '流式', 'zh-tw': '流式', en: 'Stream' },
-    't2s.mode.option.normal': { 'zh-cn': '普通接口 /ai/t2s', 'zh-tw': '普通介面 /ai/t2s', en: 'Standard Endpoint /ai/t2s' },
-    't2s.mode.option.stream': { 'zh-cn': '流式接口 /ai/t2s/stream', 'zh-tw': '流式介面 /ai/t2s/stream', en: 'Streaming Endpoint /ai/t2s/stream' },
+    't2s.mode.option.normal': { 'zh-cn': '普通接口 /ai/t2s/{service|client}/{key}/t2s', 'zh-tw': '普通介面 /ai/t2s/{service|client}/{key}/t2s', en: 'Standard Endpoint /ai/t2s/{service|client}/{key}/t2s' },
+    't2s.mode.option.stream': { 'zh-cn': '流式接口 /ai/t2s/{service|client}/{key}/stream', 'zh-tw': '流式介面 /ai/t2s/{service|client}/{key}/stream', en: 'Streaming Endpoint /ai/t2s/{service|client}/{key}/stream' },
     't2s.history.keep': { 'zh-cn': '历史保留', 'zh-tw': '歷史保留', en: 'History Limit' },
     't2s.history.items': { 'zh-cn': '条', 'zh-tw': '條', en: 'items' },
     't2s.quick.title': { 'zh-cn': '快速文本', 'zh-tw': '快速文本', en: 'Quick Samples' },
@@ -174,7 +180,8 @@
     't2s.request.title': { 'zh-cn': '请求参数', 'zh-tw': '請求參數', en: 'Request Parameters' },
     't2s.input.label': { 'zh-cn': '输入文本', 'zh-tw': '輸入文本', en: 'Input Text' },
     't2s.input.placeholder': { 'zh-cn': '请输入要合成的文本', 'zh-tw': '請輸入要合成的文本', en: 'Enter the text to synthesize' },
-    't2s.serviceInstance': { 'zh-cn': 'Service Instance', 'zh-tw': 'Service Instance', en: 'Service Instance' },
+    't2s.serviceTarget': { 'zh-cn': 'Service/Client', 'zh-tw': 'Service/Client', en: 'Service/Client' },
+    't2s.instance': { 'zh-cn': 'Key', 'zh-tw': 'Key', en: 'Key' },
     't2s.playbackRate': { 'zh-cn': '回放速度', 'zh-tw': '回放速度', en: 'Playback Rate' },
     't2s.requestMode': { 'zh-cn': '请求方式', 'zh-tw': '請求方式', en: 'Request Mode' },
     't2s.chunkSize': { 'zh-cn': '流式块大小', 'zh-tw': '流式區塊大小', en: 'Streaming Chunk Size' },
@@ -206,6 +213,7 @@
   };
   const historyStore = AITestShared.createHistoryStore('t2s', 8);
   const inputText = document.getElementById('input-text');
+  const serviceTarget = document.getElementById('service-target');
   const serviceInstance = document.getElementById('service-instance');
   const playbackRate = document.getElementById('playback-rate');
   const modeSelect = document.getElementById('mode-select');
@@ -245,15 +253,18 @@
   let currentAudioUrl = '';
   let currentBlob = null;
   let currentFilename = '';
+  let serviceTargetController = null;
 
   AITestShared.bindFormState('t2s', [
     { id: 'input-text' },
+    { id: 'service-target' },
     { id: 'service-instance' },
     { id: 'playback-rate' },
     { id: 'mode-select' },
     { id: 'chunk-size' },
   ]);
-  AITestShared.loadServiceInstances('t2s', serviceInstance);
+  void AITestShared.initServiceTargetControls('t2s', serviceTarget, serviceInstance)
+    .then((controller) => { serviceTargetController = controller; });
 
   function setError(message) {
     errorBox.style.display = message ? 'block' : 'none';
@@ -374,8 +385,13 @@
     }
 
     const mode = modeSelect.value;
-    const requestPayload = { text, chunk_size: Number(chunkSizeInput.value || 16384), service_key: serviceInstance.value || 'default' };
-    const timing = { started_at: AITestShared.nowIso(), mode };
+    const operation = mode === 'stream' ? 'stream' : 't2s';
+    const targetPath = serviceTargetController ? serviceTargetController.buildPath(operation) : `t2s/service/${encodeURIComponent(serviceInstance.value || 'default')}/${operation}`;
+    const requestPayload = {
+      text,
+      chunk_size: Number(chunkSizeInput.value || 16384),
+    };
+    const timing = { started_at: AITestShared.nowIso(), mode, target_path: targetPath };
 
     setBusy(true);
     setError('');
@@ -392,7 +408,7 @@
       let audioBase64 = null;
 
       if (mode === 'stream') {
-        const resp = await fetch(window.projAiApiPath('/ai/t2s/stream'), {
+        const resp = await fetch(window.projAiApiPath(`/ai/${targetPath}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload),
@@ -411,7 +427,7 @@
           header_mode: resp.headers.get('X-AI-Mode') || 't2s-stream',
         };
       } else {
-        const resp = await fetch(window.projAiApiPath('/ai/t2s'), {
+        const resp = await fetch(window.projAiApiPath(`/ai/${targetPath}`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload),

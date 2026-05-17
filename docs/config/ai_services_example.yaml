@@ -12,37 +12,83 @@ completion:
   # 可以和别的 service kind 重名而不冲突。
   clients:
     openai:
-      type: openai-completion
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_API_KEY}
       model: gpt-4.1-mini
 
-  default:
-    clients:
-      - openai
-      # service-local client scheduling values live on the binding, not on service init.
-      # Omit priority/strategy_lvl to use the client's own defaults.
-      # - client: openai
-      #   priority: 0.5
-      #   strategy_lvl: 1
+    # 自定义 adapter 示例：
+    # custom-vibe:
+    #   type: custom
+    #   adapter: file:///C:/Users/name/adapters/sayo.py
+    #   model: opus-4.6
+    #   x_is_human: ${VIBE_X_IS_HUMAN}
+    #   max_tokens: 32000
+    #   max_images: 0
+    #   max_audios: 0
+    #   max_videos: 0
+
+  service:
+    default:
+      clients:
+        - openai
+        # service-local client scheduling values live on the binding, not on service init.
+        # Omit priority/strategy_lvl to use the client's own defaults.
+        # - client: openai
+        #   priority: 0.5
+        #   strategy_lvl: 1
 
 embedding:
   clients:
     openai:
-      type: openai-embedding
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_API_KEY}
       model: text-embedding-3-small
 
-  default:
-    clients:
-      - openai
+    thinkthinksyn:
+      type: thinkthinksyn
+      model: zpoint
+
+    # custom-embedding:
+    #   type: custom
+    #   adapter: file:///C:/Users/name/adapters/my_embedding.py
+    #   max_tokens: 8192
+    #   support_image: false
+    #   support_audio: false
+    #   support_video: false
+
+  service:
+    default:
+      clients:
+        - openai
+        # - thinkthinksyn
 
 s2t:
-  clients: {}
-  default:
-    # S2T 可以显式引用别的 service，由子类自己解析。
-    completion_service: default
+  clients:
+    openai:
+      type: openai
+      apikey: ${OPENAI_API_KEY}
+      model: whisper-1
+
+    # OpenRouter 的 transcription 接口使用 JSON + base64 音频格式。
+    # openrouter:
+    #   type: openrouter
+    #   apikey: ${OPENROUTER_API_KEY}
+    #   model: openai/whisper-1
+  service:
+    default:
+      clients:
+        - openai
+        # - openrouter
+      # S2T 也可以显式引用 completion service 做适配，由子类自己解析。
+      # completion_service: default
 
 t2s:
-  clients: {}
-  default:
-    clients: []
+  clients:
+    openai:
+      type: openai
+      apikey: ${OPENAI_API_KEY}
+      model: tts-1
+  service:
+    default:
+      clients:
+        - openai

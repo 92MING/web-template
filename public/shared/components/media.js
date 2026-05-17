@@ -2,10 +2,9 @@
  * @fileoverview Rich media components entry point.
  *
  * Image galleries, video/audio players, PDF viewers, whiteboards,
- * advanced raster editors, diagrams, and QR code generators.
+ * diagrams, and QR code generators.
  */
 
-import { BuiltinAdvancedPainter } from "./media/advanced-painter.js";
 import { BuiltinAudioEditor } from "./media/audio-editor.js";
 import { BuiltinAudioPlayer } from "./media/audio-player.js";
 import { BuiltinCarousel } from "./media/carousel.js";
@@ -18,11 +17,10 @@ import { BuiltinVideoPlayer } from "./media/video-player.js";
 import { BuiltinWhiteboard } from "./media/whiteboard.js";
 
 export {
-  BuiltinAdvancedPainter, BuiltinAudioEditor, BuiltinAudioPlayer, BuiltinCarousel, BuiltinDocumentPreviewer, BuiltinImageGallery, BuiltinMermaidDiagram, BuiltinQrCodeDisplay, BuiltinVideoEditor, BuiltinVideoPlayer, BuiltinWhiteboard
+  BuiltinAudioEditor, BuiltinAudioPlayer, BuiltinCarousel, BuiltinDocumentPreviewer, BuiltinImageGallery, BuiltinMermaidDiagram, BuiltinQrCodeDisplay, BuiltinVideoEditor, BuiltinVideoPlayer, BuiltinWhiteboard
 };
 
 const _REGISTRY = [
-  ["builtin-advanced-painter", BuiltinAdvancedPainter],
   ["builtin-audio-editor", BuiltinAudioEditor],
   ["builtin-audio-player", BuiltinAudioPlayer],
   ["builtin-carousel", BuiltinCarousel],

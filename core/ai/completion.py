@@ -7,9 +7,15 @@ import logging
 import aiohttp
 import inspect
 import unicodedata
+import importlib.util
+import sys
+import types
 
 from types import UnionType
 from functools import partial, cache
+from pathlib import Path
+from urllib.parse import urlparse, unquote
+from urllib.request import url2pathname, urlopen
 from typing_extensions import Unpack
 from pydantic.fields import PydanticUndefined  # type: ignore
 from pydantic.v1 import BaseModel as BaseModelV1
@@ -18,10 +24,11 @@ from thinkthinksyn import ThinkThinkSyn
 
 from typing import (
     TYPE_CHECKING, Any, AsyncGenerator, Awaitable, ClassVar, Sequence, Literal, Callable, TypeVar, Union, cast, overload,
-    TypedDict, NotRequired, Required, Protocol, runtime_checkable, Self
+    TypedDict, NotRequired, Required, Protocol, Self, runtime_checkable, Mapping
 )
 
 from core.storage.orm import ORMModel, ORMField
+from core.storage.object import OBS_Object
 from core.utils.data_structs import File, Audio, Image, Video, LLMDocumentMixin 
 from core.utils.concurrent_utils import run_any_func
 from core.utils.text_utils import json_repair_loads, Language, detect_language as detect_lang, split_text_by_word_count, truncate_text_by_word_count, word_count
@@ -52,6 +59,11 @@ from .base import (
     get_inference_context,
     enter_service_context,
     exit_service_context,
+    OpenAILikedClientMixin,
+    _resolve_openai_liked_client_params,
+    _resolve_openrouter_client_params,
+    _append_default_client,
+    _append_env_default_client,
 )
 from .shared import AIServiceKind, CompletionConcurrentPool
 from ._multimodal_token_utils import (
@@ -67,7 +79,7 @@ from ._multimodal_token_utils import (
 
 if TYPE_CHECKING:
     from .s2t import S2TService
-    from ...utils.network_utils.ssh_tunnel import SSHTunnelConfig
+    from ..utils.network_utils.ssh_tunnel import SSHTunnelConfig
 
 _logger = logging.getLogger(__name__)
 _T = TypeVar('_T')
@@ -110,7 +122,6 @@ def _is_codepoint_in_ranges(codepoint: int, ranges: Sequence[tuple[int, int]]) -
             return True
     return False
 
-
 def _is_translation_noise_char(ch: str) -> bool:
     if not ch:
         return True
@@ -127,7 +138,6 @@ def _is_translation_noise_char(ch: str) -> bool:
     if category.startswith('Z') or category.startswith('P') or category.startswith('S'):
         return True
     return False
-
 
 def _normalize_translation_signal_text(text: str | None) -> str:
     if not text:
@@ -427,6 +437,8 @@ class _ChatCompleteParams(ServiceParamsBase, total=False):
     full_output: NotRequired[bool]
     '''是否返回 ``ChatCompletionOutput`` 完整输出（含 token 用量与 thinking 内容）。
     默认 ``False``，仅返回文本字符串；设为 ``True`` 时返回 ``ChatCompletionOutput``。'''
+    client_key: NotRequired[str | None]
+    '''固定使用指定的 service-attached client key；``None`` 表示仍由 service 自动调度。'''
 
 if TYPE_CHECKING:
     class ChatCompleteParams(_ChatCompleteParams, extra_items=Any): ...
@@ -443,6 +455,8 @@ class CompletionClientInitParams(ServiceClientInitParams, total=False):
     '''客户端可接受的最大输入 token 估算值；``None`` 表示不限制。'''
     token_counter: Callable[[TokenCountable], int] | None
     '''自定义 token 估算器；提供时优先于默认启发式估算。'''
+    support_json: bool
+    '''是否支持原生 JSON Schema / structured output 约束；默认 ``True``。'''
     max_images: int | None
     '''可直接处理的最大图片数；`None` 表示不限制。'''
     max_audios: int | None
@@ -499,15 +513,12 @@ class OpenAILikedCompletionClientCreateParams(CompletionClientInitParams, total=
     '''OpenAI 兼容接口根地址。'''
     model: str | None
     '''默认模型名。'''
+    extra_headers: dict[str, str] | None
+    '''额外请求头；给定时会覆写默认同名 header。'''
 
-class OpenRouterCompletionClientCreateParams(CompletionClientInitParams, total=False):
+class OpenRouterCompletionClientCreateParams(OpenAILikedCompletionClientCreateParams, total=False):
     '''OpenRouter completion 客户端创建参数。'''
-    apikey: str | None
-    '''显式指定的 OpenRouter API Key。'''
-    base_url: str | None
-    '''显式指定的 OpenRouter 兼容接口根地址；为 None 时使用默认 https://openrouter.ai/api/v1。'''
-    model: str | None
-    '''默认模型名。'''
+    pass
 
 __all__ += [
     'ChatRole',
@@ -742,6 +753,54 @@ async def _expand_llm_content(
         else:
             expanded.extend(await _expand_llm_part(part, document_mode=document_mode))
     return expanded
+
+def _message_role_and_content(msg: ChatMessageInput) -> tuple[ChatRole, ChatContent]:
+    if isinstance(msg, dict) and 'content' in msg:
+        return cast(ChatRole, msg.get('role', 'user')), cast(ChatContent, msg['content'])
+    return 'user', cast(ChatContent, msg)
+
+async def _audio_part_to_text_for_completion(
+    audio: Audio,
+    *,
+    s2t_service: object | None = None,
+) -> str:
+    service = s2t_service
+    if service is None:
+        from .s2t import S2TService
+        service = S2TService.Default()
+    s2t = getattr(service, 's2t')
+    return str(await s2t(audio, __skip_log__=True)).strip()
+
+async def _replace_audio_with_s2t_text(
+    messages: Sequence[ChatMessageInput],
+    *,
+    s2t_service: object | None = None,
+) -> tuple[list[ChatMessageInput], bool]:
+    changed = False
+    out_messages: list[ChatMessageInput] = []
+    for msg in messages:
+        role, content = _message_role_and_content(msg)
+        message_changed = False
+        new_parts: list[str | LLMContent] = []
+        for part in await _expand_llm_content(content):
+            if isinstance(part, Audio):
+                transcript = await _audio_part_to_text_for_completion(part, s2t_service=s2t_service)
+                if transcript:
+                    new_parts.append(transcript)
+                changed = True
+                message_changed = True
+                continue
+            new_parts.append(part)
+        if not message_changed:
+            out_messages.append(msg)
+            continue
+        merged_content: ChatContent
+        if len(new_parts) == 1:
+            merged_content = new_parts[0]
+        else:
+            merged_content = new_parts
+        out_messages.append({'role': role, 'content': merged_content})
+    return out_messages, changed
 
 async def _normalize_msg_content_for_thinkthinksyn(content: ChatContent) -> tuple[str, dict[int, dict[str, Any]] | None]:
     '''将消息内容转换为 ThinkThinkSyn 兼容格式。'''
@@ -1135,13 +1194,14 @@ def _append_schema_instruction(
     *,
     reasoning: bool = False,
     default_json_example: str | None = None,
+    use_fenced_json_output: bool = False,
 ) -> list[ChatMessageInput]:
     '''在最后一条消息后附加 schema 约束提示。'''
     if not messages:
         return list(messages)
 
     schema_json = json.dumps(schema, ensure_ascii=False)
-    if not reasoning:
+    if not reasoning and not use_fenced_json_output:
         schema_note = (
             '\n\nNOTE: Your response should follows the json schema below:'
             f'\n```\n{schema_json}\n```'
@@ -1149,12 +1209,19 @@ def _append_schema_instruction(
             ' The json response should have no indentation, meaning no newline characters and whitespace.'
         )
     else:
-        schema_note = (
-            '\n\nNOTE: First think carefully about the answer before responding.'
-            '\nThen return your final answer using the JSON format described below,'
-            ' wrapped inside a ```json fenced block.'
-            f'\n```\n{schema_json}\n```'
-        )
+        if reasoning:
+            schema_note = (
+                '\n\nNOTE: First think carefully about the answer before responding.'
+                '\nThen return your final answer using the JSON format described below,'
+                ' wrapped inside a ```json fenced block.'
+                f'\n```\n{schema_json}\n```'
+            )
+        else:
+            schema_note = (
+                '\n\nNOTE: Return your final answer using the JSON format described below,'
+                ' wrapped inside a ```json fenced block so it can be extracted reliably.'
+                f'\n```\n{schema_json}\n```'
+            )
         if default_json_example:
             schema_note += (
                 '\nA default example of the expected JSON shape is:'
@@ -1322,6 +1389,23 @@ class CompletionCallableMixin(ServiceCallLogMixin):
     @overload
     async def complete(self, stream: bool=False, **kwargs: Unpack[ChatCompleteParams]) -> str: ...
 
+    async def _adapt_audio_for_unsupported_completion_target(self, payload: dict[str, object]) -> dict[str, object]:
+        max_audios = getattr(self, 'max_audios', None)
+        if not isinstance(max_audios, int) or max_audios > 0:
+            return payload
+        messages = payload.get('messages')
+        if not isinstance(messages, Sequence) or isinstance(messages, (str, bytes, bytearray, memoryview)):
+            return payload
+        adapted_messages, changed = await _replace_audio_with_s2t_text(
+            cast(Sequence[ChatMessageInput], messages),
+            s2t_service=getattr(self, '_s2t_service', None),
+        )
+        if not changed:
+            return payload
+        adapted = dict(payload)
+        adapted['messages'] = adapted_messages
+        return adapted
+
     async def complete(self, stream: bool=False, **kwargs: Any) -> str | ChatCompletionOutput:
         '''
         Complete the chat based on input messages and parameters.
@@ -1336,6 +1420,7 @@ class CompletionCallableMixin(ServiceCallLogMixin):
         self._clear_latest_thinking()
         skip_log = bool(exec_kwargs.pop('__skip_log__', False))
         _apply_service_param_defaults(exec_kwargs, ChatCompleteParams)
+        exec_kwargs = await self._adapt_audio_for_unsupported_completion_target(exec_kwargs)
         request = self._log_request_payload('complete', (), exec_kwargs.copy())
         metadata = self._log_extra_metadata('complete', (), exec_kwargs.copy())
         if use_stream:
@@ -1385,6 +1470,7 @@ class CompletionCallableMixin(ServiceCallLogMixin):
         self._clear_latest_token_usage()
         skip_log = bool(exec_kwargs.pop('__skip_log__', False))
         _apply_service_param_defaults(exec_kwargs, ChatCompleteParams)
+        exec_kwargs = await self._adapt_audio_for_unsupported_completion_target(exec_kwargs)
         request = self._log_request_payload('stream_complete', (), exec_kwargs.copy())
         metadata = self._log_extra_metadata('stream_complete', (), exec_kwargs.copy())
         collector = _StreamLogCollector()
@@ -1438,12 +1524,35 @@ class CompletionClient(CompletionCallableMixin, ServiceClientBase[ChatCompletePa
         )
         self.max_tokens = kwargs.get('max_tokens', 32768)
         self.token_counter = kwargs.get('token_counter')
+        self.support_json = bool(kwargs.get('support_json', True))
         raw_max_images = kwargs.get('max_images', 0)
         raw_max_audios = kwargs.get('max_audios', 0)
         raw_max_videos = kwargs.get('max_videos', 0)
         self.max_images = None if raw_max_images is None else int(raw_max_images)
         self.max_audios = None if raw_max_audios is None else int(raw_max_audios)
         self.max_videos = None if raw_max_videos is None else int(raw_max_videos)
+
+    def update(self, **new_params: object) -> bool:
+        '''原地更新补全客户端自己的可变配置。'''
+        params = dict(new_params)
+        own_params: dict[str, object] = {}
+        for key in ('max_tokens', 'token_counter', 'support_json', 'max_images', 'max_audios', 'max_videos'):
+            if key in params:
+                own_params[key] = params.pop(key)
+        if not super().update(**params):
+            return False
+        if 'max_tokens' in own_params:
+            value = own_params['max_tokens']
+            self.max_tokens = None if value is None else int(cast(Any, value))
+        if 'token_counter' in own_params:
+            self.token_counter = cast(Callable[[TokenCountable], int] | None, own_params['token_counter'])
+        if 'support_json' in own_params:
+            self.support_json = bool(own_params['support_json'])
+        for key in ('max_images', 'max_audios', 'max_videos'):
+            if key in own_params:
+                value = own_params[key]
+                setattr(self, key, None if value is None else int(cast(Any, value)))
+        return True
 
     def count_tokens(self, value: TokenCountable | ChatMessageInput | Sequence[ChatMessageInput]) -> int:
         if self.token_counter is not None:
@@ -1473,10 +1582,13 @@ class CompletionClient(CompletionCallableMixin, ServiceClientBase[ChatCompletePa
             'max_concurrent': kwargs.get('max_concurrent'),
             'priority': kwargs.get('priority', 0.0),
             'strategy_lvl': kwargs.get('strategy_lvl', StrategyLevel.LOAD_BALANCE),
+            'support_json': kwargs.get('support_json', True),
         }
         for key in ('max_tokens', 'token_counter'):
             if key in kwargs:
                 result[key] = kwargs[key]
+        if 'key' in kwargs:
+            result['key'] = kwargs['key']
         return result
 
     @classmethod
@@ -1507,56 +1619,43 @@ class CompletionClient(CompletionCallableMixin, ServiceClientBase[ChatCompletePa
         cls,
         **kwargs: Unpack[OpenAILikedCompletionClientCreateParams],
     ) -> 'CompletionClient':
-        apikey = kwargs.get('apikey')
-        base_url = kwargs.get('base_url')
-        model = kwargs.get('model')
-        key = apikey or _env_first('OPENAI_APIKEY', 'OPENAI_API_KEY')
-        if not key:
-            raise ValueError('OpenAI-liked apikey is required.')
-        final_base_url = base_url or _env_first('OPENAI_API_URL', 'OPENAI_BASE_URL') or 'https://api.openai.com/v1'
-        if not final_base_url:
-            raise ValueError('OpenAI-liked base_url is required.')
         client_kwargs = cls._extract_common_client_kwargs(kwargs)   # type: ignore
-        return OpenAILikedCompletionClient(
-            apikey=key,
-            base_url=final_base_url,
-            model=model,
-            **client_kwargs,
-        )
+        client_kwargs.update(_resolve_openai_liked_client_params(kwargs, service_name='completion'))
+        if 'extra_headers' in kwargs:
+            client_kwargs['extra_headers'] = kwargs.get('extra_headers')
+        return OpenAILikedCompletionClient(**client_kwargs)
 
     @classmethod
     def CreateOpenRouterClient(
         cls,
         **kwargs: Unpack[OpenRouterCompletionClientCreateParams],
     ) -> 'CompletionClient':
-        apikey = kwargs.get('apikey')
-        model = kwargs.get('model')
-        key = apikey or _env_first('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY')
-        if not key:
-            raise ValueError('OpenRouter apikey not provided. Please pass `apikey` or set OPENROUTER_APIKEY / OPENROUTER_API_KEY.')
-
-        base_url = kwargs.get('base_url') or _env_first('OPENROUTER_API_URL') or 'https://openrouter.ai/api/v1'
-        final_model = model or _env_first(
-            'OPENROUTER_MODEL',
-            'OPENROUTER_MODEL_FILTER',
-        ) or 'qwen/qwen3.5-122b-a10b'
+        resolved = _resolve_openrouter_client_params(
+            kwargs,
+            service_name='completion',
+            model_env_keys=('OPENROUTER_MODEL', 'OPENROUTER_MODEL_FILTER'),
+            default_model='qwen/qwen3.5-122b-a10b',
+        )
+        final_model = cast(str, resolved['model'])
         final_max_images = kwargs.get('max_images', 0)
         if final_model in {'qwen/qwen3.5-122b-a10b', 'qwen/qwen3.5-27b'} and final_max_images == 8:
             final_max_images = None
 
         client_kwargs = cls._extract_common_client_kwargs(kwargs)   # type: ignore
+        client_kwargs.update(resolved)
         client_kwargs.update({
-            'apikey': key,
-            'base_url': base_url,
-            'model': final_model,
             'max_images': final_max_images,
-            'max_audios': kwargs.get('max_audios'),
+            'max_audios': kwargs['max_audios'] if 'max_audios' in kwargs else client_kwargs.get('max_audios', 0),
             'max_videos': kwargs.get('max_videos'),
         })
-        return cls.CreateOpenAILikedClient(**client_kwargs)
+        return OpenRouterCompletionClient(**client_kwargs)
 
-class ThinkThinkSynCompletionClient(CompletionClient, type='tts-completion'):
+class ThinkThinkSynCompletionClient(CompletionClient, type='thinkthinksyn'):
     '''ThinkThinkSyn 补全客户端实现。'''
+
+    @classmethod
+    def CreateFromConfig(cls, **kwargs: object) -> 'Self':
+        return cast(Self, CompletionClient.CreateThinkThinkSynClient(**cast(Any, kwargs)))
 
     def __init__(
         self,
@@ -1587,6 +1686,18 @@ class ThinkThinkSynCompletionClient(CompletionClient, type='tts-completion'):
             _apply_ssh_tunnel_to_tts_client(tts_client, _ssh)
         self._tts_client = _patch_thinkthinksyn_proxy(tts_client)
         self._model_filter = model_filter
+
+    def update(self, **new_params: object) -> bool:
+        params = dict(new_params)
+        model_filter = params.pop('model_filter', None) if 'model_filter' in params else None
+        old_model_filter = self._model_filter
+        if not super().update(**params):
+            return False
+        if 'model_filter' in new_params:
+            self._model_filter = None if model_filter is None else str(model_filter)
+            if self._model_filter != old_model_filter:
+                self.reset_health_state()
+        return True
 
     def _tts_url(self) -> str:
         return self._tts_client._ai_url('/completion')
@@ -1710,55 +1821,111 @@ class ThinkThinkSynCompletionClient(CompletionClient, type='tts-completion'):
                     continue
                 raise
 
-class OpenAILikedCompletionClient(CompletionClient, type='openai-completion'):
+class OpenAILikedCompletionClient(CompletionClient, OpenAILikedClientMixin, type='openai'):
     '''OpenAI 协议兼容的补全客户端实现。'''
+
+    @classmethod
+    def CreateFromConfig(cls, **kwargs: object) -> 'Self':
+        return cast(Self, CompletionClient.CreateOpenAILikedClient(**cast(Any, kwargs)))
 
     def __init__(
         self,
-        apikey: str,
+        apikey: str | None,
         base_url: str,
         model: str | None = None,
+        extra_headers: Mapping[str, str] | None = None,
         ssh_tunnel: 'SSHTunnelConfig | dict[str, Any] | str | None' = None,
         **kwargs: Unpack[CompletionClientInitParams],
     ):
         resolved_model = model or _env_first('OPENAI_MODEL') or None
-        # Apply preset defaults by model name when kwargs are not explicitly provided
-        if resolved_model:
-            try:
-                _defaults_cls = CompletionService.OpenAILikedDefaultClientParams
-                for _attr in dir(_defaults_cls):
-                    if _attr.startswith('_'):
-                        continue
-                    _preset = getattr(_defaults_cls, _attr, None)
-                    if isinstance(_preset, dict) and _preset.get('model') == resolved_model:
-                        for _pk, _pv in _preset.items():
-                            if _pk not in ('model', 'apikey', 'base_url') and _pk not in kwargs:
-                                kwargs[_pk] = _pv  # type: ignore
-                        break
-            except Exception:
-                pass
         init_kwargs: CompletionClientInitParams = {
             'max_images': 0,
             'max_audios': 0,
             'max_videos': 0,
             **kwargs,
         }
+        base_host = urlparse(base_url).hostname or ''
+        if base_host == 'www.micuapi.ai' and resolved_model == 'qwen3.6-plus':
+            init_kwargs['max_images'] = 0
+            init_kwargs['max_videos'] = 0
         if 'max_tokens' not in init_kwargs:
             init_kwargs['max_tokens'] = 100 * 1024
         super().__init__(**init_kwargs)
-        self._apikey = apikey
-        _ssh = _resolve_ssh_tunnel_config(ssh_tunnel)
-        self._base_url = (_rewrite_url_for_ssh_tunnel(base_url.rstrip('/'), _ssh) if _ssh else base_url.rstrip('/'))
-        self._model = resolved_model
+        self._init_openai_liked_client(
+            apikey=apikey,
+            base_url=base_url,
+            model=resolved_model,
+            extra_headers=extra_headers,
+            ssh_tunnel=ssh_tunnel,
+        )
+
+    def update(self, **new_params: object) -> bool:
+        params = dict(new_params)
+        openai_params = {key: params.pop(key) for key in ('apikey', 'base_url', 'model', 'extra_headers') if key in params}
+        old_identity = (self._apikey, self._base_url, self._model, tuple(sorted(self._extra_headers.items())))
+        if not super().update(**params):
+            return False
+        if 'apikey' in openai_params:
+            self._apikey = '' if openai_params['apikey'] is None else str(openai_params['apikey'])
+        if 'base_url' in openai_params and openai_params['base_url'] is not None:
+            self._base_url = str(openai_params['base_url']).rstrip('/')
+        if 'model' in openai_params:
+            self._model = None if openai_params['model'] is None else str(openai_params['model'])
+        if 'extra_headers' in openai_params:
+            self._set_openai_liked_extra_headers(cast(Mapping[str, Any] | None, openai_params['extra_headers']))
+        if openai_params and (self._apikey, self._base_url, self._model, tuple(sorted(self._extra_headers.items()))) != old_identity:
+            self.reset_health_state()
+        return True
 
     def _completion_url(self) -> str:
-        if self._base_url.endswith('/chat/completions'):
-            return self._base_url
-        return f'{self._base_url}/chat/completions'
+        return self._openai_liked_endpoint('/chat/completions')
+
+    def _completion_urls(self) -> list[str]:
+        return self._openai_liked_endpoint_candidates('/chat/completions')
+
+    def _uses_thinking_disabled_payload(self) -> bool:
+        host = urlparse(self._base_url).hostname or ''
+        return host in {'api.deepseek.com', 'api.kimi.com'}
+
+    def _uses_micu_anthropic_image_payload(self) -> bool:
+        host = urlparse(self._base_url).hostname or ''
+        return host == 'www.micuapi.ai' and bool(self._model and self._model.startswith('gpt-'))
+
+    def _convert_micu_image_part(self, part: dict[str, Any]) -> dict[str, Any]:
+        if part.get('type') != 'image_url':
+            return part
+        image_url = part.get('image_url')
+        if isinstance(image_url, dict):
+            url = image_url.get('url')
+        else:
+            url = image_url
+        if not isinstance(url, str) or not url.startswith('data:image/') or ';base64,' not in url[:64]:
+            return part
+        meta, data = url.split(',', 1)
+        media_type = meta.split('data:', 1)[1].split(';', 1)[0]
+        return {
+            'type': 'image',
+            'source': {
+                'type': 'base64',
+                'media_type': media_type,
+                'data': data,
+            },
+        }
+
+    def _convert_micu_image_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not self._uses_micu_anthropic_image_payload():
+            return messages
+        converted: list[dict[str, Any]] = []
+        for message in messages:
+            content = message.get('content')
+            if isinstance(content, list):
+                message = {**message, 'content': [self._convert_micu_image_part(part) if isinstance(part, dict) else part for part in content]}
+            converted.append(message)
+        return converted
 
     async def _build_payload(self, kwargs: ChatCompleteParams, *, stream: bool) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            'messages': await _to_openai_messages(kwargs['messages']),
+            'messages': self._convert_micu_image_messages(await _to_openai_messages(kwargs['messages'])),
             'stream': stream,
         }
         if self._model:
@@ -1787,7 +1954,10 @@ class OpenAILikedCompletionClient(CompletionClient, type='openai-completion'):
                     'schema': json_schema,
                 },
             }
-        payload['reasoning'] = {'enabled': bool(kwargs.get('reasoning', False))}
+        reasoning_enabled = bool(kwargs.get('reasoning', False))
+        payload['reasoning'] = {'enabled': reasoning_enabled}
+        if not reasoning_enabled and self._uses_thinking_disabled_payload():
+            payload['thinking'] = {'type': 'disabled'}
 
         if stream:
             payload['stream_options'] = {'include_usage': True}
@@ -1795,37 +1965,39 @@ class OpenAILikedCompletionClient(CompletionClient, type='openai-completion'):
         return payload
 
     def _headers(self) -> dict[str, str]:
-        headers = {
-            'Authorization': f'Bearer {self._apikey}',
-            'Content-Type': 'application/json',
-        }
-        referer = _env_first('OPENROUTER_HTTP_REFERER')
-        if referer:
-            headers['HTTP-Referer'] = referer
-        x_title = _env_first('OPENROUTER_X_TITLE')
-        if x_title:
-            headers['X-Title'] = x_title
-        return headers
+        return self._openai_liked_headers()
 
     async def _complete_impl(self, **kwargs: Unpack[ChatCompleteParams]) -> str:
         payload = await self._build_payload(kwargs, stream=False)
         req_timeout = _resolve_completion_timeout(kwargs)
         timeout = aiohttp.ClientTimeout(total=req_timeout)
 
-        session = await self._get_session()
-        for _attempt in range(2):
-            try:
-                async with session.post(self._completion_url(), json=payload, headers=self._headers(), timeout=timeout) as response:
-                    response.raise_for_status()
-                    data = await response.json()
-                break
-            except (aiohttp.ServerDisconnectedError, aiohttp.ClientPayloadError):
-                if _attempt == 0:
-                    continue
-                raise
-        self._set_latest_token_usage(_extract_token_usage(data))
-        self._set_latest_thinking(_extract_thinking_from_openai_liked_response(data))
-        return _extract_text_from_openai_liked_response(data)
+        last_not_found: aiohttp.ClientResponseError | None = None
+        urls = self._completion_urls()
+        for url_index, url in enumerate(urls):
+            for _attempt in range(2):
+                session = await self._get_session()
+                try:
+                    async with session.post(url, json=payload, headers=self._headers(), timeout=timeout) as response:
+                        try:
+                            response.raise_for_status()
+                        except aiohttp.ClientResponseError as exc:
+                            if exc.status == 404 and url_index < len(urls) - 1:
+                                last_not_found = exc
+                                break
+                            raise
+                        data = await response.json()
+                    self._set_latest_token_usage(_extract_token_usage(data))
+                    self._set_latest_thinking(_extract_thinking_from_openai_liked_response(data))
+                    return _extract_text_from_openai_liked_response(data)
+                except (aiohttp.ServerDisconnectedError, aiohttp.ClientPayloadError, aiohttp.ClientConnectionError):
+                    await self._close_session()
+                    if _attempt == 0:
+                        continue
+                    raise
+        if last_not_found is not None:
+            raise last_not_found
+        raise RuntimeError('OpenAI-liked completion request failed without response.')
 
     async def _stream_complete_impl(self, **kwargs: Unpack[ChatCompleteParams]) -> AsyncGenerator[CompletionStreamChunk, None]:
         payload = await self._build_payload(kwargs, stream=True)
@@ -1833,55 +2005,130 @@ class OpenAILikedCompletionClient(CompletionClient, type='openai-completion'):
         timeout = aiohttp.ClientTimeout(total=req_timeout)
         allow_thinking = bool(kwargs.get('reasoning', False))
 
-        session = await self._get_session()
-        for _attempt in range(2):
-            first_token_received = False
-            ttft_deadline = time.monotonic() + self._STREAM_TTFT_TIMEOUT
+        last_not_found: aiohttp.ClientResponseError | None = None
+        urls = self._completion_urls()
+        for url_index, url in enumerate(urls):
+            for _attempt in range(2):
+                session = await self._get_session()
+                first_token_received = False
+                ttft_deadline = time.monotonic() + self._STREAM_TTFT_TIMEOUT
 
-            try:
-                async with session.post(self._completion_url(), json=payload, headers=self._headers(), timeout=timeout) as response:
-                    response.raise_for_status()
-
-                    content_iter = response.content.__aiter__()
-                    while True:
+                try:
+                    async with session.post(url, json=payload, headers=self._headers(), timeout=timeout) as response:
                         try:
-                            if not first_token_received:
-                                ttft_remaining = ttft_deadline - time.monotonic()
-                                if ttft_remaining <= 0:
-                                    raise asyncio.TimeoutError(f'OpenAI-liked stream first token timed out ({self._STREAM_TTFT_TIMEOUT}s)')
-                                raw_line = await asyncio.wait_for(content_iter.__anext__(), timeout=ttft_remaining)
-                            else:
-                                raw_line = await content_iter.__anext__()
-                        except StopAsyncIteration:
-                            break
+                            response.raise_for_status()
+                        except aiohttp.ClientResponseError as exc:
+                            if exc.status == 404 and url_index < len(urls) - 1:
+                                last_not_found = exc
+                                break
+                            raise
 
-                        line = raw_line.decode('utf-8', errors='ignore').strip()
-                        if not line or not line.startswith('data:'):
-                            continue
-                        data = line[5:].strip()
-                        if not data or data == '[DONE]':
-                            continue
-                        try:
-                            chunk_obj = json.loads(data)
-                        except Exception:
-                            continue
-                        usage = _extract_token_usage(chunk_obj)
-                        if usage is not None:
-                            self._set_latest_token_usage(usage)
-                        parsed = _extract_openai_liked_stream_chunk(chunk_obj)
-                        if parsed and parsed['data']:
-                            first_token_received = True
-                            if parsed['type'] == 'think' and not allow_thinking:
+                        content_iter = response.content.__aiter__()
+                        while True:
+                            try:
+                                if not first_token_received:
+                                    ttft_remaining = ttft_deadline - time.monotonic()
+                                    if ttft_remaining <= 0:
+                                        raise asyncio.TimeoutError(f'OpenAI-liked stream first token timed out ({self._STREAM_TTFT_TIMEOUT}s)')
+                                    raw_line = await asyncio.wait_for(content_iter.__anext__(), timeout=ttft_remaining)
+                                else:
+                                    raw_line = await content_iter.__anext__()
+                            except StopAsyncIteration:
+                                break
+
+                            line = raw_line.decode('utf-8', errors='ignore').strip()
+                            if not line or not line.startswith('data:'):
                                 continue
-                            yield parsed    # type: ignore
-                break  # success — exit retry loop
-            except (aiohttp.ServerDisconnectedError, aiohttp.ClientPayloadError):
-                if _attempt == 0 and not first_token_received:
-                    continue
-                raise
+                            data = line[5:].strip()
+                            if not data or data == '[DONE]':
+                                continue
+                            try:
+                                chunk_obj = json.loads(data)
+                            except Exception:
+                                continue
+                            usage = _extract_token_usage(chunk_obj)
+                            if usage is not None:
+                                self._set_latest_token_usage(usage)
+                            parsed = _extract_openai_liked_stream_chunk(chunk_obj)
+                            if parsed and parsed['data']:
+                                first_token_received = True
+                                if parsed['type'] == 'think' and not allow_thinking:
+                                    continue
+                                yield parsed    # type: ignore
+                    return
+                except (aiohttp.ServerDisconnectedError, aiohttp.ClientPayloadError, aiohttp.ClientConnectionError):
+                    await self._close_session()
+                    if _attempt == 0 and not first_token_received:
+                        continue
+                    raise
+        if last_not_found is not None:
+            raise last_not_found
+
+
+class OpenRouterCompletionClient(OpenAILikedCompletionClient, type='openrouter'):
+    '''OpenRouter 补全客户端。'''
+
+    @classmethod
+    def CreateFromConfig(cls, **kwargs: object) -> 'Self':
+        return cast(Self, CompletionClient.CreateOpenRouterClient(**cast(Any, kwargs)))
+
+    def __init__(
+        self,
+        apikey: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        ssh_tunnel: 'SSHTunnelConfig | dict[str, Any] | str | None' = None,
+        **kwargs: Unpack[CompletionClientInitParams],
+    ):
+        resolved = _resolve_openrouter_client_params(
+            {
+                'apikey': apikey,
+                'base_url': base_url,
+                'model': model,
+                'ssh_tunnel': ssh_tunnel,
+            },
+            service_name='completion',
+            model_env_keys=('OPENROUTER_MODEL', 'OPENROUTER_MODEL_FILTER'),
+            default_model='qwen/qwen3.5-122b-a10b',
+        )
+        final_model = cast(str, resolved['model'])
+        _defaults_cls = CompletionService.OpenRouterDefaultClientParams
+        for _attr in dir(_defaults_cls):
+            if _attr.startswith('_'):
+                continue
+            _preset = getattr(_defaults_cls, _attr, None)
+            if isinstance(_preset, dict) and _preset.get('model') == final_model:
+                for _pk, _pv in _preset.items():
+                    if _pk not in ('model', 'apikey', 'base_url') and _pk not in kwargs:
+                        kwargs[_pk] = _pv  # type: ignore
+                break
+        super().__init__(
+            apikey=cast(str, resolved['apikey']),
+            base_url=cast(str, resolved['base_url']),
+            model=final_model,
+            ssh_tunnel=cast('SSHTunnelConfig | dict[str, Any] | str | None', resolved['ssh_tunnel']),
+            **kwargs,
+        )
+
+    def _headers(self) -> dict[str, str]:
+        return self._openrouter_headers()
+
+
+class CodingAgentCompletionClient(OpenAILikedCompletionClient, type='coding-agent'):
+    '''Coding agent 专用的 OpenAI 协议兼容补全客户端。'''
+
+    def _headers(self) -> dict[str, str]:
+        headers = super()._headers()
+        headers['User-Agent'] = 'claude-code/1.0.0'
+        return headers
+
 
 class CompletionService(CompletionCallableMixin, ServiceBase):
     '''统一补全服务。'''
+
+    @property
+    def support_json(self) -> bool:
+        return all(bool(getattr(client, 'support_json', True)) for client in self.clients)
 
     @property
     def max_images(self) -> int | None:
@@ -1996,27 +2243,27 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
             'max_concurrent': _OMNI_POOL,
         }
 
-    class OpenAILikedDefaultClientParams:
-        '''使用类似Openrouter这样的OpenAI格式接口时推荐的默认模型参数配置。'''
-        QWEN_3_5_122B_A10B: OpenAILikedCompletionClientCreateParams = {
+    class OpenRouterDefaultClientParams:
+        '''OpenRouter 默认模型参数配置。'''
+        QWEN_3_5_122B_A10B: OpenRouterCompletionClientCreateParams = {
             'model': 'qwen/qwen3.5-122b-a10b',
             'max_tokens': 260000,
             'max_images': None,
             'max_videos': None,
         }
-        QWEN_3_5_27B: OpenAILikedCompletionClientCreateParams = {
+        QWEN_3_5_27B: OpenRouterCompletionClientCreateParams = {
             'model': 'qwen/qwen3.5-27b',
             'max_tokens': 260000,
             'max_images': None,
             'max_videos': None,
         }
-        QWEN_3_5_35B_A3B: OpenAILikedCompletionClientCreateParams = {
+        QWEN_3_5_35B_A3B: OpenRouterCompletionClientCreateParams = {
             'model': 'qwen/qwen3.5-35b-a3b',
             'max_tokens': 260000,
             'max_images': None,
             'max_videos': None,
         }
-        GEMMA_4_26B_A4B: OpenAILikedCompletionClientCreateParams = {
+        GEMMA_4_26B_A4B: OpenRouterCompletionClientCreateParams = {
             'model': 'google/gemma-4-26b-a4b-it',
             'max_tokens': 260000,
             'max_images': None,
@@ -2075,19 +2322,16 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
     ):
         fail_cooldown = float(kwargs.get('fail_cooldown', 15.0))
         recovery_interval = kwargs.get('recovery_interval')
-        if not clients:
-            raise ValueError('CompletionService requires at least one CompletionClient.')
         super().__init__(
             *clients,
             fail_cooldown=fail_cooldown,
             recovery_interval=recovery_interval,
+            init_probe=bool(kwargs.get('init_probe', False)),
             key=kwargs.get('key'),
         )
         self._s2t_service = s2t_service
         self._translate_cache_lock = asyncio.Lock()
         self._translate_cache_client = None  # lazy-init ORM client
-        self._ensure_recovery_task()
-        self._start_init_probe()
 
     @classmethod
     def Default(cls) -> Self:
@@ -2101,45 +2345,51 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
         if cfg is not None:
             svc = cfg.completion.get_default()
             if svc is not None:
-                # Bootstrap extras (e.g. 'advanced') so GetInstance can find them
-                for ek in cfg.completion.extras:
-                    cfg.completion.get_service(ek)
+                cfg.completion.preload_service_instances()
                 return cast(Self, svc)
 
         # ── Hardcoded fallback ───────────────────────────────────────────
         clients: list[CompletionClient] = []
-        try:
-            basic_client = CompletionClient.CreateThinkThinkSynClient(
+        _append_default_client(
+            clients,
+            lambda: CompletionClient.CreateThinkThinkSynClient(
                 **cls.ThinkThinkSynDefaultClientParams.BASIC,
-            )
-            clients.append(basic_client)
-        except Exception as exc:
-            _logger.warning(f'Failed to create ThinkThinkSyn BASIC client: {exc}')
-
-        try:
-            omni_client = CompletionClient.CreateThinkThinkSynClient(
+            ),
+            logger=_logger,
+            description='ThinkThinkSyn BASIC completion',
+        )
+        _append_default_client(
+            clients,
+            lambda: CompletionClient.CreateThinkThinkSynClient(
                 **cls.ThinkThinkSynDefaultClientParams.OMNI,
-            )
-            clients.append(omni_client)
-        except Exception as exc:
-            _logger.warning(f'Failed to create ThinkThinkSyn OMNI client: {exc}')
-
-        or_key = _env_first('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY')
-        if or_key:
-            try:
-                or_client = CompletionClient.CreateOpenRouterClient(
-                    apikey=or_key,
-                    **cls.OpenAILikedDefaultClientParams.GEMMA_4_26B_A4B,  # type: ignore
-                    strategy_lvl=StrategyLevel.ON_RATELIMIT,    # type: ignore
-                )   # type: ignore
-                clients.append(or_client)
-            except Exception as exc:
-                _logger.warning(f'Failed to create OpenRouter default client: {exc}')
+            ),
+            logger=_logger,
+            description='ThinkThinkSyn OMNI completion',
+        )
+        _append_env_default_client(
+            clients,
+            CompletionClient.CreateOpenAILikedClient,
+            logger=_logger,
+            description='OpenAI-compatible completion',
+            env_keys=('OPENAI_APIKEY', 'OPENAI_API_KEY'),
+            factory_kwargs={'strategy_lvl': StrategyLevel.ON_RATELIMIT},
+        )
+        _append_env_default_client(
+            clients,
+            CompletionClient.CreateOpenRouterClient,
+            logger=_logger,
+            description='OpenRouter completion',
+            env_keys=('OPENROUTER_APIKEY', 'OPENROUTER_API_KEY'),
+            factory_kwargs={
+                **cls.OpenRouterDefaultClientParams.GEMMA_4_26B_A4B,
+                'strategy_lvl': StrategyLevel.ON_RATELIMIT,
+            },
+        )
 
         if not clients:
             raise RuntimeError(
                 'Cannot create default CompletionService: no client could be initialized. '
-                'Please ensure thinkthinksyn is installed or set OPENROUTER_APIKEY / OPENROUTER_API_KEY.'
+                'Please ensure thinkthinksyn is installed or set OPENAI_APIKEY / OPENAI_API_KEY / OPENROUTER_APIKEY / OPENROUTER_API_KEY.'
             )
         return cls(*clients, key='default')
 
@@ -2261,14 +2511,10 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
         s2t_svc = self._s2t_service
         if s2t_svc is None:
             from .s2t import S2TService as _S2TService
-            # Only use S2TService.Default() when 'completion' is NOT already active in the call
-            # chain, to prevent: completion -> s2t(uses completion) -> completion -> ...
-            _ctx = get_inference_context()
-            if _ctx is None or not _ctx.is_active('completion'):
-                try:
-                    s2t_svc = _S2TService.Default()
-                except Exception:
-                    s2t_svc = None
+            try:
+                s2t_svc = _S2TService.Default()
+            except Exception:
+                s2t_svc = None
         if s2t_svc is None:
             raise RuntimeError(
                 'No s2t_service configured for audio/video fallback adaptation '
@@ -2548,28 +2794,51 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
 
         return out_messages
 
-    async def _sort_clients_for_messages(self, messages: Sequence[ChatMessageInput]) -> list[CompletionClient]:
+    async def _sort_clients_for_messages(
+        self,
+        messages: Sequence[ChatMessageInput],
+        clients: Sequence[CompletionClient | ServiceClient[CompletionClient]] | None = None,
+    ) -> list[CompletionClient]:
         image_count, audio_count, video_count = await self._count_multimodal(messages)
-        for client in self.clients:
+        candidate_clients = clients if clients is not None else self._clients
+        capable_bindings: list[ServiceClient[CompletionClient]] = []
+        fallback_bindings: list[ServiceClient[CompletionClient]] = []
+
+        for binding in self._service_client_sequence(candidate_clients):
+            client = binding.client
             bonus = self._client_multimodal_score(client, image_count, audio_count, video_count) * 0.7
+            missing_direct_media = False
             if image_count > 0 and isinstance(client.max_images, int) and client.max_images <= 0:
                 bonus -= 100.0
+                missing_direct_media = True
             if audio_count > 0 and isinstance(client.max_audios, int) and client.max_audios <= 0:
                 bonus -= 100.0
+                missing_direct_media = True
             if video_count > 0 and isinstance(client.max_videos, int) and client.max_videos <= 0:
                 bonus -= 100.0
+                missing_direct_media = True
             setattr(client, '_state_multimodal_bonus', bonus)
 
-        return cast(list[CompletionClient], await self._sorted_clients(self.clients))
+            if missing_direct_media:
+                fallback_bindings.append(binding)
+            else:
+                capable_bindings.append(binding)
+
+        if (image_count > 0 or audio_count > 0 or video_count > 0) and capable_bindings:
+            return cast(list[CompletionClient], await self._sorted_clients(capable_bindings))
+        return cast(list[CompletionClient], await self._sorted_clients(capable_bindings + fallback_bindings))
 
     async def _complete_impl(self, **kwargs: Unpack[ChatCompleteParams]) -> str:
         _ctx, _ctx_token = enter_service_context('completion')
         try:
             messages = list(kwargs.get('messages') or [])
-            ordered_clients = await self._sort_clients_for_messages(messages)
+            selected_client_key = cast(str | None, kwargs.get('client_key'))
+            candidate_clients = self._resolve_service_client_candidates(self._clients, selected_client_key)
+            ordered_clients = await self._sort_clients_for_messages(messages, candidate_clients)
 
             async def _action(client: CompletionClient) -> tuple[str, float]:
                 payload_raw: dict[str, Any] = cast(dict[str, Any], kwargs.copy())
+                payload_raw.pop('client_key', None)
                 internal_params = self._pop_internal_complete_params(payload_raw)
                 payload = cast(ChatCompleteParams, payload_raw)
                 if messages:
@@ -2612,7 +2881,9 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
             cooldown_blocked: list[CompletionClient] = []
 
             messages = list(kwargs.get('messages') or [])
-            ordered_clients = await self._sort_clients_for_messages(messages)
+            selected_client_key = cast(str | None, kwargs.get('client_key'))
+            candidate_clients = self._resolve_service_client_candidates(self._clients, selected_client_key)
+            ordered_clients = await self._sort_clients_for_messages(messages, candidate_clients)
 
             for tier_clients in self._strategy_groups(ordered_clients):
                 if not tier_clients:
@@ -2630,6 +2901,7 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
                     client._state_inflight = int(getattr(client, '_state_inflight', 0)) + 1
                     try:
                         payload_raw: dict[str, Any] = cast(dict[str, Any], kwargs.copy())
+                        payload_raw.pop('client_key', None)
                         internal_params = self._pop_internal_complete_params(payload_raw)
                         payload = cast(ChatCompleteParams, payload_raw)
                         if messages:
@@ -2661,6 +2933,8 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
                         await self._on_success(client)
                         return
                     except Exception as exc:
+                        if self._is_non_client_responsibility_error(exc):
+                            raise
                         await self._on_fail(client, exc)
                         if streamed:
                             raise
@@ -2675,6 +2949,7 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
                 best._state_inflight = int(getattr(best, '_state_inflight', 0)) + 1  # type: ignore[attr-defined]
                 try:
                     payload_raw = cast(dict[str, Any], kwargs.copy())
+                    payload_raw.pop('client_key', None)
                     internal_params = self._pop_internal_complete_params(payload_raw)
                     payload = cast(ChatCompleteParams, payload_raw)
                     if messages:
@@ -2704,6 +2979,8 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
                     await self._on_success(best)
                     return
                 except Exception as exc:
+                    if self._is_non_client_responsibility_error(exc):
+                        raise
                     await self._on_fail(best, exc)
                     errors.append(f'[{self._client_display_name(best)}] {type(exc).__name__}: {exc}')
                 finally:
@@ -3172,15 +3449,17 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
 
         schema = _json_schema_of_type(cast(type[Any], return_type))
         reasoning = payload.get('reasoning', False)
-        if reasoning:
+        use_prompt_json_fallback = bool(reasoning) or (not bool(getattr(self, 'support_json', True)))
+        if use_prompt_json_fallback:
             payload['messages'] = _append_schema_instruction(
                 messages,
                 schema,
-                reasoning=True,
+                reasoning=bool(reasoning),
                 default_json_example=_try_dump_default_json_example(cast(type[Any], return_type)),
+                use_fenced_json_output=not bool(getattr(self, 'support_json', True)),
             )
             payload.pop('json_schema', None)
-            payload['reasoning'] = True
+            payload['reasoning'] = bool(reasoning)
         else:
             payload['messages'] = _append_schema_instruction(messages, schema)
             payload['json_schema'] = schema
@@ -3580,10 +3859,368 @@ class CompletionService(CompletionCallableMixin, ServiceBase):
         return self.Transcription.model_validate(result)
 
 
+class CustomCompletionAdapterProtocol(Protocol):
+    '''Completion custom adapter 协议。'''
+
+    max_tokens: int | None
+    max_images: int | None
+    max_audios: int | None
+    max_videos: int | None
+    support_json: bool
+
+    def stream_complete(self, **kwargs: Unpack[ChatCompleteParams]) -> Any: ...
+
+
+def _is_custom_completion_adapter(adapter: object) -> bool:
+    return callable(getattr(adapter, 'stream_complete', None))
+
+
+def _custom_completion_adapter_cache_key(adapter: str | OBS_Object) -> str:
+    if isinstance(adapter, OBS_Object):
+        payload = adapter.model_dump(mode='python')
+        return json.dumps(payload, sort_keys=True, ensure_ascii=True, default=str)
+    return str(adapter or '').strip()
+
+
+def _normalize_custom_completion_adapter(adapter: str | OBS_Object) -> tuple[str, str | Path | OBS_Object]:
+    if isinstance(adapter, OBS_Object):
+        return 'obs', adapter
+
+    raw = str(adapter or '').strip()
+    if not raw:
+        raise ValueError('Custom completion adapter requires a non-empty adapter.')
+
+    parsed = urlparse(raw)
+    if parsed.scheme in ('', 'file'):
+        if parsed.scheme == 'file':
+            file_path = url2pathname(unquote(parsed.path))
+            if parsed.netloc and parsed.netloc not in ('', 'localhost'):
+                file_path = f'//{parsed.netloc}{file_path}'
+            path = Path(file_path)
+        else:
+            path = Path(raw)
+        return 'file', path.expanduser().resolve()
+    return 'url', raw
+
+
+def _custom_completion_module_name(adapter: str | OBS_Object) -> str:
+    digest = hashlib.md5(_custom_completion_adapter_cache_key(adapter).encode('utf-8')).hexdigest()
+    return f'core.ai.custom_completion_adapter_{digest}'
+
+
+def _load_completion_module_from_file(path: Path, module_name: str) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(module_name, str(path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f'Failed to load custom completion adapter module from {path}')
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_completion_module_from_source(source: str, *, module_name: str, origin: str) -> types.ModuleType:
+    module = types.ModuleType(module_name)
+    module.__file__ = origin
+    sys.modules[module_name] = module
+    exec(compile(source, origin, 'exec'), module.__dict__)
+    return module
+
+
+def _load_completion_module_from_url(adapter: str, module_name: str) -> types.ModuleType:
+    with urlopen(adapter, timeout=15) as response:
+        source = response.read().decode('utf-8')
+    return _load_completion_module_from_source(source, module_name=module_name, origin=adapter)
+
+
+def _load_completion_module_from_obs_object(adapter: OBS_Object, module_name: str) -> types.ModuleType:
+    source = run_any_func(adapter._get_bytes)
+    if source is None:
+        raise FileNotFoundError(f'Custom completion adapter object not found: {adapter.storage_name}:{adapter.path}')
+    if isinstance(source, str):
+        source_text = source
+    else:
+        source_text = bytes(source).decode('utf-8')
+    origin = f'obs://{adapter.storage_name}/{adapter.path.lstrip("/")}'
+    return _load_completion_module_from_source(source_text, module_name=module_name, origin=origin)
+
+
+def load_custom_completion_adapter_module(adapter: str | OBS_Object) -> types.ModuleType:
+    module_name = _custom_completion_module_name(adapter)
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+
+    source_kind, source = _normalize_custom_completion_adapter(adapter)
+    if source_kind == 'file':
+        path = cast(Path, source)
+        if not path.is_file():
+            raise FileNotFoundError(f'Custom completion adapter script not found: {path}')
+        return _load_completion_module_from_file(path, module_name)
+    if source_kind == 'obs':
+        return _load_completion_module_from_obs_object(cast(OBS_Object, source), module_name)
+    return _load_completion_module_from_url(cast(str, source), module_name)
+
+
+def instantiate_custom_completion_adapter(
+    *,
+    adapter: str | OBS_Object,
+    init_kwargs: dict[str, object],
+) -> CustomCompletionAdapterProtocol:
+    module = load_custom_completion_adapter_module(adapter)
+    errors: list[str] = []
+
+    for name, value in sorted(module.__dict__.items(), key=lambda item: item[0]):
+        if name.startswith('_'):
+            continue
+        if not inspect.isclass(value):
+            continue
+        if getattr(value, '__module__', None) != module.__name__:
+            continue
+        try:
+            instance = value(**init_kwargs)
+        except Exception as exc:
+            errors.append(f'{name}: init failed with {type(exc).__name__}: {exc}')
+            continue
+        if _is_custom_completion_adapter(instance):
+            if not hasattr(instance, 'support_json'):
+                try:
+                    setattr(instance, 'support_json', True)
+                except (AttributeError, TypeError):
+                    pass
+            return cast(CustomCompletionAdapterProtocol, instance)
+        errors.append(f'{name}: does not satisfy {CustomCompletionAdapterProtocol.__name__}')
+
+    detail = '; '.join(errors) if errors else 'no top-level class found in module'
+    raise TypeError(f'No class in {adapter!r} satisfies {CustomCompletionAdapterProtocol.__name__}: {detail}')
+
+
+async def _resolve_custom_completion_awaitable(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def _iterate_custom_completion_stream(value: Any) -> AsyncGenerator[Any, None]:
+    resolved = await _resolve_custom_completion_awaitable(value)
+    if hasattr(resolved, '__aiter__'):
+        async for item in resolved:
+            yield item
+        return
+    if isinstance(resolved, (str, bytes, bytearray, memoryview, dict, Audio, Image, Video)):
+        yield resolved
+        return
+    if isinstance(resolved, Sequence):
+        for item in resolved:
+            yield item
+        return
+    raise TypeError(f'Unsupported custom completion adapter stream value: {type(resolved).__name__}')
+
+
+async def _call_custom_completion_override(adapter: object, method_name: str, *args: object, **kwargs: object) -> Any:
+    method = getattr(adapter, method_name, None)
+    if not callable(method):
+        return None
+    return await _resolve_custom_completion_awaitable(method(*args, **kwargs))
+
+
+def _copy_custom_completion_attr_if_present(target: object, adapter: object, attr_name: str) -> None:
+    if hasattr(adapter, attr_name):
+        setattr(target, attr_name, getattr(adapter, attr_name))
+
+
+def _normalize_custom_completion_result(result: Any) -> tuple[str, dict[str, int | None] | None, str | None]:
+    if hasattr(result, 'model_dump'):
+        result = result.model_dump()
+    elif hasattr(result, '__dict__') and not isinstance(result, dict):
+        result = result.__dict__
+
+    if isinstance(result, dict) and 'text' in result:
+        usage = {
+            'input_tokens': int(result['input_tokens']) if isinstance(result.get('input_tokens'), (int, float)) else None,
+            'output_tokens': int(result['output_tokens']) if isinstance(result.get('output_tokens'), (int, float)) else None,
+        }
+        return str(result.get('text') or ''), usage, cast(str | None, result.get('thinking'))
+    return str(result or ''), None, None
+
+
+def _normalize_custom_completion_chunk(chunk: Any) -> CompletionStreamChunk | None:
+    if hasattr(chunk, 'model_dump'):
+        chunk = chunk.model_dump()
+    elif hasattr(chunk, '__dict__') and not isinstance(chunk, dict):
+        chunk = chunk.__dict__
+
+    if isinstance(chunk, dict):
+        data = chunk.get('data')
+        chunk_type = chunk.get('type', 'text')
+        if isinstance(data, str) and chunk_type in ('text', 'think'):
+            return CompletionStreamChunk(data=data, type=cast(Any, chunk_type))
+        return None
+    if chunk is None:
+        return None
+    return CompletionStreamChunk(data=str(chunk), type='text')
+
+
+async def _collect_completion_from_custom_stream(value: Any) -> tuple[str, str | None]:
+    text_parts: list[str] = []
+    thinking_parts: list[str] = []
+    async for chunk in _iterate_custom_completion_stream(value):
+        normalized = _normalize_custom_completion_chunk(chunk)
+        if normalized is None:
+            continue
+        if normalized['type'] == 'think':
+            thinking_parts.append(normalized['data'])
+        else:
+            text_parts.append(normalized['data'])
+    thinking = ''.join(thinking_parts) or None
+    return ''.join(text_parts), thinking
+
+
+class CustomCompletionClient(CompletionClient, type='custom'):
+    '''Completion 自定义 adapter 包装器。'''
+
+    _WRAPPER_INIT_FIELDS: ClassVar[frozenset[str]] = frozenset({'key', 'max_concurrent', 'priority', 'strategy_lvl'})
+    _COMPLETION_INIT_FIELDS: ClassVar[frozenset[str]] = frozenset({
+        'max_tokens', 'token_counter', 'support_json', 'max_images', 'max_audios', 'max_videos',
+    })
+
+    def __init__(
+        self,
+        adapter: CustomCompletionAdapterProtocol | str | OBS_Object | None = None,
+        **kwargs: Any,
+    ):
+        adapter_source = adapter
+        if isinstance(adapter, (str, OBS_Object)):
+            adapter_kwargs = {k: v for k, v in kwargs.items() if k not in self._WRAPPER_INIT_FIELDS}
+            wrapper_kwargs = {k: v for k, v in kwargs.items() if k in self._WRAPPER_INIT_FIELDS}
+            adapter = instantiate_custom_completion_adapter(adapter=adapter, init_kwargs=adapter_kwargs)
+        else:
+            if adapter is None:
+                raise ValueError('Custom completion client requires adapter when adapter instance is not provided.')
+            wrapper_kwargs = kwargs
+            if not _is_custom_completion_adapter(adapter):
+                raise TypeError(f'Custom completion adapter instance must define stream_complete(), got {type(adapter).__name__}')
+            adapter = cast(CustomCompletionAdapterProtocol, adapter)
+
+        super().__init__(**wrapper_kwargs)
+        self._adapter = adapter
+        self._adapter_source = adapter_source
+        for attr_name in ('max_tokens', 'max_images', 'max_audios', 'max_videos', 'support_json'):
+            _copy_custom_completion_attr_if_present(self, adapter, attr_name)
+        token_counter = getattr(adapter, 'token_counter', None)
+        if callable(token_counter):
+            self.token_counter = cast(Callable[[object], int], token_counter)
+
+    def _update_adapter_config(self, **params: object) -> bool:
+        if not params:
+            return True
+        update_func = getattr(self._adapter, 'update', None)
+        if callable(update_func):
+            return bool(update_func(**params))
+        for key, value in params.items():
+            if hasattr(self._adapter, key):
+                setattr(self._adapter, key, value)
+                continue
+            if value is not None:
+                return False
+        return True
+
+    def update(self, **new_params: object) -> bool:
+        params = dict(new_params)
+        if 'adapter' in params:
+            next_adapter = params.pop('adapter')
+            if str(next_adapter) != str(getattr(self, '_adapter_source', None)):
+                return False
+
+        wrapper_params: dict[str, object] = {}
+        for key in self._WRAPPER_INIT_FIELDS | self._COMPLETION_INIT_FIELDS:
+            if key in params:
+                wrapper_params[key] = params[key]
+        adapter_params = {
+            key: value
+            for key, value in params.items()
+            if key not in self._WRAPPER_INIT_FIELDS
+        }
+        if not self._update_adapter_config(**adapter_params):
+            return False
+        if not super().update(**wrapper_params):
+            return False
+        for attr_name in ('max_tokens', 'max_images', 'max_audios', 'max_videos', 'support_json'):
+            _copy_custom_completion_attr_if_present(self, self._adapter, attr_name)
+        token_counter = getattr(self._adapter, 'token_counter', None)
+        if callable(token_counter):
+            self.token_counter = cast(Callable[[object], int], token_counter)
+        return True
+
+    @classmethod
+    def TestingInput(cls) -> ChatCompleteParams:
+        return {
+            'messages': [{'role': 'user', 'content': 'ping'}],
+            'timeout': 8.0,
+        }
+
+    async def probe_min_health(self) -> bool:
+        override = await _call_custom_completion_override(self._adapter, 'probe_min_health')
+        if override is not None:
+            return bool(override)
+
+        testing_input = getattr(type(self._adapter), 'TestingInput', None)
+        if callable(testing_input):
+            probe = cast(dict[str, Any], testing_input())
+            output = await self.complete(__skip_log__=True, **probe)  # type: ignore[arg-type]
+            return bool(str(output).strip())
+        return await super().probe_min_health()
+
+    def count_tokens(self, value: object) -> int:
+        count_tokens = getattr(self._adapter, 'count_tokens', None)
+        if callable(count_tokens):
+            try:
+                counted = int(cast(Any, count_tokens(value)))
+                if counted >= 0:
+                    return counted
+            except Exception:
+                pass
+        return super().count_tokens(cast(Any, value))
+
+    async def _complete_impl(self, **kwargs: Unpack[ChatCompleteParams]) -> str:
+        complete_func = getattr(self._adapter, 'complete', None)
+        if callable(complete_func):
+            result = await _resolve_custom_completion_awaitable(complete_func(**kwargs))
+            text, usage, thinking = _normalize_custom_completion_result(result)
+            self._set_latest_token_usage(usage)
+            self._set_latest_thinking(thinking)
+            return text
+
+        text, thinking = await _collect_completion_from_custom_stream(self._adapter.stream_complete(**kwargs))
+        self._set_latest_token_usage(None)
+        self._set_latest_thinking(thinking)
+        return text
+
+    async def _stream_complete_impl(self, **kwargs: Unpack[ChatCompleteParams]) -> AsyncGenerator[CompletionStreamChunk, None]:
+        async for chunk in _iterate_custom_completion_stream(self._adapter.stream_complete(**kwargs)):
+            normalized = _normalize_custom_completion_chunk(chunk)
+            if normalized is not None:
+                yield normalized
+
+    def close(self, reason: str | None = None) -> None:
+        close_func = getattr(self._adapter, 'close', None)
+        if callable(close_func):
+            try:
+                run_any_func(close_func)
+            except Exception:
+                pass
+        super().close(reason=reason)
+
+
 __all__ += [
     'CompletionCallableMixin',
     'CompletionClient',
     'ThinkThinkSynCompletionClient',
     'OpenAILikedCompletionClient',
+    'OpenRouterCompletionClient',
+    'CodingAgentCompletionClient',
     'CompletionService',
+    'CustomCompletionAdapterProtocol',
+    'CustomCompletionClient',
+    'instantiate_custom_completion_adapter',
+    'load_custom_completion_adapter_module',
 ]

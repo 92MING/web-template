@@ -14,7 +14,7 @@ from aiortc import RTCSessionDescription
 from typing import TYPE_CHECKING, Unpack, ClassVar, Literal, TypeVar, Any, Self, Callable, Awaitable
 from pydantic import field_validator, ValidationError, Field, computed_field, SerializeAsAny
 
-from ..utils.concurrent_utils import run_any_func
+from core.utils.concurrent_utils import run_any_func
 
 from .candidate import Candidate, _CandidateInitParams, UserCandidate
 from .config import _AutoDocstringModel

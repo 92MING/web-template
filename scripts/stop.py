@@ -132,15 +132,16 @@ def _pids_for_port(host: str, port: int) -> set[int]:
 def _pids_for_port_windows(port: int) -> set[int]:
     pids: set[int] = set()
 
-    # Method 1: PowerShell Get-NetTCPConnection. Do NOT filter by `-State Listen`,
-    # some sockets (e.g. dual-stack IPv6, Bound) can be missed otherwise.
+    # Method 1: PowerShell Get-NetTCPConnection. Only LISTEN sockets mean the
+    # backend still owns the port; TIME_WAIT/FIN_WAIT rows can outlive the
+    # process and must not be treated as residual servers.
     try:
         result = subprocess.run(
             [
                 "powershell",
                 "-NoProfile",
                 "-Command",
-                f"Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess",
+                f"Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess",
             ],
             capture_output=True,
             text=True,
@@ -156,8 +157,8 @@ def _pids_for_port_windows(port: int) -> set[int]:
     except Exception:
         pass
 
-    # Method 2: netstat fallback. Match any state (LISTENING / ESTABLISHED / etc.)
-    # because the caller only cares "who owns the port".
+    # Method 2: netstat fallback. Match LISTENING only; established/closing
+    # connections are not proof that the backend is still serving.
     try:
         result = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
@@ -167,7 +168,12 @@ def _pids_for_port_windows(port: int) -> set[int]:
                 # Typical lines:
                 #   TCP    0.0.0.0:19210    0.0.0.0:0    LISTENING    12345
                 #   TCP    [::]:19210       [::]:0       LISTENING    12345
-                if len(parts) >= 5 and parts[0].upper() == "TCP" and parts[1].endswith(suffix):
+                if (
+                    len(parts) >= 5
+                    and parts[0].upper() == "TCP"
+                    and parts[1].endswith(suffix)
+                    and parts[-2].upper() == "LISTENING"
+                ):
                     try:
                         pid_value = int(parts[-1])
                     except ValueError:
@@ -177,6 +183,71 @@ def _pids_for_port_windows(port: int) -> set[int]:
     except Exception:
         pass
 
+    return pids
+
+
+def _command_targets_port(command_line: str, port: int) -> bool:
+    normalized = str(command_line or "")
+    if not normalized:
+        return False
+    if not re.search(r"(?i)(^|\s)(?:pythonw?\.exe|pythonw?|py)(?:\s|$)", normalized):
+        return False
+    if not re.search(r"(?i)(^|\s)-m\s+app(?:\s|$)", normalized):
+        return False
+    port_text = str(int(port))
+    return bool(
+        re.search(rf"(?i)(^|\s)--server-port\s+{re.escape(port_text)}(?:\s|$)", normalized)
+        or re.search(rf"(?i)(^|\s)--server-port={re.escape(port_text)}(?:\s|$)", normalized)
+    )
+
+
+def _pids_for_command_port_windows(port: int) -> set[int]:
+    """Find detached backend Python processes by command line.
+
+    This catches wedged ``pythonw -m app --server-port <port>`` processes that
+    no longer own a listening socket, which normal port-based cleanup misses.
+    """
+    if not _IS_WINDOWS:
+        return set()
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                (
+                    "Get-CimInstance Win32_Process -Filter \"name like 'python%'\" | "
+                    "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+    except Exception:
+        return set()
+    if result.returncode != 0 or not result.stdout.strip():
+        return set()
+    try:
+        rows = json.loads(result.stdout)
+    except Exception:
+        return set()
+    if isinstance(rows, dict):
+        rows = [rows]
+    pids: set[int] = set()
+    if not isinstance(rows, list):
+        return pids
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            pid = int(row.get("ProcessId") or 0)
+        except (TypeError, ValueError):
+            continue
+        if pid in _WINDOWS_SYSTEM_PIDS:
+            continue
+        if _command_targets_port(str(row.get("CommandLine") or ""), port):
+            pids.add(pid)
     return pids
 
 
@@ -244,7 +315,7 @@ def _force_kill_port_windows(port: int) -> set[int]:
                 "powershell",
                 "-NoProfile",
                 "-Command",
-                f"Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess",
+                f"Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess",
             ],
             capture_output=True,
             text=True,
@@ -270,6 +341,19 @@ def _force_kill_port_windows(port: int) -> set[int]:
         if _kill_pid(pid, force=True):
             killed.add(pid)
     return killed
+
+
+def _backend_process_pids(host: str, port: int) -> set[int]:
+    pids = _pids_for_port(host, port)
+    if _IS_WINDOWS:
+        command_pids = _pids_for_command_port_windows(port)
+        if command_pids:
+            pids.update(command_pids)
+        expanded: set[int] = set(pids)
+        for pid in list(pids):
+            expanded.update(_descendant_pids_windows(pid))
+        pids = expanded
+    return {pid for pid in pids if not (_IS_WINDOWS and pid in _WINDOWS_SYSTEM_PIDS)}
 
 
 def _pids_for_port_linux(port: int) -> set[int]:
@@ -404,15 +488,22 @@ def main() -> None:
     if _try_http_stop(host, port):
         _info(f"Asked backend on {host}:{port} to shut down gracefully.")
         deadline = time.monotonic() + 10.0
+        graceful_fallback_reason = "Graceful shutdown timed out"
         while time.monotonic() < deadline:
             time.sleep(0.5)
             if not _is_backend(host, port):
-                _info(f"Backend on {host}:{port} stopped.")
-                return
-        _info("Graceful shutdown timed out; falling back to PID kill.")
+                residual = _backend_process_pids(host, port)
+                if not residual:
+                    _info(f"Backend on {host}:{port} stopped.")
+                    return
+                graceful_fallback_reason = (
+                    f"Backend stopped responding but residual process(es) remain: {sorted(residual)}"
+                )
+                break
+        _info(f"{graceful_fallback_reason}; falling back to PID kill.")
 
     # Fallback: find PID(s) and kill them.
-    pids = _pids_for_port(host, port)
+    pids = _backend_process_pids(host, port)
     if not pids:
         # Port may still be occupied by PID(s) we can't enumerate (e.g. socket
         # owned by a dead supervisor whose workers inherited it). Hammer it.
@@ -424,16 +515,6 @@ def main() -> None:
                 return
         _error(f"No process found listening on {host}:{port}")
 
-    # On Windows, expand to descendants. The OS reports the original socket
-    # creator (often a now-dead supervisor) as `OwningProcess`, but the actual
-    # workers serving traffic are its multiprocessing children that inherited
-    # the socket. We must kill the children to release the port.
-    if _IS_WINDOWS:
-        expanded: set[int] = set(pids)
-        for pid in list(pids):
-            expanded.update(_descendant_pids_windows(pid))
-        pids = expanded
-
     _info(f"Killing PID(s) on {host}:{port}: {sorted(pids)}")
     killed: set[int] = set()
     for pid in sorted(pids):
@@ -443,29 +524,25 @@ def main() -> None:
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
         time.sleep(0.3)
-        current = _pids_for_port(host, port)
-        if _IS_WINDOWS:
-            current = set(current) | {d for p in current for d in _descendant_pids_windows(p)}
+        current = _backend_process_pids(host, port)
         if not current:
             break
         for pid in sorted(current):
             if _kill_pid(pid):
                 killed.add(pid)
     else:
-        leftover = _pids_for_port(host, port)
-        if _IS_WINDOWS:
-            leftover = set(leftover) | {d for p in leftover for d in _descendant_pids_windows(p)}
+        leftover = _backend_process_pids(host, port)
         for pid in sorted(leftover):
             if _kill_pid(pid, force=True):
                 killed.add(pid)
 
-    final = _pids_for_port(host, port)
+    final = _backend_process_pids(host, port)
     if final and _IS_WINDOWS:
         # Last-resort hammer before giving up.
         hammered = _force_kill_port_windows(port)
         killed.update(hammered)
         time.sleep(1.0)
-        final = _pids_for_port(host, port)
+        final = _backend_process_pids(host, port)
     if final:
         if _IS_WINDOWS:
             details = []

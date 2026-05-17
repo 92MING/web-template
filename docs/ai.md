@@ -5,9 +5,9 @@
 当前仓库的 AI 配置不是“每类一个 provider + model”的平铺结构，而是：
 
 - 每个 service kind 自己维护一组本地 `clients`
-- `default` 定义默认 service 实例
-- 其他命名实例放在 `extras`，也可以直接写成顶层额外 key
-- service 与 service 之间可以显式依赖，比如 `embedding.default.completion_service`、`s2t.default.completion_service`
+- `service` 定义这一类能力下的 service 实例，`service.default` 是默认实例
+- 其他命名实例放在 `service.<name>`
+- service 与 service 之间可以显式依赖，比如 `embedding.service.default.completion_service`、`s2t.service.default.completion_service`
 
 ## 四类能力与对应对象
 
@@ -37,48 +37,51 @@
 
 ## 正确的配置结构
 
-最小正确示例直接参考 [docs/config/ai_services_example.yaml](docs/config/ai_services_example.yaml)。
+最小正确示例直接参考 [config/ai_services_example.yaml](config/ai_services_example.yaml)。
 
 ```yaml
 completion:
   clients:
     openai:
-      type: openai-completion
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_APIKEY}
       model: gpt-4.1-mini
 
-  default:
-    clients:
-      - openai
+  service:
+    default:
+      clients:
+        - openai
 
 embedding:
   clients:
-    openai:
-      type: openai-embedding
-      api_key: ${OPENAI_API_KEY}
-      model: text-embedding-3-small
+    thinkthinksyn:
+      type: thinkthinksyn
+      model: zpoint
 
-  default:
-    clients:
-      - openai
+  service:
+    default:
+      clients:
+        - thinkthinksyn
 
 s2t:
   clients: {}
-  default:
-    completion_service: default
+  service:
+    default:
+      completion_service: default
 
 t2s:
   clients: {}
-  default:
-    clients: []
+  service:
+    default:
+      clients: []
 ```
 
 这个结构的含义是：
 
-- `completion.clients.openai` 定义一个 completion 客户端配置，类型是 `openai-completion`。
-- `completion.default.clients: [openai]` 表示默认 completion service 使用这个本地客户端。
-- `embedding` 同理。
-- `s2t.default.completion_service: default` 表示默认 S2T service 可以引用默认 completion service，把它适配为音频能力来源。
+- `completion.clients.openai` 定义一个 completion 客户端配置，类型是 `openai`。
+- `completion.service.default.clients: [openai]` 表示默认 completion service 使用这个本地客户端。
+- `embedding.clients.thinkthinksyn` 定义一个 embedding 客户端配置，类型是 `thinkthinksyn`。
+- `s2t.service.default.completion_service: default` 表示默认 S2T service 可以引用默认 completion service，把它适配为音频能力来源。
 
 ## 关键配置概念
 
@@ -86,7 +89,7 @@ t2s:
 
 每个 `clients.<name>` 都是一个 `AIServiceClientInitData` 子类，至少包含：
 
-- `type`: 注册过的客户端类型字符串，例如 `openai-completion`、`openai-embedding`
+- `type`: 当前 service kind 下注册过的客户端类型字符串，例如 `openai`、`thinkthinksyn`、`completion`、`custom`
 - `key`: 可选，运行时 client key
 - `max_concurrent`: 并发限制
 - `priority`: client 默认优先级
@@ -99,18 +102,86 @@ t2s:
 completion:
   clients:
     openai:
-      type: openai-completion
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_APIKEY}
       model: gpt-4.1-mini
       max_tokens: 32000
       max_concurrent: 16
 ```
 
-其中 `api_key`、`model`、`max_tokens` 都会被收集并传给对应 client。
+  其中 `apikey`、`model`、`max_tokens` 都会被收集并传给对应 client。
+
+  ### 1.1 OpenAI-compatible 内置 client
+
+  当前内置的 OpenAI-compatible client 类型按 service kind 独立注册：
+
+  - `completion`: `type: openai`
+  - `embedding`: `type: openai`
+  - `s2t`: `type: openai`
+  - `t2s`: `type: openai`
+
+  常用字段是 `apikey`、`base_url`、`model`。如果不传 `base_url`，会使用 OpenAI-compatible 默认地址；如果不传 `apikey`，会按对应 service kind 查找环境变量。
+
+  `s2t` 还额外支持 `type: openrouter`。它使用 OpenRouter 的 `/audio/transcriptions` JSON + base64 音频格式，不走 OpenAI Whisper 的 multipart form 请求。
+
+### 1.2 custom adapter client
+
+如果内置 `type` 不够用，可以改用 `type: custom`，并通过 `adapter` 指向一个 Python 脚本。
+
+规则：
+
+- 脚本里需要有一个顶层 class，实例化后满足当前 service kind 对应的 protocol。
+- `completion` custom adapter 最低只需要实现 `stream_complete()`；如果额外实现了 `complete()`，wrapper 会优先调用它。
+- `completion` custom adapter 可以额外暴露 `support_json = False`，表示不支持原生 JSON Schema / structured output。此时 `json_complete()` 不会把 `json_schema` 直接下发给 adapter，而会改成在 prompt 里附 schema、example 和固定 JSON 输出格式提示。
+- `embedding` 需要实现 `embedding()`。
+- `s2t` 需要实现 `s2t()`。
+- `t2s` 需要实现 `t2s()`。
+- `max_tokens`、`max_images`、`support_image` 这类已知能力字段，建议直接作为 adapter 实例属性暴露；wrapper 会自动读取。
+- 除 `type`、`adapter`、`key`、`max_concurrent`、`priority`、`strategy_lvl` 这些保留字段外，其余配置字段都会透传给 adapter 构造函数。
+
+示例：
+
+```yaml
+completion:
+  clients:
+    vibe:
+      type: custom
+      adapter: file:///C:/Users/name/adapters/sayo.py
+      model: opus-4.6
+      x_is_human: ${VIBE_X_IS_HUMAN}
+      max_tokens: 32000
+      max_images: 0
+      max_audios: 0
+      max_videos: 0
+
+  service:
+    default:
+      clients: [vibe]
+```
+
+一个最小 completion adapter 可以只有流式方法：
+
+```python
+from typing import Any
+
+
+class MyCompletionAdapter:
+    max_tokens = 8192
+    max_images = 0
+    max_audios = 0
+    max_videos = 0
+    support_json = False
+
+    async def stream_complete(self, **kwargs: Any):
+        yield {'data': 'hello ', 'type': 'text'}
+        yield {'data': 'world', 'type': 'text'}
+```
+
+这种 stream-only adapter 仍然可以通过 `CompletionService.json_complete()`、`translate()` 等高级方法使用，因为框架会先用 `CustomCompletionClient` 包一层，再挂进 `CompletionService`。
 
 ### 2. service init
 
-`default` 和其他命名 service 的结构是 `AIServiceInitData` 或其子类，常见字段：
+`service.default` 和其他 `service.<name>` 的结构是 `AIServiceInitData` 或其子类，常见字段：
 
 - `clients`: 客户端引用列表，既可以是字符串引用，也可以是 inline binding
 - `fail_cooldown`: 故障冷却时间
@@ -119,9 +190,9 @@ completion:
 
 支持短写：
 
-- `default: openai`
-- `default: [openai, backup]`
-- `default: { clients: [openai] }`
+- `service.default: openai`
+- `service.default: [openai, backup]`
+- `service.default: { clients: [openai] }`
 
 三种写法最终都会规范化成 `clients` 列表。
 
@@ -133,43 +204,72 @@ completion:
 completion:
   clients:
     openai:
-      type: openai-completion
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_APIKEY}
       model: gpt-4.1-mini
 
-  default:
-    clients:
-      - client: openai
-        priority: 0.5
-        strategy_lvl: 1
+  service:
+    default:
+      clients:
+        - client: openai
+          priority: 0.5
+          strategy_lvl: 1
 ```
 
 这里的 `priority` / `strategy_lvl` 只作用于这个 service 绑定，不会改动底层 client 自身的默认值。
 
-### 4. extras / 命名实例
+### 4. 命名实例
 
-除了 `default` 外，还可以定义多个命名 service。可以显式放进 `extras:`，也可以直接作为额外 key 写在当前 section 下，验证时会自动收进 `extras`。
+除了 `service.default` 外，还可以在 `service` 下定义多个命名 service。
 
 ```yaml
 completion:
   clients:
     openai:
-      type: openai-completion
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_APIKEY}
       model: gpt-4.1-mini
     fast:
-      type: openai-completion
-      api_key: ${OPENAI_API_KEY}
+      type: openai
+      apikey: ${OPENAI_APIKEY}
       model: gpt-4.1-nano
 
-  default:
-    clients: [openai]
+  service:
+    default:
+      clients: [openai]
 
-  summary:
-    clients: [fast]
+    summary:
+      clients: [fast]
 ```
 
 这里 `summary` 就是一个命名 completion service，可通过 `cfg.completion.get_service("summary")` 或 `CompletionService.GetInstance("summary")` 使用。
+
+## 暴露兼容 API
+
+除了框架自己的 `/ai/...` 接口，服务端可以把已配置的 AI service 暴露成兼容 HTTP API。开关在 server 配置中：
+
+```yaml
+expose_compatible_ai_services: true
+```
+
+也可以用环境变量 `EXPOSE_COMPATIBLE_AI_SERVICES=true` 或命令行参数 `--expose-compatible-ai-services`。
+
+开启后会注册这些公开端点。OpenAI-compatible 路由仍然通过 `/ai/{kind}/service/{service_key}/openai/...` 调用：
+
+- `POST /ai/completion/service/default/openai/v1/chat/completions`
+- `POST /ai/embedding/service/default/openai/v1/embeddings`
+- `POST /ai/s2t/service/default/openai/v1/audio/transcriptions`
+- `POST /ai/t2s/service/default/openai/v1/audio/speech`
+- `POST /ai/t2img/service/default/openai/v1/images/generations`
+- `POST /ai/t2img/service/default/openai/v1/images/edits`
+- `POST /ai/t2img/service/default/openai/v1/images/variations`
+
+Anthropic-compatible completion 路由会额外注册在 `/ai/completion/service/{service_key}/anthropic/...` 和 `/ai/completion/client/{client_key}/anthropic/...`，支持这两个后缀：
+
+- `POST /ai/completion/service/default/anthropic/messages`
+- `POST /ai/completion/service/default/anthropic/v1/messages`
+
+通过指定 client instance 直接调用时使用 `/ai/{kind}/client/{client_key}/openai/...`，例如 `POST /ai/completion/client/completion:fast/openai/v1/chat/completions`；Anthropic completion 则例如 `POST /ai/completion/client/completion:fast/anthropic/v1/messages`。service 路由仍可在请求体里传 `client_key` 固定到该 service 下的某个 client；client 路由会直接调用指定 client。模型列表代理端点仍然是 `POST /ai/clients/openai/list-models`，请求体必须显式传 `apikey`。这个开关独立于普通 `expose_ai_service`，因此可以只暴露这些兼容 API，而不暴露框架内部的 canonical native 接口。
 
 ## 不能再这样写
 
@@ -285,7 +385,7 @@ audio = Audio.from_path("audio.mp3")
 text = await service.s2t(audio)
 ```
 
-如果 `s2t.default` 里配置了 `completion_service`，框架会把对应 completion service 适配成 S2T 能力来源。
+如果 `s2t.service.default` 里配置了 `completion_service`，框架会把对应 completion service 适配成 S2T 能力来源。
 
 ## T2S 的正确用法
 
@@ -329,10 +429,14 @@ AI HTTP API 的实际暴露规则由服务端配置决定：
 常见端点包括：
 
 - `GET /_internal/ai/services`
-- `POST /_internal/ai/complete`，可按配置公开为 `POST /ai/complete`
-- `POST /_internal/ai/embedding`，可按配置公开为 `POST /ai/embedding`
-- `POST /_internal/ai/s2t`，可按配置公开为 `POST /ai/s2t`
-- `POST /_internal/ai/t2s`，可按配置公开为 `POST /ai/t2s`
+- `POST /_internal/ai/completion/service/default/complete`，可按配置公开为 `POST /ai/completion/service/default/complete`
+- `POST /_internal/ai/completion/service`，可按配置公开为 `POST /ai/completion/service`，等价于默认 completion service 的 `complete`
+- `POST /_internal/ai/completion/service/{service_key}/translate`，可按配置公开为 `POST /ai/completion/service/{service_key}/translate`
+- `POST /_internal/ai/embedding/service/{service_key}/embedding`，可按配置公开为 `POST /ai/embedding/service/{service_key}/embedding`
+- `POST /_internal/ai/s2t/service/{service_key}/s2t`，可按配置公开为 `POST /ai/s2t/service/{service_key}/s2t`
+- `POST /_internal/ai/t2s/service/{service_key}/t2s`，可按配置公开为 `POST /ai/t2s/service/{service_key}/t2s`
+
+需要在 route 层指定目标时，统一使用 `/_internal/ai/{kind}/{service|client}/{key}/{operation}`；公开别名同理是 `/ai/{kind}/{service|client}/{key}/{operation}`。例如 `POST /_internal/ai/completion/client/completion:fast/complete` 会直接调用指定 completion client。
 
 管理面板页本身走另一套前缀：
 
